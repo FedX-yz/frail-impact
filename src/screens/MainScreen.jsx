@@ -3,9 +3,20 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const BASE = import.meta.env.BASE_URL;
 
 const ENEMY_TYPES = [
-  { name:'Xiao',               image:`${BASE}enemies/xiaoenemy.png`, hp:220,  maxHp:220,  coinReward:50,  isBoss:false },
-  { name:'Bonk',               image:`${BASE}enemies/bonkenemy.png`, hp:300,  maxHp:300,  coinReward:80,  isBoss:false },
-  { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true, gemReward:10 },
+  { name:'Xiao',               image:`${BASE}enemies/xiaoenemy.png`, hp:220,  maxHp:220,  coinReward:50,  isBoss:false, tier: 'basic', attacks:[], },
+  { name:'Bonk',               image:`${BASE}enemies/bonkenemy.png`, hp:300,  maxHp:300,  coinReward:80,  isBoss:false, tier: 'elite', attacks:['projectile'], attackCooldown: 4000, },
+  { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true, gemReward:10, tier: 'boss', attacks: ['projectile', 'slam'], attackCooldown: 2500, },
+  {
+    name: 'Treasure',
+    image: `${BASE}enemies/xiaoenemy.png`, // swap with your treasure sprite later
+    hp: 80, maxHp: 80, coinReward: 0,
+    isBoss: false,
+    tier: 'treasure',
+    attacks: ['lure'],
+    attackCooldown: 3000,
+    pullReward: 1,
+    movePattern: 'erratic', // always erratic
+  },
 ];
 
 const REGULAR_SIZE  = 74;
@@ -136,6 +147,11 @@ deck?.supports?.forEach((card, i) => {
   const abilityCdMax = mainCard?.ability?.cooldown ?? 10;
   const heroImage    = mainCard?.image ?? null;
 
+
+  const [playerHp, setPlayerHp]     = useState(100);
+  const [playerMaxHp]               = useState(100);
+  const playerPosRef                = useRef({ x: 50, y: 50 });
+  const arenaRef                    = useRef(null);
   const [enemies,      setEnemies]      = useState(() => [spawnEnemy(false, 0), spawnEnemy(false, 0)]);
   const [floaters,     setFloaters]     = useState([]);
   const [bossWarning,  setBossWarning]  = useState(false);
@@ -145,6 +161,7 @@ deck?.supports?.forEach((card, i) => {
   const [frozenMap,    setFrozenMap]    = useState({});
   const [hoveredNav,   setHoveredNav]   = useState(null);
   const [activeNav,    setActiveNav]    = useState(null);
+  
 
   const enemiesRef   = useRef(enemies);
   const frozenRef    = useRef(frozenMap);
@@ -178,9 +195,14 @@ deck?.supports?.forEach((card, i) => {
       let coinsEarned = 0, gemsEarned = 0;
       dead.forEach(killed => {
         newKills++;
-        const coinGain = Math.floor(killed.coinReward * dmgMult);
-        coinsEarned += coinGain;
-        addFloater(`+${fmt(coinGain)}`, killed.x, killed.y + 10, '#f0c040', false, 'coin');
+        if (killed.tier === 'treasure' && killed.pullReward) {
+          gemsEarned += killed.pullReward;
+          addFloater(`+${killed.pullReward}`, killed.x, killed.y + 10, '#5588ff', false, 'gem');
+        } else {
+          const coinGain = Math.floor(killed.coinReward * dmgMult);
+          coinsEarned += coinGain;
+          addFloater(`+${fmt(coinGain)}`, killed.x, killed.y + 10, '#f0c040', false, 'coin');
+        }
         if (killed.isBoss && killed.gemReward) {
           gemsEarned += killed.gemReward;
           addFloater(`+${killed.gemReward}`, killed.x, killed.y + 22, '#5588ff', false, 'gem');
@@ -271,6 +293,45 @@ deck?.supports?.forEach((card, i) => {
     }, 650);
     return () => clearInterval(interval);
   }, []);
+
+  // ─── Enemy attack telegraph ───────────────────────────────────────────────
+useEffect(() => {
+  const interval = setInterval(() => {
+    const now = Date.now();
+    setEnemies(prev => prev.map(en => {
+      if (en.tier === 'basic' || en.isBoss) return en;        // bosses use weak pts
+      if (en.state === 'telegraphing') return en;             // already winding up
+      if (!en.attacks?.length) return en;
+
+      const cooldownKey = `attackCooldown_${en.id}`;
+      const nextAttack  = en._nextAttack ?? (now + en.attackCooldown);
+
+      if (now < nextAttack) return { ...en, _nextAttack: nextAttack };
+
+      // Start telegraph — flash red for 1 second then fire
+      const zone = { x: en.x, y: en.y, radius: 14 };
+      setTimeout(() => {
+        // Fire: check if player dodged
+        const p = playerPosRef.current;
+        const dx = p.x - zone.x, dy = p.y - zone.y;
+        const hit = Math.sqrt(dx*dx + dy*dy) < zone.radius;
+        if (hit) {
+          setPlayerHp(hp => Math.max(0, hp - 15));
+          addFloater('-15', 10, 20, '#ff4444', false);
+        }
+        // Clear telegraph
+        setEnemies(prev2 => prev2.map(e =>
+          e.id === en.id
+            ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
+            : e
+        ));
+      }, 1000);
+
+      return { ...en, state: 'telegraphing', attackZone: zone };
+    }));
+  }, 300);
+  return () => clearInterval(interval);
+}, [addFloater]);
 
   const handleEnemyClick = useCallback((enemy, e) => {
     e.stopPropagation();
@@ -374,6 +435,10 @@ deck?.supports?.forEach((card, i) => {
         @keyframes bossPulse { 0%,100%{filter:drop-shadow(0 0 6px #ff4400)} 50%{filter:drop-shadow(0 0 22px #ff4400)} }
         @keyframes bossWarn { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.7)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.08)} 80%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-50%) scale(0.95)} }
         @keyframes weakPulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1} 50%{transform:translate(-50%,-50%) scale(1.38);opacity:0.75} }
+        @keyframes telegraphPulse {
+          0%,100% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+          50%      { opacity:0.5; transform:translate(-50%,-50%) scale(1.15); }
+        }
         .dmg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
         .enemy-wrap { position:absolute;text-align:center;z-index:10;cursor:pointer; }
         .enemy-wrap:hover .enemy-sprite { filter:brightness(1.4) !important; }
@@ -421,7 +486,18 @@ deck?.supports?.forEach((card, i) => {
         <div style={{ flex:'0 0 55%', display:'flex', flexDirection:'column', padding:'14px 12px 14px 16px', gap:10 }}>
 
           {/* Battle viewport */}
-          <div style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}>
+          <div
+              ref={arenaRef}
+              onMouseMove={(e) => {
+                const rect = arenaRef.current?.getBoundingClientRect();
+                if (!rect) return;
+                playerPosRef.current = {
+                  x: ((e.clientX - rect.left) / rect.width)  * 100,
+                  y: ((e.clientY - rect.top)  / rect.height) * 100,
+                };
+              }}
+              style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
+            >
             <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
 
             <div style={{ position:'absolute', top:10, left:12, color:'#aaa', fontSize:14, zIndex:10, pointerEvents:'none' }}>
@@ -448,6 +524,24 @@ deck?.supports?.forEach((card, i) => {
                     transition: isMoving ? 'left 0.9s ease-in-out, top 0.9s ease-in-out' : 'none',
                   }}
                 >
+                  
+                  {en.state === 'telegraphing' && en.attackZone && (
+                    <div style={{
+                      position: 'absolute',
+                      left: en.attackZone.x + '%',
+                      top:  en.attackZone.y + '%',
+                      width:  en.attackZone.radius * 2.5 + 'px',
+                      height: en.attackZone.radius * 2.5 + 'px',
+                      transform: 'translate(-50%, -50%)',
+                      borderRadius: '50%',
+                      background: 'rgba(255,0,0,0.35)',
+                      border: '2px solid red',
+                      animation: 'telegraphPulse 0.4s ease-in-out infinite',
+                      pointerEvents: 'none',
+                      zIndex: 20,
+                    }} />
+                  )}
+
                   <div style={{ position:'relative', display:'inline-block' }}>
                     <img src={en.image} alt={en.name}
                       className={`enemy-sprite${en.isBoss ? ' boss' : ''}`}
@@ -522,6 +616,18 @@ deck?.supports?.forEach((card, i) => {
                 </div>
               )}
             </div>
+            <div style={{ flexShrink:0, minWidth:80, textAlign:'center' }}>
+          <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>HP</div>
+          <div style={{ background:'#1a0a0a', borderRadius:3, height:8, width:80 }}>
+            <div style={{
+              height:'100%', borderRadius:3,
+              width: (playerHp / playerMaxHp * 100) + '%',
+              background: playerHp > 50 ? '#4ade80' : playerHp > 25 ? '#facc15' : '#f87171',
+              transition: 'width 0.2s, background 0.3s',
+            }} />
+          </div>
+          <div style={{ color:'#aaa', fontSize:11, marginTop:2 }}>{playerHp}/{playerMaxHp}</div>
+        </div>
           </div>
 
           {/* Support buffs — 4 slots, 2x2 grid */}
