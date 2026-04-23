@@ -160,6 +160,7 @@ deck?.supports?.forEach((card, i) => {
   const [bossWeakPts,  setBossWeakPts]  = useState({});
   const [frozenMap,    setFrozenMap]    = useState({});
   const [hoveredNav,   setHoveredNav]   = useState(null);
+  const [takingDamage, setTakingDamage] = useState(false);
   const [activeNav,    setActiveNav]    = useState(null);
   
 
@@ -227,6 +228,14 @@ deck?.supports?.forEach((card, i) => {
     }
   }, [dmgMult, addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency]);
 
+  // Player death
+  useEffect(() => {
+    if (playerHp <= 0) {
+      addFloater('DEFEATED!', 50, 50, '#ff4444', true);
+      setTimeout(() => setPlayerHp(playerMaxHp), 3000);
+    }
+  }, [playerHp]);
+
   // Ability CD
   useEffect(() => {
     if (abilityCd <= 0) return;
@@ -273,6 +282,29 @@ deck?.supports?.forEach((card, i) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Treasure spawner
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (Math.random() < 0.2) {
+        const base = ENEMY_TYPES.find(t => t.tier === 'treasure');
+        const treasure = {
+          ...base,
+          id: Date.now() + Math.random(),
+          x: 50 + Math.random() * 35,
+          y: 25 + Math.random() * 50,
+          movePattern: 'erratic',
+          patrolDir: 1,
+          state: 'idle',
+        };
+        setEnemies(prev => [...prev, treasure]);
+        setTimeout(() => {
+          setEnemies(prev => prev.filter(e => e.id !== treasure.id));
+        }, 10000);
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Boss weak points
   useEffect(() => {
     const interval = setInterval(() => {
@@ -314,10 +346,12 @@ useEffect(() => {
         // Fire: check if player dodged
         const p = playerPosRef.current;
         const dx = p.x - zone.x, dy = p.y - zone.y;
-        const hit = Math.sqrt(dx*dx + dy*dy) < zone.radius;
+        const hit = Math.abs(p.x - en.x) < 8 && Math.abs(p.y - en.y) < 8;
         if (hit) {
           setPlayerHp(hp => Math.max(0, hp - 15));
-          addFloater('-15', 10, 20, '#ff4444', false);
+          setTakingDamage(true);
+          setTimeout(() => setTakingDamage(false), 300);
+          addFloater('-15 HP', 10, 20, '#ff4444', false);
         }
         // Clear telegraph
         setEnemies(prev2 => prev2.map(e =>
@@ -499,6 +533,14 @@ useEffect(() => {
               style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
             >
             <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
+            {takingDamage && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: 'rgba(255,0,0,0.25)',
+                pointerEvents: 'none',
+                zIndex: 50,
+              }} />
+            )}
 
             <div style={{ position:'absolute', top:10, left:12, color:'#aaa', fontSize:14, zIndex:10, pointerEvents:'none' }}>
               auto <span style={{ color:'#f0c040' }}>{fmt(cps*dmgMult)}</span>/s · kills <span style={{ color:'#f0c040' }}>{killCount}</span>
@@ -528,8 +570,8 @@ useEffect(() => {
                   {en.state === 'telegraphing' && en.attackZone && (
                     <div style={{
                       position: 'absolute',
-                      left: en.attackZone.x + '%',
-                      top:  en.attackZone.y + '%',
+                      left: '50%',           
+                      top: '50%',            
                       width:  en.attackZone.radius * 2.5 + 'px',
                       height: en.attackZone.radius * 2.5 + 'px',
                       transform: 'translate(-50%, -50%)',
