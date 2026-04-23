@@ -8,14 +8,14 @@ const ENEMY_TYPES = [
   { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true, gemReward:10, tier: 'boss', attacks: ['projectile', 'slam'], attackCooldown: 2500, },
   {
     name: 'Treasure',
-    image: `${BASE}enemies/treasure.png`, // swap with your treasure sprite later
+    image: `${BASE}enemies/treasure.png`,
     hp: 80, maxHp: 80, coinReward: 0,
     isBoss: false,
     tier: 'treasure',
     attacks: ['lure'],
     attackCooldown: 3000,
     pullReward: 1,
-    movePattern: 'erratic', // always erratic
+    movePattern: 'erratic',
   },
 ];
 
@@ -24,9 +24,6 @@ const BOSS_SIZE     = 120;
 const BASE_CRIT     = 0.20;
 const MOVE_PATTERNS = ['stationary', 'stationary', 'patrol', 'erratic'];
 
-// ─── Asset & Sound Config ───────────────────────────────────────────────────
-// uniqueSfx: true  → play ONLY tabSfx on click (skip press sounds)
-// uniqueSfx: false → play ONLY press sound on click (skip tabSfx)
 const NAV_CONFIG = [
   { label: 'shop',     screen: 'shop',     hoverImg: `${BASE}ui/ui_hovershop.png`,     tabSfx: 'ui_shop.mp3',  uniqueSfx: true  },
   { label: 'gamble',   screen: 'gacha',    hoverImg: `${BASE}ui/ui_hovergamble.png`,   tabSfx: 'ui_warp.mp3',  uniqueSfx: true  },
@@ -47,13 +44,11 @@ const STATUS_PORTRAITS = {
 const PRESS_SFXS   = [`${BASE}sounds/ui_press.mp3`, `${BASE}sounds/ui_press2.mp3`];
 const MENU_BG      = `${BASE}ui/ui_menu.png`;
 
-// ─── playSFX helper ──────────────────────────────────────────────────────────
 const playSFX = (src, gain = 3.5) => {
   const ctx    = new (window.AudioContext || window.webkitAudioContext)();
   const source = ctx.createBufferSource();
   const gainNode = ctx.createGain();
-  gainNode.gain.value = gain; // > 1.0 amplifies beyond normal max
-
+  gainNode.gain.value = gain;
   fetch(src)
     .then(r => r.arrayBuffer())
     .then(buf => ctx.decodeAudioData(buf))
@@ -94,30 +89,22 @@ function spawnEnemy(forceBoss = false, currentKills = 0) {
 function getDeckBonuses(deck, cardInventory = {}) {
   let atkBonus = 0, dmgMult = 1;
   const cards = [deck?.main, ...(deck?.supports ?? [])].filter(Boolean);
-  console.log('getDeckBonuses - cards to process:', cards.length);
-  
-  cards.forEach((card, idx) => {
-    console.log(`Card ${idx}: ${card.name} (ID: ${card.id})`);
+  cards.forEach((card) => {
     if (card.stats) {
       const si = cardInventory[card.id]?.si ?? 0;
       const siMult = [1, 1.12, 1.25, 1.40, 1.60][si];
-      const cardAtk = (card.stats.atk ?? 0);
-      const boostedAtk = cardAtk * siMult;
-      console.log(`  ATK: ${cardAtk}, SI: ${si}, Mult: ${siMult}, Boosted: ${boostedAtk}`);
-      atkBonus += boostedAtk;
+      atkBonus += (card.stats.atk ?? 0) * siMult;
     }
     if (card.passive) {
       if (card.passive.effect === 'global_dmg_boost')  dmgMult  += card.passive.value;
       if (card.passive.effect === 'atk_boost_high_hp') atkBonus += (card.stats?.atk ?? 0) * card.passive.value;
     }
   });
-  console.log('Final atkBonus:', atkBonus);
   return { atkBonus, dmgMult };
 }
 
 const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : Math.floor(n);
 
-// ─── Inline icon helpers ─────────────────────────────────────────────────────
 const CoinIcon = ({ size = 28 }) => (
   <img src={`${BASE}ui/ui_cucoin.png`} alt="coin" style={{ width: size, height: size, objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }} />
 );
@@ -137,26 +124,12 @@ export default function MainScreen({
   killCount, setKillCount
 }) {
   const bonuses      = getDeckBonuses(deck, cardInventory);
-  console.log('=== DECK BONUSES ===');
-  console.log('Deck:', deck);
-  console.log('CardInventory:', cardInventory);
-  console.log('Main card:', deck?.main);
-  console.log('Main card ID:', deck?.main?.id);
-  console.log('SI for main card:', cardInventory[deck?.main?.id]?.si);
-  console.log('Bonuses:', bonuses);
-  console.log('=== SUPPORT CARDS ===');
-deck?.supports?.forEach((card, i) => {
-  if (card) {
-    console.log(`Support ${i}: ${card.name} (ID: ${card.id}) - SI: ${cardInventory[card.id]?.si ?? 0}`);
-  }
-});
   const critRate     = BASE_CRIT;
   const atkBonus     = bonuses.atkBonus;
   const dmgMult      = bonuses.dmgMult * multiplier;
   const mainCard     = deck?.main ?? null;
   const abilityCdMax = mainCard?.ability?.cooldown ?? 10;
   const heroImage    = mainCard?.image ?? null;
-
 
   const [playerHp, setPlayerHp]     = useState(100);
   const [playerMaxHp]               = useState(100);
@@ -176,19 +149,24 @@ deck?.supports?.forEach((card, i) => {
   const [unlockedSkills, setUnlockedSkills] = useState([]);
   const [lureFloaters, setLureFloaters] = useState([]);
   const [activeNav,    setActiveNav]    = useState(null);
-  
 
   const enemiesRef   = useRef(enemies);
   const frozenRef    = useRef(frozenMap);
-  const killRef = useRef(killCount);
+  const killRef      = useRef(killCount);
   const floaterIdRef = useRef(0);
+
+  // ─── BUG FIX #2: Keep playerLevelRef current so processDead never has a stale closure ───
+  const playerLevelRef = useRef(playerLevel);
+  useEffect(() => { playerLevelRef.current = playerLevel; }, [playerLevel]);
 
   useEffect(() => { enemiesRef.current = enemies;  }, [enemies]);
   useEffect(() => { frozenRef.current  = frozenMap; }, [frozenMap]);
 
+  // ─── BUG FIX #3: Sync killRef whenever the prop changes (e.g. parent resets it) ────────
+  useEffect(() => { killRef.current = killCount; }, [killCount]);
+
   const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
 
-  // icon: 'coin' | 'gem' | null — renders ui_cucoin.png or ui_frailite.png after the text
   const addFloater = useCallback((text, x, y, color = '#f0c040', isCrit = false, icon = null) => {
     const id = floaterIdRef.current++;
     setFloaters(f => [...f, { id, text, x, y, color, isCrit, icon }]);
@@ -210,14 +188,17 @@ deck?.supports?.forEach((card, i) => {
       let coinsEarned = 0, gemsEarned = 0;
       dead.forEach(killed => {
         newKills++;
-        // Award XP
         const xpGain = killed.isBoss ? 50 : killed.tier === 'elite' ? 15 : killed.tier === 'treasure' ? 10 : 5;
+
+        // ─── BUG FIX #2: Read level from ref, never from stale closure ───────────────
         setPlayerXp(prev => {
+          const currentLevel = playerLevelRef.current;
           const next = prev + xpGain;
-          const xpNeeded = playerLevel * 100;
+          const xpNeeded = currentLevel * 100;
           if (next >= xpNeeded) {
-            const newLevel = playerLevel + 1;
+            const newLevel = currentLevel + 1;
             setPlayerLevel(newLevel);
+            playerLevelRef.current = newLevel; // keep ref in sync immediately
             addFloater(`LEVEL UP! ${newLevel}`, 50, 40, '#facc15', true);
             if (newLevel === 20) {
               setUnlockedSkills(s => [...s, 'gun']);
@@ -231,6 +212,7 @@ deck?.supports?.forEach((card, i) => {
           }
           return next;
         });
+
         if (killed.tier === 'treasure' && killed.pullReward) {
           gemsEarned += killed.pullReward;
           addFloater(`+${killed.pullReward}`, killed.x, killed.y + 10, '#5588ff', false, 'gem');
@@ -270,7 +252,6 @@ deck?.supports?.forEach((card, i) => {
       setTimeout(() => setPlayerHp(playerMaxHp), 3000);
       return;
     }
-    // Slowly regen 1 HP every 2 seconds if not at max
     if (playerHp >= playerMaxHp) return;
     const regen = setTimeout(() => {
       setPlayerHp(hp => Math.min(playerMaxHp, hp + 1));
@@ -331,19 +312,12 @@ deck?.supports?.forEach((card, i) => {
       if (!treasures.length) return;
       treasures.forEach(t => {
         const id = Date.now() + Math.random();
-        setLureFloaters(prev => [...prev, {
-          id,
-          x: t.x + (Math.random() - 0.5) * 10,
-          y: t.y - 8,
-        }]);
-        setTimeout(() => {
-          setLureFloaters(prev => prev.filter(l => l.id !== id));
-        }, 1200);
+        setLureFloaters(prev => [...prev, { id, x: t.x + (Math.random() - 0.5) * 10, y: t.y - 8 }]);
+        setTimeout(() => setLureFloaters(prev => prev.filter(l => l.id !== id)), 1200);
       });
     }, 3000);
     return () => clearInterval(interval);
   }, []);
-
 
   // Treasure spawner
   useEffect(() => {
@@ -360,9 +334,7 @@ deck?.supports?.forEach((card, i) => {
           state: 'idle',
         };
         setEnemies(prev => [...prev, treasure]);
-        setTimeout(() => {
-          setEnemies(prev => prev.filter(e => e.id !== treasure.id));
-        }, 10000);
+        setTimeout(() => setEnemies(prev => prev.filter(e => e.id !== treasure.id)), 10000);
       }
     }, 15000);
     return () => clearInterval(interval);
@@ -389,60 +361,63 @@ deck?.supports?.forEach((card, i) => {
     return () => clearInterval(interval);
   }, []);
 
-// Enemy attack telegraph
-useEffect(() => {
-  const interval = setInterval(() => {
-    const now = Date.now();
-    setEnemies(prev => prev.map(en => {
-      if (en.tier === 'basic') return en;
-      if (en.state === 'telegraphing') return en;
-      if (!en.attacks?.length) return en;
+  // ─── BUG FIX #4: Track and clean up telegraph setTimeouts to prevent leaks ───────────────
+  const telegraphTimeoutsRef = useRef({});
 
-      const nextAttack = en._nextAttack ?? (now + (en.attackCooldown ?? 4000));
-      if (now < nextAttack) return { ...en, _nextAttack: nextAttack };
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setEnemies(prev => prev.map(en => {
+        if (en.tier === 'basic') return en;
+        if (en.state === 'telegraphing') return en;
+        if (!en.attacks?.length) return en;
 
-      // Pick attack type
-      const attack = en.attacks[Math.floor(Math.random() * en.attacks.length)];
+        const nextAttack = en._nextAttack ?? (now + (en.attackCooldown ?? 4000));
+        if (now < nextAttack) return { ...en, _nextAttack: nextAttack };
 
-      const attackLabels = {
-        projectile: '⚡',
-        sweep:      '〰',
-        chase:      '👁',
-        slam:       '💥',
-        lure:       '💎',
-      };
+        const attack = en.attacks[Math.floor(Math.random() * en.attacks.length)];
+        const isBossAttack = en.isBoss;
+        const zone = {
+          x: en.x,
+          y: en.y,
+          radius: isBossAttack ? (attack === 'slam' ? 22 : 16) : 14,
+        };
 
-      // Boss attacks get bigger zones and more damage
-      const isBossAttack = en.isBoss;
-      const zone = {
-        x: en.x,
-        y: en.y,
-        radius: isBossAttack ? (attack === 'slam' ? 22 : 16) : 14,
-      };
-
-      setTimeout(() => {
-        const p = playerPosRef.current;
-        const hit = Math.abs(p.x - en.x) < (isBossAttack ? 18 : 8) &&
-                    Math.abs(p.y - en.y) < (isBossAttack ? 18 : 8);
-        if (hit) {
-          const dmgAmount = isBossAttack ? (attack === 'slam' ? 30 : 20) : 15;
-          setPlayerHp(hp => Math.max(0, hp - dmgAmount));
-          setTakingDamage(true);
-          setTimeout(() => setTakingDamage(false), 300);
-          addFloater(`-${dmgAmount} HP`, 10, 20, '#ff4444', false);
+        // Clear any previous timeout for this enemy before setting a new one
+        if (telegraphTimeoutsRef.current[en.id]) {
+          clearTimeout(telegraphTimeoutsRef.current[en.id]);
         }
-        setEnemies(prev2 => prev2.map(e =>
-          e.id === en.id
-            ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
-            : e
-        ));
-      }, 1000);
 
-      return { ...en, state: 'telegraphing', attackZone: zone, _currentAttack: attack };
-    }));
-  }, 300);
-  return () => clearInterval(interval);
-}, [addFloater]);
+        telegraphTimeoutsRef.current[en.id] = setTimeout(() => {
+          delete telegraphTimeoutsRef.current[en.id];
+          const p = playerPosRef.current;
+          const hit = Math.abs(p.x - en.x) < (isBossAttack ? 18 : 8) &&
+                      Math.abs(p.y - en.y) < (isBossAttack ? 18 : 8);
+          if (hit) {
+            const dmgAmount = isBossAttack ? (attack === 'slam' ? 30 : 20) : 15;
+            setPlayerHp(hp => Math.max(0, hp - dmgAmount));
+            setTakingDamage(true);
+            setTimeout(() => setTakingDamage(false), 300);
+            addFloater(`-${dmgAmount} HP`, 10, 20, '#ff4444', false);
+          }
+          setEnemies(prev2 => prev2.map(e =>
+            e.id === en.id
+              ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
+              : e
+          ));
+        }, 1000);
+
+        return { ...en, state: 'telegraphing', attackZone: zone, _currentAttack: attack };
+      }));
+    }, 300);
+
+    return () => {
+      clearInterval(interval);
+      // Clear all pending attack timeouts on unmount
+      Object.values(telegraphTimeoutsRef.current).forEach(clearTimeout);
+      telegraphTimeoutsRef.current = {};
+    };
+  }, [addFloater]);
 
   const handleEnemyClick = useCallback((enemy, e) => {
     e.stopPropagation();
@@ -518,20 +493,16 @@ useEffect(() => {
     setAbilityCd(abilityCdMax);
   }, [abilityReady, mainCard, clickPower, atkBonus, dmgMult, abilityCdMax, addFloater, processDead, setCoins, setTotalEarned]);
 
-  // ─── Nav click: unique-sfx tabs play only their sound; others play only press ───
   const handleNavClick = (cfg) => {
-    // If leaving Codex, play its close SFX first
     if (activeNav === 'cards' && cfg.screen !== 'cards') {
       const codexCfg = NAV_CONFIG.find(c => c.screen === 'cards');
       if (codexCfg?.closeSfx) playSFX(`${BASE}sounds/${codexCfg.closeSfx}`);
     }
-
     if (cfg.uniqueSfx && cfg.tabSfx) {
       playSFX(`${BASE}sounds/${cfg.tabSfx}`);
     } else {
       playPress();
     }
-
     setActiveNav(cfg.screen);
     navigate(cfg.screen);
   };
@@ -539,6 +510,7 @@ useEffect(() => {
   return (
     <div style={{ width:'100%', height:'100vh', background:'#1a2035', cursor:`url(${BASE}ui/mouse.png) 0 0, auto`, display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", userSelect:'none' }}>
 
+      {/* ─── BUG FIX #1: `.dmg-float` class was broken as `}mg-float` (missing dot + newline) ─── */}
       <style>{`
         img { -webkit-user-drag:none; user-select:none; }
         * { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }
@@ -547,14 +519,9 @@ useEffect(() => {
         @keyframes bossPulse { 0%,100%{filter:drop-shadow(0 0 6px #ff4400)} 50%{filter:drop-shadow(0 0 22px #ff4400)} }
         @keyframes bossWarn { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.7)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.08)} 80%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-50%) scale(0.95)} }
         @keyframes weakPulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1} 50%{transform:translate(-50%,-50%) scale(1.38);opacity:0.75} }
-        @keyframes telegraphPulse {
-  0%,100% { opacity:1; transform:translate(-50%,-50%) scale(1); }
-  50%      { opacity:0.4; transform:translate(-50%,-50%) scale(1.2); }
-}
-@keyframes telegraphPulseBoss {
-  0%,100% { opacity:1; transform:translate(-50%,-50%) scale(1); box-shadow:0 0 12px red; }
-  50%      { opacity:0.5; transform:translate(-50%,-50%) scale(1.25); box-shadow:0 0 28px red; }
-}mg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
+        @keyframes telegraphPulse { 0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)} 50%{opacity:0.4;transform:translate(-50%,-50%) scale(1.2)} }
+        @keyframes telegraphPulseBoss { 0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1);box-shadow:0 0 12px red} 50%{opacity:0.5;transform:translate(-50%,-50%) scale(1.25);box-shadow:0 0 28px red} }
+        .dmg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
         .enemy-wrap { position:absolute;text-align:center;z-index:10;cursor:pointer; }
         .enemy-wrap:hover .enemy-sprite { filter:brightness(1.4) !important; }
         .enemy-sprite { image-rendering:pixelated;display:block;animation:enemyFloat 2.4s ease-in-out infinite;transition:filter 0.15s; }
@@ -574,12 +541,10 @@ useEffect(() => {
 
       {/* TOP BAR */}
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 16px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
-        {/* Gems */}
         <div style={{ display:'flex', alignItems:'center', gap:6, background:'#0f1420', border:'2px solid #5588ff', borderRadius:20, padding:'4px 14px 4px 8px' }}>
           <GemIcon />
           <span style={{ color:'#fff', fontWeight:700, fontSize:17 }}>{pullCurrency}</span>
         </div>
-        {/* Coins */}
         <div style={{ display:'flex', alignItems:'center', gap:6, background:'#0f1420', border:'2px solid #cc8800', borderRadius:20, padding:'4px 14px 4px 8px' }}>
           <CoinIcon />
           <span style={{ color:'#f0c040', fontWeight:700, fontSize:17 }}>{fmt(coins)}</span>
@@ -606,40 +571,28 @@ useEffect(() => {
 
           {/* Battle viewport */}
           <div
-              ref={arenaRef}
-              onMouseMove={(e) => {
-                const rect = arenaRef.current?.getBoundingClientRect();
-                if (!rect) return;
-                playerPosRef.current = {
-                  x: ((e.clientX - rect.left) / rect.width)  * 100,
-                  y: ((e.clientY - rect.top)  / rect.height) * 100,
-                };
-              }}
-              style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
-            >
+            ref={arenaRef}
+            onMouseMove={(e) => {
+              const rect = arenaRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              playerPosRef.current = {
+                x: ((e.clientX - rect.left) / rect.width)  * 100,
+                y: ((e.clientY - rect.top)  / rect.height) * 100,
+              };
+            }}
+            style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
+          >
 
             {/* Ability button — top right of viewport */}
-<div style={{
-  position: 'absolute', top: 10, right: 12, zIndex: 20,
-  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4,
-  pointerEvents: 'auto',
-}}>
-  <button
-    className="ability-btn"
-    disabled={!abilityReady || !mainCard?.ability}
-    onClick={useAbility}
-  >
-    {!mainCard?.ability ? 'no ability' : abilityReady ? `✦ ${mainCard.ability.name}` : `CD ${abilityCd}s`}
-  </button>
-</div>
+            <div style={{ position:'absolute', top:10, right:12, zIndex:20, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4, pointerEvents:'auto' }}>
+              <button className="ability-btn" disabled={!abilityReady || !mainCard?.ability} onClick={useAbility}>
+                {!mainCard?.ability ? 'no ability' : abilityReady ? `✦ ${mainCard.ability.name}` : `CD ${abilityCd}s`}
+              </button>
+            </div>
+
             <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
             {takingDamage && (
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'rgba(255,0,0,0.25)',
-                pointerEvents: 'none',
-                zIndex: 50,
-              }} />
+              <div style={{ position:'absolute', inset:0, background:'rgba(255,0,0,0.25)', pointerEvents:'none', zIndex:50 }} />
             )}
 
             <div style={{ position:'absolute', top:10, left:12, color:'#aaa', fontSize:14, zIndex:10, pointerEvents:'none' }}>
@@ -666,35 +619,23 @@ useEffect(() => {
                     transition: isMoving ? 'left 0.9s ease-in-out, top 0.9s ease-in-out' : 'none',
                   }}
                 >
-                  
                   {en.state === 'telegraphing' && en.attackZone && (
-  <>
-    <div style={{
-      position: 'absolute',
-      left: '50%',
-      top: '50%',
-      width:  en.attackZone.radius * 3 + 'px',
-      height: en.attackZone.radius * 3 + 'px',
-      transform: 'translate(-50%, -50%)',
-      borderRadius: en._currentAttack === 'sweep' ? '4px' : '50%',
-      background: en._currentAttack === 'sweep' ? 'rgba(255,150,0,0.3)' : 'rgba(255,0,0,0.35)',
-      border: `2px solid ${en._currentAttack === 'sweep' ? 'orange' : 'red'}`,
-      animation: `${en.isBoss ? 'telegraphPulseBoss' : 'telegraphPulse'} 0.4s ease-in-out infinite`,
-      pointerEvents: 'none',
-      zIndex: 20,
-    }} />
-    <div style={{
-      position: 'absolute',
-      left: '50%',
-      top: '-18px',
-      transform: 'translateX(-50%)',
-      fontSize: 16,
-      pointerEvents: 'none',
-      zIndex: 21,
-    }}>
-      {en._currentAttack === 'sweep' ? '〰' : en._currentAttack === 'chase' ? '👁' : en.isBoss && en._currentAttack === 'slam' ? '💥' : '⚡'}
-    </div>
-  </>
+                    <>
+                      <div style={{
+                        position:'absolute', left:'50%', top:'50%',
+                        width: en.attackZone.radius * 3 + 'px',
+                        height: en.attackZone.radius * 3 + 'px',
+                        transform:'translate(-50%, -50%)',
+                        borderRadius: en._currentAttack === 'sweep' ? '4px' : '50%',
+                        background: en._currentAttack === 'sweep' ? 'rgba(255,150,0,0.3)' : 'rgba(255,0,0,0.35)',
+                        border: `2px solid ${en._currentAttack === 'sweep' ? 'orange' : 'red'}`,
+                        animation: `${en.isBoss ? 'telegraphPulseBoss' : 'telegraphPulse'} 0.4s ease-in-out infinite`,
+                        pointerEvents:'none', zIndex:20,
+                      }} />
+                      <div style={{ position:'absolute', left:'50%', top:'-18px', transform:'translateX(-50%)', fontSize:16, pointerEvents:'none', zIndex:21 }}>
+                        {en._currentAttack === 'sweep' ? '〰' : en._currentAttack === 'chase' ? '👁' : en.isBoss && en._currentAttack === 'slam' ? '💥' : '⚡'}
+                      </div>
+                    </>
                   )}
 
                   <div style={{ position:'relative', display:'inline-block' }}>
@@ -720,155 +661,44 @@ useEffect(() => {
               );
             })}
 
-            {/* ── NEW HUD ── */}
-<div style={{
-  position: 'absolute',
-  left: '1%',
-  bottom: '2%',
-  zIndex: 20,
-  width: '42%',
-  pointerEvents: 'none',
-  display: 'flex',
-  flexDirection: 'column',
-}}>
-  <div style={{ position: 'relative', width: '100%' }}>
+            {/* HUD */}
+            <div style={{ position:'absolute', left:'1%', bottom:'2%', zIndex:20, width:'42%', pointerEvents:'none', display:'flex', flexDirection:'column' }}>
+              <div style={{ position:'relative', width:'100%' }}>
+                <img src={`${BASE}ui/ui_status.png`} alt="" style={{ width:'100%', display:'block', imageRendering:'pixelated' }} />
+                <div style={{ position:'absolute', left:'3%', top:'5%', width:'48%', height:'75%', overflow:'hidden' }}>
+                  <img src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null} alt=""
+                    style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', imageRendering:'pixelated', display: mainCard ? 'block' : 'none' }}
+                  />
+                </div>
+                <div style={{ position:'absolute', right:'3%', top:'5%', width:'44%', height:'75%', borderRadius:'50%', overflow:'hidden' }}>
+                  <div style={{
+                    position:'absolute', bottom:0, left:0, width:'100%',
+                    height: abilityReady ? '100%' : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
+                    background:'rgba(100,200,255,0.35)',
+                    transition:'height 1s linear',
+                  }} />
+                  {abilityReady && mainCard?.ability && (
+                    <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', imageRendering:'pixelated', opacity:0.9 }} />
+                  )}
+                  {!abilityReady && (
+                    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:'clamp(12px,2vw,20px)', textShadow:'0 0 8px #000' }}>
+                      {abilityCd}s
+                    </div>
+                  )}
+                </div>
+                <div style={{ position:'absolute', bottom:'4%', left:'4%', width:'92%', height:'14%', overflow:'hidden', borderRadius:2 }}>
+                  <div style={{ position:'absolute', inset:0, background:'#1a0a0a' }} />
+                  <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${(playerHp / playerMaxHp) * 100}%`, transition:'width 0.2s', overflow:'hidden' }}>
+                    <img src={`${BASE}ui/ui_statushp.png`} alt="" style={{ width:`${100 / ((playerHp / playerMaxHp) || 0.01)}%`, height:'100%', objectFit:'fill', imageRendering:'pixelated', maxWidth:'none' }} />
+                  </div>
+                  <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'clamp(9px,1.2vw,13px)', color:'#fff', fontWeight:700, textShadow:'0 0 4px #000' }}>
+                    {playerHp}/{playerMaxHp}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-    {/* Base frame */}
-    <img
-      src={`${BASE}ui/ui_status.png`}
-      alt=""
-      style={{ width: '100%', display: 'block', imageRendering: 'pixelated' }}
-    />
-
-    {/* Portrait — left side of frame */}
-    <div style={{
-      position: 'absolute',
-      left: '3%',
-      top: '5%',
-      width: '48%',
-      height: '75%',
-      overflow: 'hidden',
-    }}>
-      <img
-        src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null}
-        alt=""
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'top',
-          imageRendering: 'pixelated',
-          display: mainCard ? 'block' : 'none',
-        }}
-      />
-    </div>
-
-    {/* Ability circle — right side, fills as CD recharges */}
-    <div style={{
-      position: 'absolute',
-      right: '3%',
-      top: '5%',
-      width: '44%',
-      height: '75%',
-      borderRadius: '50%',
-      overflow: 'hidden',
-    }}>
-      {/* Fill — grows from bottom as ability recharges */}
-      <div style={{
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        width: '100%',
-        height: abilityReady
-          ? '100%'
-          : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
-        background: 'rgba(100, 200, 255, 0.35)',
-        transition: 'height 1s linear',
-      }} />
-
-      {/* Ult ready overlay */}
-      {abilityReady && mainCard?.ability && (
-        <img
-          src={`${BASE}ui/ul_statusult.png`}
-          alt=""
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            imageRendering: 'pixelated',
-            opacity: 0.9,
-          }}
-        />
-      )}
-
-      {/* CD text */}
-      {!abilityReady && (
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#fff',
-          fontWeight: 900,
-          fontSize: 'clamp(12px, 2vw, 20px)',
-          textShadow: '0 0 8px #000',
-        }}>
-          {abilityCd}s
-        </div>
-      )}
-    </div>
-
-    {/* HP bar — along the bottom of the frame */}
-    <div style={{
-      position: 'absolute',
-      bottom: '4%',
-      left: '4%',
-      width: '92%',
-      height: '14%',
-      overflow: 'hidden',
-      borderRadius: 2,
-    }}>
-      {/* Background */}
-      <div style={{ position: 'absolute', inset: 0, background: '#1a0a0a' }} />
-      {/* Fill using hp image */}
-      <div style={{
-        position: 'absolute',
-        left: 0, top: 0, bottom: 0,
-        width: `${(playerHp / playerMaxHp) * 100}%`,
-        transition: 'width 0.2s',
-        overflow: 'hidden',
-      }}>
-        <img
-          src={`${BASE}ui/ui_statushp.png`}
-          alt=""
-          style={{
-            width: `${100 / ((playerHp / playerMaxHp) || 0.01)}%`,
-            height: '100%',
-            objectFit: 'fill',
-            imageRendering: 'pixelated',
-            maxWidth: 'none',
-          }}
-        />
-      </div>
-      {/* HP numbers */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 'clamp(9px, 1.2vw, 13px)',
-        color: '#fff', fontWeight: 700,
-        textShadow: '0 0 4px #000',
-      }}>
-        {playerHp}/{playerMaxHp}
-      </div>
-    </div>
-
-  </div>
-</div>
-{/* ── END HUD ── */}
-            {/* Hero — no HP bar */}
+            {/* Hero */}
             <div style={{ position:'absolute', left:'7%', bottom:'14%', zIndex:10, textAlign:'center', pointerEvents:'none' }}>
               {heroImage && !heroImage.includes('placeholder') ? (
                 <img src={heroImage} alt="hero" style={{ width:200, height:200, objectFit:'contain', imageRendering:'pixelated', display:'block' }} />
@@ -880,23 +710,11 @@ useEffect(() => {
             </div>
 
             {lureFloaters.map(l => (
-  <div key={l.id} style={{
-    position: 'absolute',
-    left: l.x + '%',
-    top: l.y + '%',
-    transform: 'translateX(-50%)',
-    pointerEvents: 'none',
-    zIndex: 30,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    animation: 'floatDmg 1.2s ease-out forwards',
-  }}>
-    <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width: 22, height: 22, imageRendering: 'pixelated' }} />
-    <span style={{ color: '#5588ff', fontWeight: 700, fontSize: 14 }}>+1</span>
-  </div>
-))}
-
+              <div key={l.id} style={{ position:'absolute', left:l.x+'%', top:l.y+'%', transform:'translateX(-50%)', pointerEvents:'none', zIndex:30, display:'flex', alignItems:'center', gap:4, animation:'floatDmg 1.2s ease-out forwards' }}>
+                <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width:22, height:22, imageRendering:'pixelated' }} />
+                <span style={{ color:'#5588ff', fontWeight:700, fontSize:14 }}>+1</span>
+              </div>
+            ))}
 
             {floaters.map(f => (
               <div key={f.id} className="dmg-float" style={{ left:f.x+'%', top:f.y+'%', color:f.color, fontSize:f.isCrit?'clamp(14px,2.3vw,23px)':'clamp(12px,1.9vw,18px)', fontWeight:f.isCrit?900:600, textShadow:f.isCrit?'0 0 10px rgba(255,60,60,0.9)':'0 1px 4px rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
@@ -907,7 +725,7 @@ useEffect(() => {
             ))}
           </div>
 
-          {/* Hero stat bar — NO HP */}
+          {/* Hero stat bar */}
           <div style={{ background:'#0f1625', border:'2px solid #334', borderRadius:6, padding:'10px 14px', display:'flex', alignItems:'center', gap:14, flexShrink:0 }}>
             <div style={{ width:44, height:44, flexShrink:0, borderRadius:4, overflow:'hidden', border:`2px solid ${mainCard?'#f0c040':'#334'}`, background:'#1a2035', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {mainCard && !mainCard.image?.includes('placeholder')
@@ -939,132 +757,67 @@ useEffect(() => {
               )}
             </div>
             <div style={{ flexShrink:0, minWidth:80, textAlign:'center' }}>
-          <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>HP</div>
-          <div style={{ background:'#1a0a0a', borderRadius:3, height:8, width:80 }}>
-            <div style={{
-              height:'100%', borderRadius:3,
-              width: (playerHp / playerMaxHp * 100) + '%',
-              background: playerHp > 50 ? '#4ade80' : playerHp > 25 ? '#facc15' : '#f87171',
-              transition: 'width 0.2s, background 0.3s',
-            }} />
-          </div>
-          <div style={{ color:'#aaa', fontSize:11, marginTop:2 }}>{playerHp}/{playerMaxHp}</div>
-        </div>
-
-        {unlockedSkills.includes('gun') && (
-  <div style={{ flexShrink:0, textAlign:'center' }}>
-    <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>GUN</div>
-    <button
-      className="ability-btn"
-      style={{ borderColor:'#4ade80', color:'#4ade80' }}
-      onClick={() => {
-        // fires at nearest enemy
-        const nearest = enemiesRef.current[0];
-        if (!nearest) return;
-        const dmg = Math.floor((clickPower + atkBonus) * dmgMult * 0.8);
-        addFloater(`🔫-${fmt(dmg)}`, nearest.x, nearest.y - 12, '#4ade80', false);
-        const updated = enemiesRef.current.map(en =>
-          en.id === nearest.id ? { ...en, hp: en.hp - dmg } : en
-        );
-        processDead(enemiesRef.current, updated);
-      }}
-    >
-      🔫 SHOOT
-    </button>
-  </div>
-)}
+              <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>HP</div>
+              <div style={{ background:'#1a0a0a', borderRadius:3, height:8, width:80 }}>
+                <div style={{ height:'100%', borderRadius:3, width:(playerHp/playerMaxHp*100)+'%', background: playerHp>50?'#4ade80':playerHp>25?'#facc15':'#f87171', transition:'width 0.2s,background 0.3s' }} />
+              </div>
+              <div style={{ color:'#aaa', fontSize:11, marginTop:2 }}>{playerHp}/{playerMaxHp}</div>
+            </div>
+            {unlockedSkills.includes('gun') && (
+              <div style={{ flexShrink:0, textAlign:'center' }}>
+                <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>GUN</div>
+                <button className="ability-btn" style={{ borderColor:'#4ade80', color:'#4ade80' }}
+                  onClick={() => {
+                    const nearest = enemiesRef.current[0];
+                    if (!nearest) return;
+                    const dmg = Math.floor((clickPower + atkBonus) * dmgMult * 0.8);
+                    addFloater(`🔫-${fmt(dmg)}`, nearest.x, nearest.y - 12, '#4ade80', false);
+                    const updated = enemiesRef.current.map(en => en.id === nearest.id ? { ...en, hp: en.hp - dmg } : en);
+                    processDead(enemiesRef.current, updated);
+                  }}>
+                  🔫 SHOOT
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Support buffs — 4 slots, 2x2 grid */}
+          {/* Support buffs */}
           {deck?.supports?.some(Boolean) && (
-  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, flexShrink:0 }}>
-    {deck.supports.map((card, i) => card && (
-      <div key={i} style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:4, padding:'6px 10px', fontSize:11 }}>
-        <div style={{ color:'#5588ff', marginBottom:2, fontWeight:700 }}>{card.name} <span style={{ color:'#445', fontWeight:400 }}>support</span></div>
-        {card.stats && (() => {
-          const si = cardInventory[card.id]?.si ?? 0;
-          const siMult = [1, 1.12, 1.25, 1.40, 1.60][si];
-          const boostedAtk = Math.round(card.stats.atk * siMult);
-          return (
-            <span style={{ color:'#aaa' }}>
-              +{boostedAtk} ATK
-              {si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>S{si+1}</span>}
-            </span>
-          );
-        })()}
-        {card.passive && <div style={{ color:'#778', marginTop:1 }}>{card.passive.description}</div>}
-      </div>
-    ))}
-  </div>
-)}
-
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, flexShrink:0 }}>
+              {deck.supports.map((card, i) => card && (
+                <div key={i} style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:4, padding:'6px 10px', fontSize:11 }}>
+                  <div style={{ color:'#5588ff', marginBottom:2, fontWeight:700 }}>{card.name} <span style={{ color:'#445', fontWeight:400 }}>support</span></div>
+                  {card.stats && (() => {
+                    const si = cardInventory[card.id]?.si ?? 0;
+                    const siMult = [1, 1.12, 1.25, 1.40, 1.60][si];
+                    const boostedAtk = Math.round(card.stats.atk * siMult);
+                    return <span style={{ color:'#aaa' }}>+{boostedAtk} ATK{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>S{si+1}</span>}</span>;
+                  })()}
+                  {card.passive && <div style={{ color:'#778', marginTop:1 }}>{card.passive.description}</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* RIGHT: nav grid */}
-        <div style={{
-          flex: '0 0 45%',
-          padding: '14px 16px 14px 4px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-          minHeight: 0,
-        }}>
-          {/* Menu container — aspect ratio matches ui_menu.png */}
-          <div style={{
-            position: 'relative',
-            width: '95%',
-            flex: 1,
-            minHeight: 0,
-            overflow: 'hidden',
-          }}>
-            {/* Base menu image */}
-            <img
-              src={MENU_BG}
-              alt=""
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'fill',
-                display: 'block',
-                pointerEvents: 'none',
-              }}
-            />
-
-            {/* Hover overlays — each is full canvas, pre-positioned by the artist */}
+        <div style={{ flex:'0 0 45%', padding:'14px 16px 14px 4px', display:'flex', flexDirection:'column', gap:8, minHeight:0 }}>
+          <div style={{ position:'relative', width:'95%', flex:1, minHeight:0, overflow:'hidden' }}>
+            <img src={MENU_BG} alt="" style={{ width:'100%', height:'100%', objectFit:'fill', display:'block', pointerEvents:'none' }} />
             {NAV_CONFIG.map((cfg) => (
               hoveredNav === cfg.label && (
-                <img
-                  key={cfg.label}
-                  src={cfg.hoverImg}
-                  alt=""
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'fill',
-                    pointerEvents: 'none',
-                  }}
-                />
+                <img key={cfg.label} src={cfg.hoverImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'fill', pointerEvents:'none' }} />
               )
             ))}
-
-            {/* Invisible click zones — positioned to match each button on the PNG */}
             {[
-              { cfg: NAV_CONFIG[0], style: { left:'2%',  top:'2%',  width:'47%', height:'29%' } }, // SHOP
-              { cfg: NAV_CONFIG[1], style: { left:'51%', top:'2%',  width:'47%', height:'29%' } }, // GAMBLE
-              { cfg: NAV_CONFIG[2], style: { left:'2%',  top:'33%', width:'47%', height:'31%' } }, // DECK
-              { cfg: NAV_CONFIG[3], style: { left:'51%', top:'33%', width:'47%', height:'31%' } }, // TOWER
-              { cfg: NAV_CONFIG[4], style: { left:'2%',  top:'66%', width:'62%', height:'32%' } }, // CODEX
-              { cfg: NAV_CONFIG[5], style: { left:'66%', top:'66%', width:'32%', height:'32%' } }, // SETTINGS
+              { cfg: NAV_CONFIG[0], style: { left:'2%',  top:'2%',  width:'47%', height:'29%' } },
+              { cfg: NAV_CONFIG[1], style: { left:'51%', top:'2%',  width:'47%', height:'29%' } },
+              { cfg: NAV_CONFIG[2], style: { left:'2%',  top:'33%', width:'47%', height:'31%' } },
+              { cfg: NAV_CONFIG[3], style: { left:'51%', top:'33%', width:'47%', height:'31%' } },
+              { cfg: NAV_CONFIG[4], style: { left:'2%',  top:'66%', width:'62%', height:'32%' } },
+              { cfg: NAV_CONFIG[5], style: { left:'66%', top:'66%', width:'32%', height:'32%' } },
             ].map(({ cfg, style }) => (
-              <div
-                key={cfg.label}
-                style={{
-                  position: 'absolute',
-                  cursor: 'pointer',
-                  ...style,
-                }}
+              <div key={cfg.label} style={{ position:'absolute', cursor:'pointer', ...style }}
                 onMouseEnter={() => setHoveredNav(cfg.label)}
                 onMouseLeave={() => setHoveredNav(null)}
                 onClick={() => handleNavClick(cfg)}
