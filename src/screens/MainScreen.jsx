@@ -137,7 +137,9 @@ deck?.supports?.forEach((card, i) => {
 
   const [enemies,      setEnemies]      = useState(() => [spawnEnemy(false, 0), spawnEnemy(false, 0)]);
   const [floaters,     setFloaters]     = useState([]);
-  const [killCount,    setKillCount]    = useState(0);
+  const [killCount, setKillCount] = useState(
+    () => parseInt(sessionStorage.getItem('killCount') || '0', 10)
+  );
   const [bossWarning,  setBossWarning]  = useState(false);
   const [abilityCd,    setAbilityCd]    = useState(0);
   const [abilityReady, setAbilityReady] = useState(true);
@@ -148,11 +150,14 @@ deck?.supports?.forEach((card, i) => {
 
   const enemiesRef   = useRef(enemies);
   const frozenRef    = useRef(frozenMap);
-  const killRef      = useRef(0);
+  const killRef = useRef(parseInt(sessionStorage.getItem('killCount') || '0', 10));
   const floaterIdRef = useRef(0);
 
   useEffect(() => { enemiesRef.current = enemies;  }, [enemies]);
   useEffect(() => { frozenRef.current  = frozenMap; }, [frozenMap]);
+  useEffect(() => {
+    sessionStorage.setItem('killCount', killCount);
+  }, [killCount]);
 
   const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
 
