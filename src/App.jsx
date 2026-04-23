@@ -31,6 +31,7 @@ export default function App() {
   const [pullCurrency,  setPullCurrency]  = useState(s.pullCurrency  ?? 10);
   const [coins,         setCoins]         = useState(s.coins         ?? 0);
   const [collection,    setCollection]    = useState(s.collection    ?? []);
+  const [killCount, setKillCount] = useState(s.killCount ?? 0);
   // ── Shop inventory: { [cardId]: { count: number, si: number (0–4) } }  ──────
   // Kept separate from `collection` (the gacha array) so nothing breaks.
   const [cardInventory, setCardInventory] = useState(s.cardInventory ?? {}); // ← NEW
@@ -52,10 +53,11 @@ export default function App() {
   });
 
   // NO auto-income — coins come from kills only
+  // Add killCount to useDebouncedSave:
   useDebouncedSave({
-    pullCurrency, coins, collection, cardInventory, // ← cardInventory added to save
+    pullCurrency, coins, collection, cardInventory,
     clickPower, cps, multiplier, totalEarned, upgradeCost,
-    deck, pity4, pity5,
+    deck, pity4, pity5, killCount,  // ← add killCount
   });
 
   const buyUpgrade = () => {
@@ -111,7 +113,9 @@ export default function App() {
       totalEarned={totalEarned} setTotalEarned={setTotalEarned}
       upgradeCost={upgradeCost} buyUpgrade={buyUpgrade}
       deck={deck}
-      cardInventory={cardInventory}                                 // ← NEW (for SI bonuses)
+      cardInventory={cardInventory}
+      killCount={killCount}
+      setKillCount={setKillCount}
     />
   );
 

@@ -37,7 +37,7 @@ function doPulls(count, pity4, pity5, banner) {
     p4++; p5++;
     const rand = Math.random() * 100;
     let rarity;
-    if (p5 >= 90 || (p5 >= 75 && rand < 0.6 + (p5 - 75) * 6)) {
+    if (p5 >= 90 || (p5 >= 60 && rand < 2 + (p5 - 60) * 6)) {
       rarity = Math.random() < 0.1 ? 6 : 5; p5 = 0;
     } else if (p4 >= 10 || rand < 5.1) {
       rarity = 4; p4 = 0;
@@ -568,9 +568,6 @@ zIndex: 10,
         />
       </div>
 
-      <div style={{ color: 'rgba(255,255,255,0.22)', fontSize: 12 }}>
-        5★ 0.6% · 4★ 5.1% · 6★ 0.67%
-      </div>
     </div>
   </div>
 )}
