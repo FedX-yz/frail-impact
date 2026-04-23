@@ -36,6 +36,14 @@ const NAV_CONFIG = [
   { label: 'settings', screen: 'settings', hoverImg: `${BASE}ui/ui_hoversettings.png`, tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
 ];
 
+const STATUS_PORTRAITS = {
+  1:  `${BASE}ui/ui_statusastrec.png`,
+  2:  `${BASE}ui/ui_statusbio.png`,
+  6:  `${BASE}ui/ui_statusice.png`,
+  9:  `${BASE}ui/ul_statusreef.png`,
+  10: `${BASE}ui/ui_statusforbiddenone.png`,
+  99: `${BASE}ui/ui_statushox.png`,
+};
 const PRESS_SFXS   = [`${BASE}sounds/ui_press.mp3`, `${BASE}sounds/ui_press2.mp3`];
 const MENU_BG      = `${BASE}ui/ui_menu.png`;
 
@@ -529,10 +537,11 @@ useEffect(() => {
   };
 
   return (
-    <div style={{ width:'100%', height:'100vh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", userSelect:'none' }}>
+    <div style={{ width:'100%', height:'100vh', background:'#1a2035', cursor:`url(${BASE}ui/mouse.png) 0 0, auto`, display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", userSelect:'none' }}>
 
       <style>{`
         img { -webkit-user-drag:none; user-select:none; }
+        * { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }
         @keyframes floatDmg { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)} 65%{opacity:1} 100%{opacity:0;transform:translateX(-50%) translateY(-64px) scale(0.8)} }
         @keyframes enemyFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
         @keyframes bossPulse { 0%,100%{filter:drop-shadow(0 0 6px #ff4400)} 50%{filter:drop-shadow(0 0 22px #ff4400)} }
@@ -608,6 +617,21 @@ useEffect(() => {
               }}
               style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
             >
+
+            {/* Ability button — top right of viewport */}
+<div style={{
+  position: 'absolute', top: 10, right: 12, zIndex: 20,
+  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4,
+  pointerEvents: 'auto',
+}}>
+  <button
+    className="ability-btn"
+    disabled={!abilityReady || !mainCard?.ability}
+    onClick={useAbility}
+  >
+    {!mainCard?.ability ? 'no ability' : abilityReady ? `✦ ${mainCard.ability.name}` : `CD ${abilityCd}s`}
+  </button>
+</div>
             <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
             {takingDamage && (
               <div style={{
@@ -696,6 +720,154 @@ useEffect(() => {
               );
             })}
 
+            {/* ── NEW HUD ── */}
+<div style={{
+  position: 'absolute',
+  left: '1%',
+  bottom: '2%',
+  zIndex: 20,
+  width: '42%',
+  pointerEvents: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+}}>
+  <div style={{ position: 'relative', width: '100%' }}>
+
+    {/* Base frame */}
+    <img
+      src={`${BASE}ui/ui_status.png`}
+      alt=""
+      style={{ width: '100%', display: 'block', imageRendering: 'pixelated' }}
+    />
+
+    {/* Portrait — left side of frame */}
+    <div style={{
+      position: 'absolute',
+      left: '3%',
+      top: '5%',
+      width: '48%',
+      height: '75%',
+      overflow: 'hidden',
+    }}>
+      <img
+        src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null}
+        alt=""
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition: 'top',
+          imageRendering: 'pixelated',
+          display: mainCard ? 'block' : 'none',
+        }}
+      />
+    </div>
+
+    {/* Ability circle — right side, fills as CD recharges */}
+    <div style={{
+      position: 'absolute',
+      right: '3%',
+      top: '5%',
+      width: '44%',
+      height: '75%',
+      borderRadius: '50%',
+      overflow: 'hidden',
+    }}>
+      {/* Fill — grows from bottom as ability recharges */}
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        height: abilityReady
+          ? '100%'
+          : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
+        background: 'rgba(100, 200, 255, 0.35)',
+        transition: 'height 1s linear',
+      }} />
+
+      {/* Ult ready overlay */}
+      {abilityReady && mainCard?.ability && (
+        <img
+          src={`${BASE}ui/ul_statusult.png`}
+          alt=""
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            imageRendering: 'pixelated',
+            opacity: 0.9,
+          }}
+        />
+      )}
+
+      {/* CD text */}
+      {!abilityReady && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontWeight: 900,
+          fontSize: 'clamp(12px, 2vw, 20px)',
+          textShadow: '0 0 8px #000',
+        }}>
+          {abilityCd}s
+        </div>
+      )}
+    </div>
+
+    {/* HP bar — along the bottom of the frame */}
+    <div style={{
+      position: 'absolute',
+      bottom: '4%',
+      left: '4%',
+      width: '92%',
+      height: '14%',
+      overflow: 'hidden',
+      borderRadius: 2,
+    }}>
+      {/* Background */}
+      <div style={{ position: 'absolute', inset: 0, background: '#1a0a0a' }} />
+      {/* Fill using hp image */}
+      <div style={{
+        position: 'absolute',
+        left: 0, top: 0, bottom: 0,
+        width: `${(playerHp / playerMaxHp) * 100}%`,
+        transition: 'width 0.2s',
+        overflow: 'hidden',
+      }}>
+        <img
+          src={`${BASE}ui/ui_statushp.png`}
+          alt=""
+          style={{
+            width: `${100 / ((playerHp / playerMaxHp) || 0.01)}%`,
+            height: '100%',
+            objectFit: 'fill',
+            imageRendering: 'pixelated',
+            maxWidth: 'none',
+          }}
+        />
+      </div>
+      {/* HP numbers */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 'clamp(9px, 1.2vw, 13px)',
+        color: '#fff', fontWeight: 700,
+        textShadow: '0 0 4px #000',
+      }}>
+        {playerHp}/{playerMaxHp}
+      </div>
+    </div>
+
+  </div>
+</div>
+{/* ── END HUD ── */}
             {/* Hero — no HP bar */}
             <div style={{ position:'absolute', left:'7%', bottom:'14%', zIndex:10, textAlign:'center', pointerEvents:'none' }}>
               {heroImage && !heroImage.includes('placeholder') ? (
