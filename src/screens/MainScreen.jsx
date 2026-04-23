@@ -4,7 +4,7 @@ const BASE = import.meta.env.BASE_URL;
 
 const ENEMY_TYPES = [
   { name:'Xiao',               image:`${BASE}enemies/xiaoenemy.png`, hp:220,  maxHp:220,  coinReward:50,  isBoss:false, tier: 'basic', attacks:[], },
-  { name:'Bonk',               image:`${BASE}enemies/bonkenemy.png`, hp:300,  maxHp:300,  coinReward:80,  isBoss:false, tier: 'elite', attacks:['projectile'], attackCooldown: 4000, },
+  { name:'Bonk',               image:`${BASE}enemies/bonkenemy.png`, hp:300,  maxHp:300,  coinReward:80,  isBoss:false, tier: 'elite', attacks:['projectile', 'sweep', 'chase'], attackCooldown: 4000, },
   { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true, gemReward:10, tier: 'boss', attacks: ['projectile', 'slam'], attackCooldown: 2500, },
   {
     name: 'Treasure',
@@ -62,9 +62,11 @@ const playPress = () =>
   playSFX(PRESS_SFXS[Math.floor(Math.random() * PRESS_SFXS.length)]);
 
 function spawnEnemy(forceBoss = false, currentKills = 0) {
-  const pool  = forceBoss
-    ? ENEMY_TYPES[ENEMY_TYPES.length - 1]
-    : ENEMY_TYPES[Math.floor(Math.random() * (ENEMY_TYPES.length - 1))];
+  const spawnableTypes = ENEMY_TYPES.filter(t => t.tier !== 'boss' && t.tier !== 'treasure');
+  const bossType = ENEMY_TYPES.find(t => t.tier === 'boss');
+  const pool = forceBoss
+    ? bossType
+    : spawnableTypes[Math.floor(Math.random() * spawnableTypes.length)];
   const wave  = Math.floor(currentKills / 10);
   const scale = 1 + wave * 0.3;
   const pattern = pool.isBoss ? 'stationary' : MOVE_PATTERNS[Math.floor(Math.random() * MOVE_PATTERNS.length)];
@@ -161,6 +163,10 @@ deck?.supports?.forEach((card, i) => {
   const [frozenMap,    setFrozenMap]    = useState({});
   const [hoveredNav,   setHoveredNav]   = useState(null);
   const [takingDamage, setTakingDamage] = useState(false);
+  const [playerXp,    setPlayerXp]    = useState(0);
+  const [playerLevel, setPlayerLevel] = useState(1);
+  const [unlockedSkills, setUnlockedSkills] = useState([]);
+  const [lureFloaters, setLureFloaters] = useState([]);
   const [activeNav,    setActiveNav]    = useState(null);
   
 
@@ -196,6 +202,27 @@ deck?.supports?.forEach((card, i) => {
       let coinsEarned = 0, gemsEarned = 0;
       dead.forEach(killed => {
         newKills++;
+        // Award XP
+        const xpGain = killed.isBoss ? 50 : killed.tier === 'elite' ? 15 : killed.tier === 'treasure' ? 10 : 5;
+        setPlayerXp(prev => {
+          const next = prev + xpGain;
+          const xpNeeded = playerLevel * 100;
+          if (next >= xpNeeded) {
+            const newLevel = playerLevel + 1;
+            setPlayerLevel(newLevel);
+            addFloater(`LEVEL UP! ${newLevel}`, 50, 40, '#facc15', true);
+            if (newLevel === 20) {
+              setUnlockedSkills(s => [...s, 'gun']);
+              addFloater('SKILL UNLOCKED: GUN', 50, 30, '#4ade80', true);
+            }
+            if (newLevel === 50) {
+              setUnlockedSkills(s => [...s, 'ult']);
+              addFloater('SKILL UNLOCKED: ULT', 50, 30, '#c084fc', true);
+            }
+            return next - xpNeeded;
+          }
+          return next;
+        });
         if (killed.tier === 'treasure' && killed.pullReward) {
           gemsEarned += killed.pullReward;
           addFloater(`+${killed.pullReward}`, killed.x, killed.y + 10, '#5588ff', false, 'gem');
@@ -228,12 +255,19 @@ deck?.supports?.forEach((card, i) => {
     }
   }, [dmgMult, addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency]);
 
-  // Player death
+  // Player death + regen
   useEffect(() => {
     if (playerHp <= 0) {
       addFloater('DEFEATED!', 50, 50, '#ff4444', true);
       setTimeout(() => setPlayerHp(playerMaxHp), 3000);
+      return;
     }
+    // Slowly regen 1 HP every 2 seconds if not at max
+    if (playerHp >= playerMaxHp) return;
+    const regen = setTimeout(() => {
+      setPlayerHp(hp => Math.min(playerMaxHp, hp + 1));
+    }, 2000);
+    return () => clearTimeout(regen);
   }, [playerHp]);
 
   // Ability CD
@@ -282,6 +316,27 @@ deck?.supports?.forEach((card, i) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Lure mechanic
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const treasures = enemiesRef.current.filter(e => e.tier === 'treasure');
+      if (!treasures.length) return;
+      treasures.forEach(t => {
+        const id = Date.now() + Math.random();
+        setLureFloaters(prev => [...prev, {
+          id,
+          x: t.x + (Math.random() - 0.5) * 10,
+          y: t.y - 8,
+        }]);
+        setTimeout(() => {
+          setLureFloaters(prev => prev.filter(l => l.id !== id));
+        }, 1200);
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+
   // Treasure spawner
   useEffect(() => {
     const interval = setInterval(() => {
@@ -326,34 +381,48 @@ deck?.supports?.forEach((card, i) => {
     return () => clearInterval(interval);
   }, []);
 
-  // ─── Enemy attack telegraph ───────────────────────────────────────────────
+// Enemy attack telegraph
 useEffect(() => {
   const interval = setInterval(() => {
     const now = Date.now();
     setEnemies(prev => prev.map(en => {
-      if (en.tier === 'basic' || en.isBoss) return en;        // bosses use weak pts
-      if (en.state === 'telegraphing') return en;             // already winding up
+      if (en.tier === 'basic') return en;
+      if (en.state === 'telegraphing') return en;
       if (!en.attacks?.length) return en;
 
-      const cooldownKey = `attackCooldown_${en.id}`;
-      const nextAttack  = en._nextAttack ?? (now + en.attackCooldown);
-
+      const nextAttack = en._nextAttack ?? (now + (en.attackCooldown ?? 4000));
       if (now < nextAttack) return { ...en, _nextAttack: nextAttack };
 
-      // Start telegraph — flash red for 1 second then fire
-      const zone = { x: en.x, y: en.y, radius: 14 };
+      // Pick attack type
+      const attack = en.attacks[Math.floor(Math.random() * en.attacks.length)];
+
+      const attackLabels = {
+        projectile: '⚡',
+        sweep:      '〰',
+        chase:      '👁',
+        slam:       '💥',
+        lure:       '💎',
+      };
+
+      // Boss attacks get bigger zones and more damage
+      const isBossAttack = en.isBoss;
+      const zone = {
+        x: en.x,
+        y: en.y,
+        radius: isBossAttack ? (attack === 'slam' ? 22 : 16) : 14,
+      };
+
       setTimeout(() => {
-        // Fire: check if player dodged
         const p = playerPosRef.current;
-        const dx = p.x - zone.x, dy = p.y - zone.y;
-        const hit = Math.abs(p.x - en.x) < 8 && Math.abs(p.y - en.y) < 8;
+        const hit = Math.abs(p.x - en.x) < (isBossAttack ? 18 : 8) &&
+                    Math.abs(p.y - en.y) < (isBossAttack ? 18 : 8);
         if (hit) {
-          setPlayerHp(hp => Math.max(0, hp - 15));
+          const dmgAmount = isBossAttack ? (attack === 'slam' ? 30 : 20) : 15;
+          setPlayerHp(hp => Math.max(0, hp - dmgAmount));
           setTakingDamage(true);
           setTimeout(() => setTakingDamage(false), 300);
-          addFloater('-15 HP', 10, 20, '#ff4444', false);
+          addFloater(`-${dmgAmount} HP`, 10, 20, '#ff4444', false);
         }
-        // Clear telegraph
         setEnemies(prev2 => prev2.map(e =>
           e.id === en.id
             ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
@@ -361,7 +430,7 @@ useEffect(() => {
         ));
       }, 1000);
 
-      return { ...en, state: 'telegraphing', attackZone: zone };
+      return { ...en, state: 'telegraphing', attackZone: zone, _currentAttack: attack };
     }));
   }, 300);
   return () => clearInterval(interval);
@@ -470,10 +539,13 @@ useEffect(() => {
         @keyframes bossWarn { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.7)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.08)} 80%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-50%) scale(0.95)} }
         @keyframes weakPulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1} 50%{transform:translate(-50%,-50%) scale(1.38);opacity:0.75} }
         @keyframes telegraphPulse {
-          0%,100% { opacity:1; transform:translate(-50%,-50%) scale(1); }
-          50%      { opacity:0.5; transform:translate(-50%,-50%) scale(1.15); }
-        }
-        .dmg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
+  0%,100% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  50%      { opacity:0.4; transform:translate(-50%,-50%) scale(1.2); }
+}
+@keyframes telegraphPulseBoss {
+  0%,100% { opacity:1; transform:translate(-50%,-50%) scale(1); box-shadow:0 0 12px red; }
+  50%      { opacity:0.5; transform:translate(-50%,-50%) scale(1.25); box-shadow:0 0 28px red; }
+}mg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
         .enemy-wrap { position:absolute;text-align:center;z-index:10;cursor:pointer; }
         .enemy-wrap:hover .enemy-sprite { filter:brightness(1.4) !important; }
         .enemy-sprite { image-rendering:pixelated;display:block;animation:enemyFloat 2.4s ease-in-out infinite;transition:filter 0.15s; }
@@ -509,6 +581,10 @@ useEffect(() => {
           auto <span style={{ color:'#f0c040' }}>{fmt(cps*dmgMult)}/s</span>
           {' · '}
           wave <span style={{ color:'#ff8c00' }}>{Math.floor(killCount/10)+1}</span>
+          {' · '}
+          lv <span style={{ color:'#4ade80' }}>{playerLevel}</span>
+          {' · '}
+          <span style={{ color:'#4ade80' }}>{playerXp}/{playerLevel * 100} xp</span>
         </div>
         <div style={{ flex:1 }} />
       </div>
@@ -568,20 +644,33 @@ useEffect(() => {
                 >
                   
                   {en.state === 'telegraphing' && en.attackZone && (
-                    <div style={{
-                      position: 'absolute',
-                      left: '50%',           
-                      top: '50%',            
-                      width:  en.attackZone.radius * 2.5 + 'px',
-                      height: en.attackZone.radius * 2.5 + 'px',
-                      transform: 'translate(-50%, -50%)',
-                      borderRadius: '50%',
-                      background: 'rgba(255,0,0,0.35)',
-                      border: '2px solid red',
-                      animation: 'telegraphPulse 0.4s ease-in-out infinite',
-                      pointerEvents: 'none',
-                      zIndex: 20,
-                    }} />
+  <>
+    <div style={{
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      width:  en.attackZone.radius * 3 + 'px',
+      height: en.attackZone.radius * 3 + 'px',
+      transform: 'translate(-50%, -50%)',
+      borderRadius: en._currentAttack === 'sweep' ? '4px' : '50%',
+      background: en._currentAttack === 'sweep' ? 'rgba(255,150,0,0.3)' : 'rgba(255,0,0,0.35)',
+      border: `2px solid ${en._currentAttack === 'sweep' ? 'orange' : 'red'}`,
+      animation: `${en.isBoss ? 'telegraphPulseBoss' : 'telegraphPulse'} 0.4s ease-in-out infinite`,
+      pointerEvents: 'none',
+      zIndex: 20,
+    }} />
+    <div style={{
+      position: 'absolute',
+      left: '50%',
+      top: '-18px',
+      transform: 'translateX(-50%)',
+      fontSize: 16,
+      pointerEvents: 'none',
+      zIndex: 21,
+    }}>
+      {en._currentAttack === 'sweep' ? '〰' : en._currentAttack === 'chase' ? '👁' : en.isBoss && en._currentAttack === 'slam' ? '💥' : '⚡'}
+    </div>
+  </>
                   )}
 
                   <div style={{ position:'relative', display:'inline-block' }}>
@@ -617,6 +706,25 @@ useEffect(() => {
                 </div>
               )}
             </div>
+
+            {lureFloaters.map(l => (
+  <div key={l.id} style={{
+    position: 'absolute',
+    left: l.x + '%',
+    top: l.y + '%',
+    transform: 'translateX(-50%)',
+    pointerEvents: 'none',
+    zIndex: 30,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    animation: 'floatDmg 1.2s ease-out forwards',
+  }}>
+    <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width: 22, height: 22, imageRendering: 'pixelated' }} />
+    <span style={{ color: '#5588ff', fontWeight: 700, fontSize: 14 }}>+1</span>
+  </div>
+))}
+
 
             {floaters.map(f => (
               <div key={f.id} className="dmg-float" style={{ left:f.x+'%', top:f.y+'%', color:f.color, fontSize:f.isCrit?'clamp(14px,2.3vw,23px)':'clamp(12px,1.9vw,18px)', fontWeight:f.isCrit?900:600, textShadow:f.isCrit?'0 0 10px rgba(255,60,60,0.9)':'0 1px 4px rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
@@ -670,6 +778,29 @@ useEffect(() => {
           </div>
           <div style={{ color:'#aaa', fontSize:11, marginTop:2 }}>{playerHp}/{playerMaxHp}</div>
         </div>
+
+        {unlockedSkills.includes('gun') && (
+  <div style={{ flexShrink:0, textAlign:'center' }}>
+    <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>GUN</div>
+    <button
+      className="ability-btn"
+      style={{ borderColor:'#4ade80', color:'#4ade80' }}
+      onClick={() => {
+        // fires at nearest enemy
+        const nearest = enemiesRef.current[0];
+        if (!nearest) return;
+        const dmg = Math.floor((clickPower + atkBonus) * dmgMult * 0.8);
+        addFloater(`🔫-${fmt(dmg)}`, nearest.x, nearest.y - 12, '#4ade80', false);
+        const updated = enemiesRef.current.map(en =>
+          en.id === nearest.id ? { ...en, hp: en.hp - dmg } : en
+        );
+        processDead(enemiesRef.current, updated);
+      }}
+    >
+      🔫 SHOOT
+    </button>
+  </div>
+)}
           </div>
 
           {/* Support buffs — 4 slots, 2x2 grid */}
