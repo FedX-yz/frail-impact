@@ -8,7 +8,7 @@ const ENEMY_TYPES = [
   { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true, gemReward:10, tier: 'boss', attacks: ['projectile', 'slam'], attackCooldown: 2500, },
   {
     name: 'Treasure',
-    image: `${BASE}enemies/xiaoenemy.png`, // swap with your treasure sprite later
+    image: `${BASE}enemies/treasure.png`, // swap with your treasure sprite later
     hp: 80, maxHp: 80, coinReward: 0,
     isBoss: false,
     tier: 'treasure',
