@@ -24,6 +24,7 @@ function useDebouncedSave(data, delay = 1500) {
   });
 }
 
+
 export default function App() {
   const s = loadSave() || {};
 
@@ -57,8 +58,22 @@ export default function App() {
   useDebouncedSave({
     pullCurrency, coins, collection, cardInventory,
     clickPower, cps, multiplier, totalEarned, upgradeCost,
-    deck, pity4, pity5, killCount,  // ← add killCount
+    deck, pity4, pity5, killCount,
   });
+
+  useEffect(() => {
+    const handleUnload = () => {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          pullCurrency, coins, collection, cardInventory,
+          clickPower, cps, multiplier, totalEarned, upgradeCost,
+          deck, pity4, pity5, killCount,
+        }));
+      } catch {}
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [pullCurrency, coins, collection, cardInventory, clickPower, cps, multiplier, totalEarned, upgradeCost, deck, pity4, pity5, killCount]);
 
   const buyUpgrade = () => {
     if (coins < upgradeCost) return;
