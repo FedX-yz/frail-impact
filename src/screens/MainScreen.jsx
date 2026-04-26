@@ -638,54 +638,43 @@ export default function MainScreen({
 
             {/* HUD */}
 
-{/* HUD */}
 <div style={{ position:'absolute', left:'1%', bottom:'2%', zIndex:20, width:'38%', pointerEvents:'none' }}>
   <div style={{ position:'relative', width:'100%' }}>
 
     {/* Base frame */}
     <img src={`${BASE}ui/ui_status.png`} alt="" style={{ width:'100%', display:'block', imageRendering:'pixelated' }} />
 
-    {/* Portrait — left square of the frame */}
-    <div style={{ position:'absolute', left:'3%', top:'5%', width:'44%', height:'76%', overflow:'hidden' }}>
-      <img
-        src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null}
-        alt=""
+    {/* Portrait — above the HP bar on the left */}
+    <div style={{ position:'absolute', left:'3%', top:'5%', width:'42%', height:'70%', overflow:'hidden' }}>
+      <img src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null} alt=""
         style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', imageRendering:'pixelated', display: mainCard ? 'block' : 'none' }}
       />
     </div>
 
-    {/* Skill orb — right circle of the frame */}
+    {/* Orb fill — clips from top, reveals from bottom as ability charges */}
     <div style={{ position:'absolute', right:'3%', top:'5%', width:'44%', height:'76%', borderRadius:'50%', overflow:'hidden' }}>
-      {/* Orb fill image, clipped by charge level from bottom */}
-      <div style={{ position:'absolute', bottom:0, left:0, width:'100%', height: abilityReady ? '100%' : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`, overflow:'hidden', transition:'height 1s linear' }}>
-        <img
-          src={`${BASE}ui/ul_statusult.png`}
-          alt=""
-          style={{ position:'absolute', bottom:0, left:0, width:'100%', height:`${(abilityCdMax / Math.max(abilityCdMax - abilityCd, 0.01)) * 100}%`, objectFit:'cover', objectPosition:'bottom', imageRendering:'pixelated' }}
-        />
-      </div>
-      {/* Ready pulse overlay */}
-      {abilityReady && mainCard?.ability && (
-        <div style={{ position:'absolute', inset:0, borderRadius:'50%', background:'rgba(150,230,255,0.15)', animation:'weakPulse 1.2s ease-in-out infinite' }} />
-      )}
-      {/* CD countdown */}
+      <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{
+        width:'100%', height:'100%', objectFit:'cover', imageRendering:'pixelated', display:'block',
+        clipPath: `inset(${abilityReady ? '0%' : `${100 - ((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`} 0 0 0)`,
+        transition: 'clip-path 1s linear',
+      }} />
       {!abilityReady && (
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:'clamp(12px,2vw,20px)', textShadow:'0 0 8px #000', zIndex:2 }}>
           {abilityCd}s
         </div>
       )}
+      {abilityReady && mainCard?.ability && (
+        <div style={{ position:'absolute', inset:0, background:'rgba(150,230,255,0.15)', animation:'weakPulse 1.2s ease-in-out infinite' }} />
+      )}
     </div>
 
-    {/* HP bar — bottom strip of the frame */}
-    <div style={{ position:'absolute', bottom:'4%', left:'4%', width:'92%', height:'13%', borderRadius:2, overflow:'hidden' }}>
-      <div style={{ position:'absolute', inset:0, background:'#1a0505' }} />
-      <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${(playerHp / playerMaxHp) * 100}%`, overflow:'hidden', transition:'width 0.2s' }}>
-        <img
-          src={`${BASE}ui/ui_statushp.png`}
-          alt=""
-          style={{ position:'absolute', left:0, top:0, width:`${100 / ((playerHp / playerMaxHp) || 0.01)}%`, height:'100%', objectFit:'fill', imageRendering:'pixelated', maxWidth:'none' }}
-        />
-      </div>
+    {/* HP fill — clips from right as HP drops */}
+    <div style={{ position:'absolute', bottom:'4%', left:'4%', width:'92%', height:'13%', overflow:'hidden', borderRadius:2 }}>
+      <img src={`${BASE}ui/ui_statushp.png`} alt="" style={{
+        width:'100%', height:'100%', objectFit:'fill', imageRendering:'pixelated', display:'block',
+        clipPath: `inset(0 ${100 - (playerHp / playerMaxHp) * 100}% 0 0)`,
+        transition: 'clip-path 0.2s',
+      }} />
       <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'clamp(9px,1.2vw,13px)', color:'#fff', fontWeight:700, textShadow:'0 0 4px #000' }}>
         {playerHp}/{playerMaxHp}
       </div>
