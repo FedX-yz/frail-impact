@@ -637,50 +637,61 @@ export default function MainScreen({
             })}
 
             {/* HUD */}
-            <div style={{ position:'absolute', left:'1%', bottom:'2%', zIndex:20, width:'42%', pointerEvents:'none', display:'flex', flexDirection:'column' }}>
-              <div style={{ position:'relative', width:'100%' }}>
-                <img src={`${BASE}ui/ui_status.png`} alt="" style={{ width:'100%', display:'block', imageRendering:'pixelated' }} />
-                <div style={{ position:'absolute', left:'3%', top:'5%', width:'48%', height:'75%', overflow:'hidden' }}>
-                  <img src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null} alt=""
-                    style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', imageRendering:'pixelated', display: mainCard ? 'block' : 'none' }}
-                  />
-                </div>
-                <div style={{ position:'absolute', right:'3%', top:'5%', width:'44%', aspectRatio:'1', borderRadius:'50%', overflow:'hidden' }}>
-  {/* Ult image always visible as base */}
-  {mainCard?.ability && (
-    <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', imageRendering:'pixelated', opacity: abilityReady ? 1 : 0.6 }} />
-  )}
-  {/* Dark overlay drains from top as ability charges */}
-  {!abilityReady && (
-    <div style={{
-      position:'absolute', top:0, left:0, width:'100%',
-      height: `${100 - ((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
-      background:'rgba(0,0,20,0.80)',
-      transition:'height 1s linear',
-    }} />
-  )}
-  {/* CD countdown */}
-  {!abilityReady && (
-    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:'clamp(12px,2vw,20px)', textShadow:'0 0 8px #000' }}>
-      {abilityCd}s
+
+<div style={{ position:'absolute', left:'2%', bottom:'2%', zIndex:20, pointerEvents:'none' }}>
+  {/* Portrait + Orb cluster */}
+  <div style={{ position:'relative', display:'inline-block' }}>
+
+    {/* Portrait */}
+    <div style={{ width:90, height:90, border:'3px solid #fff', borderRadius:4, overflow:'hidden', background:'#1a2035', flexShrink:0 }}>
+      <img
+        src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null}
+        alt=""
+        style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', imageRendering:'pixelated', display: mainCard ? 'block' : 'none' }}
+      />
     </div>
-  )}
-  {/* Ready pulse */}
-  {abilityReady && mainCard?.ability && (
-    <div style={{ position:'absolute', inset:0, background:'rgba(100,200,255,0.12)', animation:'weakPulse 1.2s ease-in-out infinite', borderRadius:'50%' }} />
-  )}
+
+    {/* Skill Gauge — overlaps top-right corner of portrait */}
+    <div style={{
+      position:'absolute', top:-20, right:-20,
+      width:58, height:58,
+      borderRadius:'50%',
+      border:'3px solid #fff',
+      background:'#050d1a',
+      overflow:'hidden',
+      zIndex:5,
+    }}>
+      <div style={{
+        position:'absolute', bottom:0, left:0, width:'100%',
+        height: abilityReady ? '100%' : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
+        background:'rgba(100,220,255,0.88)',
+        transition:'height 1s linear',
+      }} />
+      {abilityReady && mainCard?.ability && (
+        <div style={{ position:'absolute', inset:0, borderRadius:'50%', animation:'weakPulse 1.2s ease-in-out infinite', background:'rgba(150,230,255,0.15)' }} />
+      )}
+      {!abilityReady && (
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:13, textShadow:'0 0 6px #000', zIndex:2 }}>
+          {abilityCd}s
+        </div>
+      )}
+    </div>
+  </div>
+
+  {/* HP Bar — sits below the portrait/orb cluster */}
+  <div style={{ width:90, marginTop:5, height:16, background:'#1a0505', borderRadius:3, position:'relative', overflow:'hidden', border:'1px solid #333' }}>
+    <div style={{
+      position:'absolute', left:0, top:0, bottom:0,
+      width:`${(playerHp / playerMaxHp) * 100}%`,
+      background:'#f97316',
+      transition:'width 0.2s',
+      borderRadius:3,
+    }} />
+    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'#fff', fontWeight:700, textShadow:'0 0 4px #000' }}>
+      {playerHp}/{playerMaxHp}
+    </div>
+  </div>
 </div>
-                <div style={{ position:'absolute', bottom:'4%', left:'4%', width:'92%', height:'14%', overflow:'hidden', borderRadius:2 }}>
-                  <div style={{ position:'absolute', inset:0, background:'#1a0a0a' }} />
-                  <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${(playerHp / playerMaxHp) * 100}%`, transition:'width 0.2s', overflow:'hidden' }}>
-                    <img src={`${BASE}ui/ui_statushp.png`} alt="" style={{ width:`${100 / ((playerHp / playerMaxHp) || 0.01)}%`, height:'100%', objectFit:'fill', imageRendering:'pixelated', maxWidth:'none' }} />
-                  </div>
-                  <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'clamp(9px,1.2vw,13px)', color:'#fff', fontWeight:700, textShadow:'0 0 4px #000' }}>
-                    {playerHp}/{playerMaxHp}
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {lureFloaters.map(l => (
               <div key={l.id} style={{ position:'absolute', left:l.x+'%', top:l.y+'%', transform:'translateX(-50%)', pointerEvents:'none', zIndex:30, display:'flex', alignItems:'center', gap:4, animation:'floatDmg 1.2s ease-out forwards' }}>
