@@ -645,22 +645,31 @@ export default function MainScreen({
                     style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', imageRendering:'pixelated', display: mainCard ? 'block' : 'none' }}
                   />
                 </div>
-                <div style={{ position:'absolute', right:'3%', top:'5%', width:'44%', height:'75%', borderRadius:'50%', overflow:'hidden' }}>
-                <div style={{
-                    position:'absolute', bottom:0, left:0, width:'100%',
-                    height: abilityReady ? '0%' : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
-                    background:'rgba(100,200,255,0.35)',
-                    transition:'height 1s linear',
-                  }} />
-                  {abilityReady && mainCard?.ability && (
-                    <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', imageRendering:'pixelated', opacity:0.9 }} />
-                  )}
-                  {!abilityReady && (
-                    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:'clamp(12px,2vw,20px)', textShadow:'0 0 8px #000' }}>
-                      {abilityCd}s
-                    </div>
-                  )}
-                </div>
+                <div style={{ position:'absolute', right:'3%', top:'5%', width:'44%', aspectRatio:'1', borderRadius:'50%', overflow:'hidden' }}>
+  {/* Ult image always visible as base */}
+  {mainCard?.ability && (
+    <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', imageRendering:'pixelated', opacity: abilityReady ? 1 : 0.6 }} />
+  )}
+  {/* Dark overlay drains from top as ability charges */}
+  {!abilityReady && (
+    <div style={{
+      position:'absolute', top:0, left:0, width:'100%',
+      height: `${100 - ((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
+      background:'rgba(0,0,20,0.80)',
+      transition:'height 1s linear',
+    }} />
+  )}
+  {/* CD countdown */}
+  {!abilityReady && (
+    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:'clamp(12px,2vw,20px)', textShadow:'0 0 8px #000' }}>
+      {abilityCd}s
+    </div>
+  )}
+  {/* Ready pulse */}
+  {abilityReady && mainCard?.ability && (
+    <div style={{ position:'absolute', inset:0, background:'rgba(100,200,255,0.12)', animation:'weakPulse 1.2s ease-in-out infinite', borderRadius:'50%' }} />
+  )}
+</div>
                 <div style={{ position:'absolute', bottom:'4%', left:'4%', width:'92%', height:'14%', overflow:'hidden', borderRadius:2 }}>
                   <div style={{ position:'absolute', inset:0, background:'#1a0a0a' }} />
                   <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${(playerHp / playerMaxHp) * 100}%`, transition:'width 0.2s', overflow:'hidden' }}>
