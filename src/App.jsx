@@ -131,6 +131,7 @@ export default function App() {
       cardInventory={cardInventory}
       killCount={killCount}
       setKillCount={setKillCount}
+      setCardInventory={setCardInventory}
     />
   );
 

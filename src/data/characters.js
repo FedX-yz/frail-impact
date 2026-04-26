@@ -17,9 +17,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     `${BASE}reveals/astrecreveal.mp4`,
     stats: { hp: 1400, atk: 160, def: 80 },
-    ability: {
+    skill: {
+      name: 'Rock Shard',
+      description: 'Launches a rock at one enemy for 3× click DMG.',
+      effect: 'rock_shard',
+      cooldown: 4,
+    },
+    ult: {
       name: 'Tectonic Wrath',
-      type: 'active',
       description: 'Summons a rock spire that deals 400% ATK to all enemies.',
       effect: 'tectonic_wrath',
       cooldown: 6,
@@ -46,9 +51,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     `${BASE}reveals/bioreveal.mp4`,
     stats: { hp: 1200, atk: 200, def: 50 },
-    ability: {
+    skill: {
+      name: 'Quantum Burst',
+      description: 'Deals 2× click DMG to all enemies.',
+      effect: 'quantum_burst',
+      cooldown: 5,
+    },
+    ult: {
       name: 'Black Hole',
-      type: 'active',
       description: 'Tears open a singularity. Pulls all enemies in and deals 600% ATK.',
       effect: 'black_hole',
       cooldown: 8,
@@ -75,9 +85,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     `${BASE}reveals/bioreveal.mp4`,
     stats: { hp: 1200, atk: 200, def: 50 },
-    ability: {
+    skill: {
+      name: 'Swag Strike',
+      description: 'Deals 3× click DMG to all enemies.',
+      effect: 'swag_strike',
+      cooldown: 4,
+    },
+    ult: {
       name: 'Idk',
-      type: 'active',
       description: 'type shi',
       effect: 'black_hole',
       cooldown: 8,
@@ -104,9 +119,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     `${BASE}reveals/icereveal.mp4`,
     stats: { hp: 1350, atk: 140, def: 100 },
-    ability: {
+    skill: {
+      name: 'Frost Bolt',
+      description: 'Deals 2× click DMG to one enemy and freezes it for 2s.',
+      effect: 'frost_bolt',
+      cooldown: 4,
+    },
+    ult: {
       name: 'Permafrost',
-      type: 'active',
       description: 'Freezes all enemies 4s and deals 250% ATK.',
       effect: 'permafrost',
       cooldown: 5,
@@ -133,9 +153,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     `${BASE}reveals/reefreveal.mp4`,
     stats: { hp: 1600, atk: 120, def: 90 },
-    ability: {
+    skill: {
+      name: 'Healing Tide',
+      description: 'Deals 1× click DMG to one enemy and restores 15 HP.',
+      effect: 'healing_tide',
+      cooldown: 5,
+    },
+    ult: {
       name: 'Tidal Surge',
-      type: 'active',
       description: 'Deals 350% ATK to all enemies and drops a bonus coin pile.',
       effect: 'tidal_surge',
       cooldown: 7,
@@ -162,9 +187,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     `${BASE}reveals/stephenreveal.mp4`,
     stats: { hp: 1300, atk: 170, def: 70 },
-    ability: {
+    skill: {
+      name: 'Reality Slice',
+      description: 'Deals 5× click DMG to the highest HP enemy.',
+      effect: 'reality_slice',
+      cooldown: 6,
+    },
+    ult: {
       name: 'Reality Break',
-      type: 'active',
       description: 'Ignores all enemy DEF and deals 500% ATK.',
       effect: 'reality_break',
       cooldown: 7,
@@ -192,9 +222,14 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/6star.mp4`,
     resultVideo:     null,
     stats: { hp: 9999, atk: 999, def: 999 },
-    ability: {
+    skill: {
+      name: 'Devour',
+      description: 'Deals 2× click DMG to all enemies. Heals HP equal to damage dealt.',
+      effect: 'devour',
+      cooldown: 3,
+    },
+    ult: {
       name: 'HOX',
-      type: 'active',
       description: 'eats everyone',
       effect: 'hox',
       cooldown: 60,

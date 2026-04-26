@@ -87,7 +87,7 @@ export default function MainScreen({
   totalEarned, setTotalEarned,
   upgradeCost, buyUpgrade,
   deck,
-  cardInventory,
+  cardInventory, setCardInventory,
   killCount, setKillCount
 }) {
   const bonuses      = getDeckBonuses(deck, cardInventory);
@@ -95,7 +95,10 @@ export default function MainScreen({
   const atkBonus     = bonuses.atkBonus;
   const dmgMult      = bonuses.dmgMult * multiplier;
   const mainCard     = deck?.main ?? null;
-  const abilityCdMax = mainCard?.ability?.cooldown ?? 10;
+  const abilityCdMax = mainCard?.ult?.cooldown ?? 10;
+  const cardEntry    = cardInventory[mainCard?.id] ?? { si: 0, xp: 0, level: 1 };
+  const cardLevel    = cardEntry.level ?? 1;
+  const cardXp       = cardEntry.xp ?? 0;
 
   const [playerHp, setPlayerHp]     = useState(100);
   const [playerMaxHp]               = useState(100);
@@ -110,11 +113,12 @@ export default function MainScreen({
   const [frozenMap,    setFrozenMap]    = useState({});
   const [hoveredNav,   setHoveredNav]   = useState(null);
   const [takingDamage, setTakingDamage] = useState(false);
-  const [playerXp,    setPlayerXp]    = useState(0);
-  const [playerLevel, setPlayerLevel] = useState(1);
-  const [unlockedSkills, setUnlockedSkills] = useState([]);
+  const [hitFlash,     setHitFlash]     = useState(false);
+  const [skillCd,      setSkillCd]      = useState(0);
+  const [skillReady,   setSkillReady]   = useState(true);
   const [lureFloaters, setLureFloaters] = useState([]);
   const [activeNav,    setActiveNav]    = useState(null);
+  const [cdAnimating, setCdAnimating] = useState(false);
 
   const enemiesRef   = useRef(enemies);
   const frozenRef    = useRef(frozenMap);
@@ -123,8 +127,8 @@ export default function MainScreen({
   const dmgMultRef   = useRef(dmgMult);
   const [, forceUpdate] = useState(0);
 
-  const playerLevelRef = useRef(playerLevel);
-  useEffect(() => { playerLevelRef.current = playerLevel; }, [playerLevel]);
+  const mainCardRef = useRef(mainCard);
+  useEffect(() => { mainCardRef.current = mainCard; }, [mainCard]);
 
   useEffect(() => { enemiesRef.current  = enemies;  }, [enemies]);
   useEffect(() => { frozenRef.current   = frozenMap; }, [frozenMap]);
@@ -159,29 +163,24 @@ export default function MainScreen({
       let coinsEarned = 0, gemsEarned = 0;
       dead.forEach(killed => {
         newKills++;
-        const xpGain = killed.isBoss ? 50 : killed.tier === 'elite' ? 15 : killed.tier === 'treasure' ? 10 : 5;
-
-        setPlayerXp(prev => {
-          const currentLevel = playerLevelRef.current;
-          const next = prev + xpGain;
-          const xpNeeded = currentLevel * 100;
-          if (next >= xpNeeded) {
-            const newLevel = currentLevel + 1;
-            setPlayerLevel(newLevel);
-            playerLevelRef.current = newLevel;
-            addFloater(`LEVEL UP! ${newLevel}`, 50, 40, '#facc15', true);
-            if (newLevel === 20) {
-              setUnlockedSkills(s => [...s, 'gun']);
-              addFloater('SKILL UNLOCKED: GUN', 50, 30, '#4ade80', true);
+        const xpGain = killed.isBoss ? 1000 : killed.tier === 'elite' ? 300 : killed.tier === 'treasure' ? 10 : 100;
+        const mc = mainCardRef.current;
+        if (mc && mc.rarity >= 5) {
+          setCardInventory(prev => {
+            const entry = prev[mc.id] ?? { si: 0, xp: 0, level: 1 };
+            const prevLevel = entry.level ?? 1;
+            const newXp = (entry.xp ?? 0) + xpGain;
+            const xpNeeded = prevLevel * 100;
+            if (newXp >= xpNeeded) {
+              const newLevel = prevLevel + 1;
+              addFloater(`${mc.name} LV${newLevel}!`, 50, 40, '#facc15', true);
+              if (newLevel === 20) addFloater('SKILL UNLOCKED!', 50, 30, '#4ade80', true);
+              if (newLevel === 50) addFloater('ULT UNLOCKED!', 50, 30, '#c084fc', true);
+              return { ...prev, [mc.id]: { ...entry, xp: newXp - xpNeeded, level: newLevel } };
             }
-            if (newLevel === 50) {
-              setUnlockedSkills(s => [...s, 'ult']);
-              addFloater('SKILL UNLOCKED: ULT', 50, 30, '#c084fc', true);
-            }
-            return next - xpNeeded;
-          }
-          return next;
-        });
+            return { ...prev, [mc.id]: { ...entry, xp: newXp } };
+          });
+        }
 
         if (killed.tier === 'treasure' && killed.pullReward) {
           gemsEarned += killed.pullReward;
@@ -221,7 +220,7 @@ export default function MainScreen({
     } else {
       setEnemies(updated);
     }
-  }, [addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency]);
+  }, [addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency, setCardInventory]);
 
   // Player death + regen
   useEffect(() => {
@@ -241,10 +240,19 @@ export default function MainScreen({
   useEffect(() => {
     if (abilityCd <= 0) return;
     const t = setInterval(() => {
-      setAbilityCd(cd => { if (cd <= 1) { setAbilityReady(true); clearInterval(t); return 0; } return cd - 1; });
+      setAbilityCd(cd => { if (cd <= 1) { setAbilityReady(true); setCdAnimating(false); clearInterval(t); return 0; } return cd - 1; });
     }, 1000);
     return () => clearInterval(t);
   }, [abilityCd]);
+
+  // Skill CD
+  useEffect(() => {
+    if (skillCd <= 0) return;
+    const t = setInterval(() => {
+      setSkillCd(cd => { if (cd <= 1) { setSkillReady(true); clearInterval(t); return 0; } return cd - 1; });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [skillCd]);
 
   // Auto-attack
   useEffect(() => {
@@ -268,18 +276,16 @@ export default function MainScreen({
   useEffect(() => {
     const interval = setInterval(() => {
       setEnemies(prev => prev.map(en => {
-        if (en.isBoss || en.movePattern === 'stationary') return en;
-        if (en.movePattern === 'patrol') {
-          const newX = en.x + en.patrolDir * 4;
-          const clamped = Math.max(50, Math.min(85, newX));
-          return { ...en, x: clamped, patrolDir: (newX > 85 || newX < 50) ? -en.patrolDir : en.patrolDir };
-        }
+        if (en.isBoss || en.speed === 0) return en;
         if (en.movePattern === 'erratic' && Math.random() < 0.45) {
           return { ...en, x: 50 + Math.random() * 35, y: 25 + Math.random() * 50 };
         }
-        return en;
+        const step = (en.speed ?? 2) * 0.7;
+        const newX = en.x + en.patrolDir * step;
+        const clamped = Math.max(50, Math.min(85, newX));
+        return { ...en, x: clamped, patrolDir: (newX > 85 || newX < 50) ? -en.patrolDir : en.patrolDir };
       }));
-    }, 1000);
+    }, 600);
     return () => clearInterval(interval);
   }, []);
 
@@ -359,10 +365,13 @@ export default function MainScreen({
 
         const attack = en.attacks[Math.floor(Math.random() * en.attacks.length)];
         const isBossAttack = en.isBoss;
-        const zone = {
-          x: en.x,
-          y: en.y,
-          radius: isBossAttack ? (attack === 'slam' ? 22 : 16) : 14,
+        const isBodyAttack = attack === 'chase';
+        const spriteSize = en.isBoss ? BOSS_SIZE : REGULAR_SIZE;
+        const r = Math.round((spriteSize + 20) / 3);
+        const zone = isBodyAttack ? null : {
+          x: en.x, y: en.y, radius: r,
+          w: attack === 'sweep' ? r * 5 : r * 3,
+          h: attack === 'sweep' ? r * 1.2 : r * 3,
         };
 
         if (telegraphTimeoutsRef.current[en.id]) {
@@ -371,24 +380,30 @@ export default function MainScreen({
 
         telegraphTimeoutsRef.current[en.id] = setTimeout(() => {
           delete telegraphTimeoutsRef.current[en.id];
-          const p = playerPosRef.current;
           const liveEnemy = enemiesRef.current.find(e => e.id === en.id);
-          const ex = liveEnemy?.x ?? en.x;
-          const ey = liveEnemy?.y ?? en.y;
+          if (!liveEnemy) return;
+          const p = playerPosRef.current;
+          const ex = liveEnemy.x;
+          const ey = liveEnemy.y;
           const hit = Math.abs(p.x - ex) < (isBossAttack ? 18 : 8) &&
                       Math.abs(p.y - ey) < (isBossAttack ? 18 : 8);
           if (hit) {
-            const dmgAmount = isBossAttack ? (attack === 'slam' ? 30 : 20) : 15;
+            const dmgAmount = en.isBoss ? (attack === 'slam' ? 35 : attack === 'sweep' ? 22 : 18) : en.tier === 'elite' ? (attack === 'chase' ? 20 : 14) : 10;
             setPlayerHp(hp => Math.max(0, hp - dmgAmount));
-            setTakingDamage(true);
-            setTimeout(() => setTakingDamage(false), 300);
+            setTakingDamage(true); setHitFlash(true);
+            setTimeout(() => { setTakingDamage(false); setHitFlash(false); }, 300);
             addFloater(`-${dmgAmount} HP`, 10, 20, '#ff4444', false);
           }
           setEnemies(prev2 => prev2.map(e =>
-            e.id === en.id
-              ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
-              : e
+            e.id === en.id ? { ...e, state: 'attacking' } : e
           ));
+          setTimeout(() => {
+            setEnemies(prev2 => prev2.map(e =>
+              e.id === en.id
+                ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
+                : e
+            ));
+          }, 200);
         }, 1000);
 
         return { ...en, state: 'telegraphing', attackZone: zone, _currentAttack: attack };
@@ -420,9 +435,90 @@ export default function MainScreen({
     processDead(enemiesRef.current, updated);
   }, [clickPower, atkBonus, dmgMult, addFloater, processDead]);
 
-  const useAbility = useCallback(() => {
-    if (!abilityReady || !mainCard?.ability) return;
-    const effect  = mainCard.ability.effect;
+  const triggerSkill = useCallback(() => {
+    if (!skillReady || !mainCard?.skill) return;
+    if (cardLevel < 20) { addFloater('Skill unlocks at LV20', 50, 35, '#aaa', false); return; }
+    const effect  = mainCard.skill.effect;
+    const baseDmg = Math.floor((clickPower + atkBonus) * dmgMult);
+    const current = enemiesRef.current;
+    let updated   = current;
+    switch (effect) {
+      case 'rock_shard': {
+        if (!current.length) break;
+        const t = current[Math.floor(Math.random() * current.length)];
+        const dmg = baseDmg * 3;
+        addFloater(`🪨-${fmt(dmg)}`, t.x, t.y - 12, '#F59E0B', true);
+        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
+        break;
+      }
+      case 'quantum_burst': {
+        const dmg = baseDmg * 2;
+        current.forEach(en => addFloater(`⚛-${fmt(dmg)}`, en.x, en.y - 12, '#8B5CF6', true));
+        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp - dmg) }));
+        break;
+      }
+      case 'frost_bolt': {
+        if (!current.length) break;
+        const t = current[Math.floor(Math.random() * current.length)];
+        const dmg = baseDmg * 2;
+        addFloater(`❄-${fmt(dmg)}`, t.x, t.y - 12, '#06B6D4', true);
+        setFrozenMap(prev => ({ ...prev, [t.id]: Date.now() + 2000 }));
+        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
+        break;
+      }
+      case 'healing_tide': {
+        if (!current.length) break;
+        const t = current[Math.floor(Math.random() * current.length)];
+        const dmg = baseDmg;
+        addFloater(`💧-${fmt(dmg)}`, t.x, t.y - 12, '#3B82F6', true);
+        addFloater('+15 HP', 10, 20, '#4ade80', false);
+        setPlayerHp(hp => Math.min(playerMaxHp, hp + 15));
+        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
+        break;
+      }
+      case 'reality_slice': {
+        if (!current.length) break;
+        const t = current.reduce((a, b) => a.hp > b.hp ? a : b);
+        const dmg = baseDmg * 5;
+        addFloater(`✦-${fmt(dmg)}`, t.x, t.y - 12, '#EAB308', true);
+        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
+        break;
+      }
+      case 'devour': {
+        const dmg = baseDmg * 2;
+        let totalHeal = 0;
+        updated = current.map(en => {
+          const actual = Math.min(en.hp, dmg);
+          totalHeal += actual;
+          addFloater(`👁-${fmt(dmg)}`, en.x, en.y - 12, '#ff0000', true);
+          return { ...en, hp: Math.max(0, en.hp - dmg) };
+        });
+        addFloater(`+${fmt(totalHeal)} HP`, 10, 20, '#4ade80', false);
+        setPlayerHp(hp => Math.min(playerMaxHp, hp + totalHeal));
+        break;
+      }
+      case 'swag_strike': {
+        const dmg = baseDmg * 3;
+        current.forEach(en => addFloater(`💃-${fmt(dmg)}`, en.x, en.y - 12, '#8B5CF6', true));
+        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp - dmg) }));
+        break;
+      }
+      default: {
+        if (!current.length) break;
+        const dmg = baseDmg * 2;
+        addFloater(`✦-${fmt(dmg)}`, current[0].x, current[0].y - 12, '#cc44ff', true);
+        updated = current.map((en, i) => i === 0 ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
+      }
+    }
+    processDead(current, updated);
+    setSkillReady(false);
+    setSkillCd(mainCard.skill.cooldown);
+  }, [skillReady, mainCard, cardLevel, clickPower, atkBonus, dmgMult, addFloater, processDead, setFrozenMap, playerMaxHp]);
+
+  const triggerAbility = useCallback(() => {
+    if (!abilityReady || !mainCard?.ult) return;
+    if (cardLevel < 50) { addFloater('Ult unlocks at LV50', 50, 35, '#aaa', false); return; }
+    const effect  = mainCard.ult.effect;
     const baseDmg = Math.floor((clickPower + atkBonus) * dmgMult);
     const current = enemiesRef.current;
     let updated   = current;
@@ -474,7 +570,18 @@ export default function MainScreen({
     processDead(current, updated);
     setAbilityReady(false);
     setAbilityCd(abilityCdMax);
-  }, [abilityReady, mainCard, clickPower, atkBonus, dmgMult, abilityCdMax, addFloater, processDead, setCoins, setTotalEarned]);
+    setTimeout(() => setCdAnimating(true), 50);
+  }, [abilityReady, mainCard, cardLevel, clickPower, atkBonus, dmgMult, abilityCdMax, addFloater, processDead, setCoins, setTotalEarned]);
+
+  // Ability keybind — must be after triggerAbility is defined
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'e' || e.key === 'E') triggerAbility();
+      if (e.key === 'q' || e.key === 'Q') triggerSkill();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [triggerAbility, triggerSkill]);
 
   const handleNavClick = (cfg) => {
     if (activeNav === 'cards' && cfg.screen !== 'cards') {
@@ -503,10 +610,12 @@ export default function MainScreen({
         @keyframes weakPulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1} 50%{transform:translate(-50%,-50%) scale(1.38);opacity:0.75} }
         @keyframes telegraphPulse { 0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)} 50%{opacity:0.4;transform:translate(-50%,-50%) scale(1.2)} }
         @keyframes telegraphPulseBoss { 0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1);box-shadow:0 0 12px red} 50%{opacity:0.5;transform:translate(-50%,-50%) scale(1.25);box-shadow:0 0 28px red} }
+        @keyframes arenaShake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-4px,2px)} 50%{transform:translate(4px,-2px)} 80%{transform:translate(-2px,3px)} }
+        @keyframes chaseFlash { 0%,100%{filter:brightness(1) drop-shadow(0 0 0px red)} 50%{filter:brightness(2) drop-shadow(0 0 18px red)} }
         .dmg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
         .enemy-wrap { position:absolute;text-align:center;z-index:10;cursor:pointer; }
         .enemy-wrap:hover .enemy-sprite { filter:brightness(1.4) !important; }
-        .enemy-sprite { image-rendering:pixelated;display:block;animation:enemyFloat 2.4s ease-in-out infinite;transition:filter 0.15s; }
+        .enemy-sprite { image-rendering:pixelated;display:block;animation:enemyFloat 2.4s ease-in-out infinite;transition:none; }
         .enemy-sprite.boss { animation:enemyFloat 1.8s ease-in-out infinite,bossPulse 1.2s ease-in-out infinite; }
         .boss-warning { position:absolute;top:50%;left:50%;animation:bossWarn 2.6s ease-in-out forwards;pointer-events:none;z-index:40;text-align:center; }
         .weak-pt { position:absolute;width:28px;height:28px;border-radius:50%;background:radial-gradient(circle,#ffff44 30%,#ff8800);border:2px solid #fff;cursor:crosshair;z-index:25;animation:weakPulse 0.45s ease-in-out infinite;box-shadow:0 0 14px #ffff44;transform:translate(-50%,-50%); }
@@ -538,9 +647,11 @@ export default function MainScreen({
           {' · '}
           wave <span style={{ color:'#ff8c00' }}>{Math.floor(killCount/10)+1}</span>
           {' · '}
-          lv <span style={{ color:'#4ade80' }}>{playerLevel}</span>
-          {' · '}
-          <span style={{ color:'#4ade80' }}>{playerXp}/{playerLevel * 100} xp</span>
+          {mainCard?.rarity >= 5 && <>
+            lv <span style={{ color:'#4ade80' }}>{cardLevel}</span>
+            {' · '}
+            <span style={{ color:'#4ade80' }}>{cardXp}/{cardLevel * 100} xp</span>
+          </>}
         </div>
         <div style={{ flex:1 }} />
       </div>
@@ -562,12 +673,14 @@ export default function MainScreen({
                 y: ((e.clientY - rect.top)  / rect.height) * 100,
               };
             }}
-            style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
+            style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625', animation: hitFlash ? 'arenaShake 0.3s ease-out' : 'none' }}
           >
 
             <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
             {takingDamage && (
-              <div style={{ position:'absolute', inset:0, background:'rgba(255,0,0,0.25)', pointerEvents:'none', zIndex:50 }} />
+              <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:50,
+                background: hitFlash ? 'rgba(255,255,255,0.45)' : 'rgba(255,0,0,0.2)',
+                transition:'background 0.15s' }} />
             )}
 
             <div style={{ position:'absolute', top:10, left:12, color:'#aaa', fontSize:14, zIndex:10, pointerEvents:'none' }}>
@@ -591,20 +704,21 @@ export default function MainScreen({
                   style={{
                     left: en.x+'%', top: en.y+'%',
                     transform:'translate(-50%,-50%)',
-                    transition: (isMoving && en.movePattern !== 'erratic') ? 'left 0.9s ease-in-out, top 0.9s ease-in-out' : 'none',
+                    transition: (isMoving && en.movePattern !== 'erratic') ? 'left 0.55s linear, top 0.55s linear' : 'none',
                   }}
                 >
-                  {en.state === 'telegraphing' && en.attackZone && (
+                  {(en.state === 'telegraphing' || en.state === 'attacking') && en.attackZone && (
                     <>
                       <div style={{
                         position:'absolute', left:'50%', top:'50%',
-                        width: en.attackZone.radius * 3 + 'px',
-                        height: en.attackZone.radius * 3 + 'px',
+                        width:  (en.attackZone.w ?? en.attackZone.radius * 3) + 'px',
+                        height: (en.attackZone.h ?? en.attackZone.radius * 3) + 'px',
                         transform:'translate(-50%, -50%)',
                         borderRadius: en._currentAttack === 'sweep' ? '4px' : '50%',
-                        background: en._currentAttack === 'sweep' ? 'rgba(255,150,0,0.3)' : 'rgba(255,0,0,0.35)',
-                        border: `2px solid ${en._currentAttack === 'sweep' ? 'orange' : 'red'}`,
-                        animation: `${en.isBoss ? 'telegraphPulseBoss' : 'telegraphPulse'} 0.4s ease-in-out infinite`,
+                        background: en.state === 'attacking' ? 'rgba(255,255,255,0.85)' : en._currentAttack === 'sweep' ? 'rgba(255,150,0,0.3)' : 'rgba(255,0,0,0.35)',
+                        border: `2px solid ${en.state === 'attacking' ? '#fff' : en._currentAttack === 'sweep' ? 'orange' : 'red'}`,
+                        boxShadow: en.state === 'attacking' ? '0 0 24px #fff' : 'none',
+                        animation: en.state === 'attacking' ? 'none' : `${en.isBoss ? 'telegraphPulseBoss' : 'telegraphPulse'} 0.4s ease-in-out infinite`,
                         pointerEvents:'none', zIndex:20,
                       }} />
                       <div style={{ position:'absolute', left:'50%', top:'-18px', transform:'translateX(-50%)', fontSize:16, pointerEvents:'none', zIndex:21 }}>
@@ -616,7 +730,14 @@ export default function MainScreen({
                   <div style={{ position:'relative', display:'inline-block' }}>
                     <img src={en.image} alt={en.name}
                       className={`enemy-sprite${en.isBoss ? ' boss' : ''}`}
-                      style={{ width:size, height:size, objectFit:'contain', filter: isFrozen ? 'hue-rotate(180deg) brightness(1.5) saturate(2)' : undefined }}
+                      style={{ width:size, height:size, objectFit:'contain',
+                        filter: isFrozen ? 'hue-rotate(180deg) brightness(1.5) saturate(2)' :
+                          en.state === 'attacking' && !en.attackZone ? 'brightness(3) sepia(1) saturate(10) hue-rotate(310deg) drop-shadow(0 0 16px #fff)' :
+                          undefined,
+                        animation: (!isFrozen && en.state === 'telegraphing' && !en.attackZone)
+                          ? 'chaseFlash 0.35s ease-in-out infinite'
+                          : undefined,
+                      }}
                     />
                     {en.isBoss && (bossWeakPts[en.id] || []).map(wp => (
                       <div key={wp.id} className="weak-pt" title={`${wp.dmgMult}× DAMAGE!`}
@@ -645,7 +766,7 @@ export default function MainScreen({
     <img src={`${BASE}ui/ui_status.png`} alt="" style={{ width:'100%', display:'block', }} />
 
     {/* Portrait — above the HP bar on the left */}
-    <div style={{ position:'absolute', right:'0.5%', bottom:'0.5%', width:'100%', height:'100%', overflow:'hidden'}}>
+    <div style={{ position:'absolute', right:'0.5%', bottom:'0.5%', width:'95%', height:'100%', overflow:'hidden'}}>
       <img src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null} alt=""
         style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top',display: mainCard ? 'block' : 'none' }}
       />
@@ -655,8 +776,8 @@ export default function MainScreen({
 <div style={{ position:'absolute', right:'0%', top:'0%', width:'100%', height:'100%', borderRadius:'50%', overflow:'hidden' }}>
   <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{
     width:'100%', height:'100%', objectFit:'cover', display:'block',
-    clipPath: `inset(${abilityReady ? '0%' : `${100 - ((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`} 0 0 0)`,
-    transition: abilityCd === abilityCdMax ? 'none' : 'clip-path 1s linear',
+    clipPath: (abilityReady || cdAnimating) ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
+    transition: cdAnimating ? `clip-path ${abilityCdMax}s linear` : 'none',
   }} />
 </div>
 
@@ -717,8 +838,10 @@ export default function MainScreen({
               </div>
             </div>
             <div style={{ flexShrink:0, textAlign:'center' }}>
-              <button className="ability-btn" disabled={!abilityReady || !mainCard?.ability} onClick={useAbility}>
-                {!mainCard?.ability ? 'no ability' : abilityReady ? `✦ ${mainCard.ability.name}` : `CD ${abilityCd}s`}
+            <button className="ability-btn"
+                disabled={!abilityReady || !mainCard?.ult || cardLevel < 50}
+                onClick={triggerAbility}>
+                {!mainCard?.ult ? 'no ult' : cardLevel < 50 ? `ULT [E] LV50` : abilityReady ? `⚡ ${mainCard.ult.name}` : `CD ${abilityCd}s`}
               </button>
               {!abilityReady && (
                 <div className="cd-bar-bg">
@@ -733,20 +856,22 @@ export default function MainScreen({
               </div>
               <div style={{ color:'#aaa', fontSize:11, marginTop:2 }}>{playerHp}/{playerMaxHp}</div>
             </div>
-            {unlockedSkills.includes('gun') && (
+            {mainCard?.skill && (
               <div style={{ flexShrink:0, textAlign:'center' }}>
-                <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>GUN</div>
-                <button className="ability-btn" style={{ borderColor:'#4ade80', color:'#4ade80' }}
-                  onClick={() => {
-                    const nearest = enemiesRef.current[0];
-                    if (!nearest) return;
-                    const dmg = Math.floor((clickPower + atkBonus) * dmgMult * 0.8);
-                    addFloater(`🔫-${fmt(dmg)}`, nearest.x, nearest.y - 12, '#4ade80', false);
-                    const updated = enemiesRef.current.map(en => en.id === nearest.id ? { ...en, hp: en.hp - dmg } : en);
-                    processDead(enemiesRef.current, updated);
-                  }}>
-                  🔫 SHOOT
+                <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>
+                  SKILL [Q] {cardLevel < 20 && <span style={{ color:'#ff4444' }}>LV20</span>}
+                </div>
+                <button className="ability-btn"
+                  style={{ borderColor: cardLevel >= 20 ? '#4ade80' : '#334', color: cardLevel >= 20 ? '#4ade80' : '#445' }}
+                  disabled={!skillReady || cardLevel < 20}
+                  onClick={triggerSkill}>
+                  {skillReady ? `✦ ${mainCard.skill.name}` : `CD ${skillCd}s`}
                 </button>
+                {!skillReady && (
+                  <div className="cd-bar-bg">
+                    <div className="cd-bar-fill" style={{ width:((mainCard.skill.cooldown - skillCd) / mainCard.skill.cooldown * 100)+'%', background:'#4ade80' }} />
+                  </div>
+                )}
               </div>
             )}
           </div>
