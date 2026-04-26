@@ -1,28 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { ENEMY_TYPES } from '../data/enemyTypes';
+import { playSFX, playPress } from '../utils/sfx';
 
 const BASE = import.meta.env.BASE_URL;
-
-const ENEMY_TYPES = [
-  { name:'Xiao',               image:`${BASE}enemies/xiaoenemy.png`, hp:220,  maxHp:220,  coinReward:50,  isBoss:false, tier: 'basic', attacks:[], },
-  { name:'Bonk',               image:`${BASE}enemies/bonkenemy.png`, hp:300,  maxHp:300,  coinReward:80,  isBoss:false, tier: 'elite', attacks:['projectile', 'sweep', 'chase'], attackCooldown: 4000, },
-  { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true, gemReward:10, tier: 'boss', attacks: ['projectile', 'slam'], attackCooldown: 2500, },
-  {
-    name: 'Treasure',
-    image: `${BASE}enemies/treasure.png`,
-    hp: 80, maxHp: 80, coinReward: 0,
-    isBoss: false,
-    tier: 'treasure',
-    attacks: ['lure'],
-    attackCooldown: 3000,
-    pullReward: 1,
-    movePattern: 'erratic',
-  },
-];
 
 const REGULAR_SIZE  = 74;
 const BOSS_SIZE     = 120;
 const BASE_CRIT     = 0.20;
 const MOVE_PATTERNS = ['stationary', 'stationary', 'patrol', 'erratic'];
+const SI_MULT = [1, 1.12, 1.25, 1.40, 1.60];
 
 const NAV_CONFIG = [
   { label: 'shop',     screen: 'shop',     hoverImg: `${BASE}ui/ui_hovershop.png`,     tabSfx: 'ui_shop.mp3',  uniqueSfx: true  },
@@ -41,28 +27,8 @@ const STATUS_PORTRAITS = {
   10: `${BASE}ui/ui_statusforbiddenone.png`,
   99: `${BASE}ui/ui_statushox.png`,
 };
-const PRESS_SFXS   = [`${BASE}sounds/ui_press.mp3`, `${BASE}sounds/ui_press2.mp3`];
 const MENU_BG      = `${BASE}ui/ui_menu.png`;
-
-const playSFX = (src, gain = 3.5) => {
-  const ctx    = new (window.AudioContext || window.webkitAudioContext)();
-  const source = ctx.createBufferSource();
-  const gainNode = ctx.createGain();
-  gainNode.gain.value = gain;
-  fetch(src)
-    .then(r => r.arrayBuffer())
-    .then(buf => ctx.decodeAudioData(buf))
-    .then(decoded => {
-      source.buffer = decoded;
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      source.start(0);
-    })
-    .catch(() => {});
-};
-
-const playPress = () =>
-  playSFX(PRESS_SFXS[Math.floor(Math.random() * PRESS_SFXS.length)]);
+const BATTLE_BG    = `${BASE}backgrounds/bg1.png`;
 
 function spawnEnemy(forceBoss = false, currentKills = 0) {
   const spawnableTypes = ENEMY_TYPES.filter(t => t.tier !== 'boss' && t.tier !== 'treasure');
@@ -92,7 +58,7 @@ function getDeckBonuses(deck, cardInventory = {}) {
   cards.forEach((card) => {
     if (card.stats) {
       const si = cardInventory[card.id]?.si ?? 0;
-      const siMult = [1, 1.12, 1.25, 1.40, 1.60][si];
+      const siMult = SI_MULT[si];
       atkBonus += (card.stats.atk ?? 0) * siMult;
     }
     if (card.passive) {
@@ -104,12 +70,13 @@ function getDeckBonuses(deck, cardInventory = {}) {
 }
 
 const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : Math.floor(n);
+const PIX = { imageRendering: 'pixelated' };
 
 const CoinIcon = ({ size = 28 }) => (
-  <img src={`${BASE}ui/ui_cucoin.png`} alt="coin" style={{ width: size, height: size, objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }} />
+  <img src={`${BASE}ui/ui_cucoin.png`} alt="coin" style={{ width: size, height: size, objectFit: 'contain', ...PIX, flexShrink: 0 }} />
 );
 const GemIcon = ({ size = 28 }) => (
-  <img src={`${BASE}ui/ui_frailite.png`} alt="gem" style={{ width: size, height: size, objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }} />
+  <img src={`${BASE}ui/ui_frailite.png`} alt="gem" style={{ width: size, height: size, objectFit: 'contain', ...PIX, flexShrink: 0 }} />
 );
 
 export default function MainScreen({
@@ -129,7 +96,6 @@ export default function MainScreen({
   const dmgMult      = bonuses.dmgMult * multiplier;
   const mainCard     = deck?.main ?? null;
   const abilityCdMax = mainCard?.ability?.cooldown ?? 10;
-  const heroImage    = mainCard?.image ?? null;
 
   const [playerHp, setPlayerHp]     = useState(100);
   const [playerMaxHp]               = useState(100);
@@ -154,18 +120,23 @@ export default function MainScreen({
   const frozenRef    = useRef(frozenMap);
   const killRef      = useRef(killCount);
   const floaterIdRef = useRef(0);
+  const dmgMultRef   = useRef(dmgMult);
+  const [, forceUpdate] = useState(0);
 
-  // ─── BUG FIX #2: Keep playerLevelRef current so processDead never has a stale closure ───
   const playerLevelRef = useRef(playerLevel);
   useEffect(() => { playerLevelRef.current = playerLevel; }, [playerLevel]);
 
-  useEffect(() => { enemiesRef.current = enemies;  }, [enemies]);
-  useEffect(() => { frozenRef.current  = frozenMap; }, [frozenMap]);
+  useEffect(() => { enemiesRef.current  = enemies;  }, [enemies]);
+  useEffect(() => { frozenRef.current   = frozenMap; }, [frozenMap]);
+  useEffect(() => {
+    const hasFrozen = Object.keys(frozenMap).length > 0;
+    if (!hasFrozen) return;
+    const interval = setInterval(() => forceUpdate(n => n + 1), 500);
+    return () => clearInterval(interval);
+  }, [frozenMap]);
+  useEffect(() => { dmgMultRef.current  = dmgMult;  }, [dmgMult]);
 
-  // ─── BUG FIX #3: Sync killRef whenever the prop changes (e.g. parent resets it) ────────
   useEffect(() => { killRef.current = killCount; }, [killCount]);
-
-  const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
 
   const addFloater = useCallback((text, x, y, color = '#f0c040', isCrit = false, icon = null) => {
     const id = floaterIdRef.current++;
@@ -190,7 +161,6 @@ export default function MainScreen({
         newKills++;
         const xpGain = killed.isBoss ? 50 : killed.tier === 'elite' ? 15 : killed.tier === 'treasure' ? 10 : 5;
 
-        // ─── BUG FIX #2: Read level from ref, never from stale closure ───────────────
         setPlayerXp(prev => {
           const currentLevel = playerLevelRef.current;
           const next = prev + xpGain;
@@ -198,7 +168,7 @@ export default function MainScreen({
           if (next >= xpNeeded) {
             const newLevel = currentLevel + 1;
             setPlayerLevel(newLevel);
-            playerLevelRef.current = newLevel; // keep ref in sync immediately
+            playerLevelRef.current = newLevel;
             addFloater(`LEVEL UP! ${newLevel}`, 50, 40, '#facc15', true);
             if (newLevel === 20) {
               setUnlockedSkills(s => [...s, 'gun']);
@@ -217,7 +187,7 @@ export default function MainScreen({
           gemsEarned += killed.pullReward;
           addFloater(`+${killed.pullReward}`, killed.x, killed.y + 10, '#5588ff', false, 'gem');
         } else {
-          const coinGain = Math.floor(killed.coinReward * dmgMult);
+          const coinGain = Math.floor(killed.coinReward * dmgMultRef.current);
           coinsEarned += coinGain;
           addFloater(`+${fmt(coinGain)}`, killed.x, killed.y + 10, '#f0c040', false, 'coin');
         }
@@ -229,21 +199,29 @@ export default function MainScreen({
 
       checkUpcomingBoss(newKills);
 
+      let bossSpawned = false;
       const replacements = dead.map((_, i) => {
         const k         = newKills - dead.length + i + 1;
-        const spawnBoss = k > 0 && k % 10 === 0;
+        const spawnBoss = !bossSpawned && k > 0 && k % 10 === 0;
+        if (spawnBoss) bossSpawned = true;
         return spawnEnemy(spawnBoss, newKills);
       });
 
       killRef.current = newKills;
       setKillCount(newKills);
+      const deadIds = dead.map(e => e.id);
+      setFrozenMap(prev => {
+        const next = { ...prev };
+        deadIds.forEach(id => delete next[id]);
+        return next;
+      });
       if (coinsEarned > 0) { setCoins(c => c + coinsEarned); setTotalEarned(t => t + coinsEarned); }
       if (gemsEarned  > 0) setPullCurrency(c => c + gemsEarned);
       setEnemies([...alive, ...replacements]);
     } else {
       setEnemies(updated);
     }
-  }, [dmgMult, addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency]);
+  }, [addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency]);
 
   // Player death + regen
   useEffect(() => {
@@ -257,7 +235,7 @@ export default function MainScreen({
       setPlayerHp(hp => Math.min(playerMaxHp, hp + 1));
     }, 2000);
     return () => clearTimeout(regen);
-  }, [playerHp]);
+  }, [playerHp, addFloater, playerMaxHp]);
 
   // Ability CD
   useEffect(() => {
@@ -321,6 +299,7 @@ export default function MainScreen({
 
   // Treasure spawner
   useEffect(() => {
+    const treasureTimeouts = [];
     const interval = setInterval(() => {
       if (Math.random() < 0.2) {
         const base = ENEMY_TYPES.find(t => t.tier === 'treasure');
@@ -334,10 +313,14 @@ export default function MainScreen({
           state: 'idle',
         };
         setEnemies(prev => [...prev, treasure]);
-        setTimeout(() => setEnemies(prev => prev.filter(e => e.id !== treasure.id)), 10000);
+        const t = setTimeout(() => setEnemies(prev => prev.filter(e => e.id !== treasure.id)), 10000);
+        treasureTimeouts.push(t);
       }
     }, 15000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      treasureTimeouts.forEach(clearTimeout);
+    };
   }, []);
 
   // Boss weak points
@@ -361,7 +344,6 @@ export default function MainScreen({
     return () => clearInterval(interval);
   }, []);
 
-  // ─── BUG FIX #4: Track and clean up telegraph setTimeouts to prevent leaks ───────────────
   const telegraphTimeoutsRef = useRef({});
 
   useEffect(() => {
@@ -383,7 +365,6 @@ export default function MainScreen({
           radius: isBossAttack ? (attack === 'slam' ? 22 : 16) : 14,
         };
 
-        // Clear any previous timeout for this enemy before setting a new one
         if (telegraphTimeoutsRef.current[en.id]) {
           clearTimeout(telegraphTimeoutsRef.current[en.id]);
         }
@@ -391,8 +372,11 @@ export default function MainScreen({
         telegraphTimeoutsRef.current[en.id] = setTimeout(() => {
           delete telegraphTimeoutsRef.current[en.id];
           const p = playerPosRef.current;
-          const hit = Math.abs(p.x - en.x) < (isBossAttack ? 18 : 8) &&
-                      Math.abs(p.y - en.y) < (isBossAttack ? 18 : 8);
+          const liveEnemy = enemiesRef.current.find(e => e.id === en.id);
+          const ex = liveEnemy?.x ?? en.x;
+          const ey = liveEnemy?.y ?? en.y;
+          const hit = Math.abs(p.x - ex) < (isBossAttack ? 18 : 8) &&
+                      Math.abs(p.y - ey) < (isBossAttack ? 18 : 8);
           if (hit) {
             const dmgAmount = isBossAttack ? (attack === 'slam' ? 30 : 20) : 15;
             setPlayerHp(hp => Math.max(0, hp - dmgAmount));
@@ -413,7 +397,6 @@ export default function MainScreen({
 
     return () => {
       clearInterval(interval);
-      // Clear all pending attack timeouts on unmount
       Object.values(telegraphTimeoutsRef.current).forEach(clearTimeout);
       telegraphTimeoutsRef.current = {};
     };
@@ -510,7 +493,6 @@ export default function MainScreen({
   return (
     <div style={{ width:'100%', height:'100vh', background:'#1a2035', cursor:`url(${BASE}ui/mouse.png) 0 0, auto`, display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", userSelect:'none' }}>
 
-      {/* ─── BUG FIX #1: `.dmg-float` class was broken as `}mg-float` (missing dot + newline) ─── */}
       <style>{`
         img { -webkit-user-drag:none; user-select:none; }
         * { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }
@@ -583,13 +565,6 @@ export default function MainScreen({
             style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625' }}
           >
 
-            {/* Ability button — top right of viewport */}
-            <div style={{ position:'absolute', top:10, right:12, zIndex:20, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4, pointerEvents:'auto' }}>
-              <button className="ability-btn" disabled={!abilityReady || !mainCard?.ability} onClick={useAbility}>
-                {!mainCard?.ability ? 'no ability' : abilityReady ? `✦ ${mainCard.ability.name}` : `CD ${abilityCd}s`}
-              </button>
-            </div>
-
             <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
             {takingDamage && (
               <div style={{ position:'absolute', inset:0, background:'rgba(255,0,0,0.25)', pointerEvents:'none', zIndex:50 }} />
@@ -616,7 +591,7 @@ export default function MainScreen({
                   style={{
                     left: en.x+'%', top: en.y+'%',
                     transform:'translate(-50%,-50%)',
-                    transition: isMoving ? 'left 0.9s ease-in-out, top 0.9s ease-in-out' : 'none',
+                    transition: (isMoving && en.movePattern !== 'erratic') ? 'left 0.9s ease-in-out, top 0.9s ease-in-out' : 'none',
                   }}
                 >
                   {en.state === 'telegraphing' && en.attackZone && (
@@ -671,9 +646,9 @@ export default function MainScreen({
                   />
                 </div>
                 <div style={{ position:'absolute', right:'3%', top:'5%', width:'44%', height:'75%', borderRadius:'50%', overflow:'hidden' }}>
-                  <div style={{
+                <div style={{
                     position:'absolute', bottom:0, left:0, width:'100%',
-                    height: abilityReady ? '100%' : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
+                    height: abilityReady ? '0%' : `${((abilityCdMax - abilityCd) / abilityCdMax) * 100}%`,
                     background:'rgba(100,200,255,0.35)',
                     transition:'height 1s linear',
                   }} />
@@ -696,17 +671,6 @@ export default function MainScreen({
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Hero */}
-            <div style={{ position:'absolute', left:'7%', bottom:'14%', zIndex:10, textAlign:'center', pointerEvents:'none' }}>
-              {heroImage && !heroImage.includes('placeholder') ? (
-                <img src={heroImage} alt="hero" style={{ width:200, height:200, objectFit:'contain', imageRendering:'pixelated', display:'block' }} />
-              ) : (
-                <div style={{ width:60, height:60, background:'#2a3050', border:'2px solid #ff8c00', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'#ff8c00', textAlign:'center', lineHeight:1.3 }}>
-                  {mainCard ? mainCard.name.slice(0,6) : 'HERO'}
-                </div>
-              )}
             </div>
 
             {lureFloaters.map(l => (
@@ -789,7 +753,7 @@ export default function MainScreen({
                   <div style={{ color:'#5588ff', marginBottom:2, fontWeight:700 }}>{card.name} <span style={{ color:'#445', fontWeight:400 }}>support</span></div>
                   {card.stats && (() => {
                     const si = cardInventory[card.id]?.si ?? 0;
-                    const siMult = [1, 1.12, 1.25, 1.40, 1.60][si];
+                    const siMult = SI_MULT[si];
                     const boostedAtk = Math.round(card.stats.atk * siMult);
                     return <span style={{ color:'#aaa' }}>+{boostedAtk} ATK{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>S{si+1}</span>}</span>;
                   })()}

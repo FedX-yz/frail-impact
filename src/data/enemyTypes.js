@@ -1,51 +1,8 @@
-// data/enemyTypes.js
+const BASE = import.meta.env.BASE_URL;
 
-export const ENEMY_TYPES = {
-    basic: {
-      tier: 'basic',
-      hpMultiplier: 1,
-      speed: 0,
-      attacks: [],
-      spawnWeight: 10,
-      reward: 1,         // coin multiplier on kill
-    },
-    elite: {
-      tier: 'elite',
-      hpMultiplier: 3,
-      speed: 1.5,
-      attacks: ['projectile'],
-      spawnWeight: 3,
-      attackCooldown: 4000,
-      reward: 3,
-    },
-    boss: {
-      tier: 'boss',
-      hpMultiplier: 10,
-      speed: 0.8,
-      attacks: ['projectile', 'slam'],
-      spawnWeight: 0,
-      attackCooldown: 2500,
-      reward: 15,
-    },
-    treasure: {
-      tier: 'treasure',
-      hpMultiplier: 0.5,
-      speed: 2.5,        // moves fast = less hp
-      attacks: ['lure'],
-      spawnWeight: 1,
-      reward: 0,         // gives pull currency instead
-      pullReward: 1,
-    },
-  }
-  
-  // Weighted random pick from spawnable types
-  export function pickRandomEnemyType() {
-    const spawnable = Object.values(ENEMY_TYPES).filter(t => t.spawnWeight > 0)
-    const totalWeight = spawnable.reduce((sum, t) => sum + t.spawnWeight, 0)
-    let roll = Math.random() * totalWeight
-    for (const type of spawnable) {
-      roll -= type.spawnWeight
-      if (roll <= 0) return type.tier
-    }
-    return 'basic'
-  }
+export const ENEMY_TYPES = [
+  { name:'Xiao',               image:`${BASE}enemies/xiaoenemy.png`, hp:220,  maxHp:220,  coinReward:50,  isBoss:false, tier:'basic',    attacks:[] },
+  { name:'Bonk',               image:`${BASE}enemies/bonkenemy.png`, hp:300,  maxHp:300,  coinReward:80,  isBoss:false, tier:'elite',    attacks:['projectile','sweep','chase'], attackCooldown:4000 },
+  { name:'DEVOURER OF WORLDS', image:`${BASE}enemies/hoxboss.jpg`,   hp:1200, maxHp:1200, coinReward:300, isBoss:true,  tier:'boss',     attacks:['projectile','slam'],          attackCooldown:2500, gemReward:10 },
+  { name:'Treasure',           image:`${BASE}enemies/treasure.png`,  hp:80,   maxHp:80,   coinReward:0,   isBoss:false, tier:'treasure', attacks:['lure'],                       attackCooldown:3000, pullReward:1, movePattern:'erratic' },
+];

@@ -1,18 +1,18 @@
 const BASE = import.meta.env.BASE_URL;
 
+const _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 export const playSFX = (src, gain = 2.5) => {
-  const ctx      = new (window.AudioContext || window.webkitAudioContext)();
-  const source   = ctx.createBufferSource();
-  const gainNode = ctx.createGain();
+  const source   = _audioCtx.createBufferSource();
+  const gainNode = _audioCtx.createGain();
   gainNode.gain.value = gain;
 
   fetch(src)
     .then(r => r.arrayBuffer())
-    .then(buf => ctx.decodeAudioData(buf))
+    .then(buf => _audioCtx.decodeAudioData(buf))
     .then(decoded => {
       source.buffer = decoded;
       source.connect(gainNode);
-      gainNode.connect(ctx.destination);
+      gainNode.connect(_audioCtx.destination);
       source.start(0);
     })
     .catch(() => {});
