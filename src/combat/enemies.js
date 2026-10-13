@@ -7,6 +7,7 @@
 //   slash  – red band through where you are, then a white slash
 //   shot   – red line toward you, then a projectile flies down it
 //   dash   – its own sprite flashes red, then it launches itself at you
+//   (worm heads don't telegraph — they hurt on contact)
 //
 // Boss patterns (see engine.js): slamRing, crossSlash, barrage, rain
 
@@ -35,12 +36,62 @@ export const ENEMY_TYPES = {
     attacks: ['dash', 'shot'],
     cooldown: [3.5, 5],
   },
+  // Horde: small, fast, weak, they show up as a pack and crowd around you.
+  // Some of them poke (small red circles), so a swarm next to you is dangerous.
+  swarmling: {
+    name: 'Swarmling', tier: 'basic', horde: true,
+    img: `${BASE}enemies/xiaoenemy.png`, size: 42,
+    hp: 9, coin: 4, speedRange: [0.8, 1],
+    attacks: [], armedAttacks: ['poke'],
+    cooldown: [3.5, 5.5],
+  },
+  // Shield: a blue bubble that soaks up ALL damage to itself and anything
+  // standing inside it. Break the bubble first; it comes back 5s after the
+  // last hit, so keep the pressure on.
+  shielder: {
+    name: 'Shield Bonk', tier: 'elite',
+    img: `${BASE}enemies/bonkenemy.png`, tint: 'hue-rotate(185deg) saturate(1.6)', size: 84,
+    hp: 110, coin: 75, speed: 0.1,
+    attacks: ['shot'], cooldown: [4, 5.5],
+    shield: { pct: 0.7, radius: 125, regen: 5 },
+  },
+
+  // ── Bosses (rotate: Devourer → Worm → Hydra → Devourer …) ──
   devourer: {
     name: 'DEVOURER OF WORLDS', tier: 'boss',
     img: `${BASE}enemies/hoxboss.jpg`, size: 150,
     hp: 700, coin: 400, gems: 10, speed: 0,
     bossPatterns: ['slamRing', 'crossSlash', 'barrage', 'rain'],
     cooldown: [2.6, 3.4],
+    weakPoints: true,
+  },
+  // Worm (like Terraria's Eater of Worlds): HP is split across body parts,
+  // every part can be clicked, but the HEAD hurts you if it touches your
+  // cursor. Kill the head and the next segment becomes the new head.
+  worm: {
+    name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm',
+    img: `${BASE}enemies/hoxboss.jpg`, size: 74,
+    hp: 120, coin: 0, xp: 40,
+    segments: 10, segmentType: 'wormSeg', spacing: 40,
+    wormSpeed: 165, turnRate: 2.4,
+    groupReward: { coin: 400, gems: 10, xp: 1000 },
+  },
+  wormSeg: {
+    name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm', shape: 'segment',
+    img: null, size: 54,
+    hp: 75, coin: 10, xp: 40,
+  },
+  // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN
+  // for 5s. Get all three down at the same time or the downed ones regrow
+  // at half HP.
+  hydra: {
+    name: 'HYDRA', tier: 'boss', kind: 'hydra',
+    img: `${BASE}enemies/hoxboss.jpg`, size: 100,
+    hp: 300, coin: 0, xp: 40, speed: 0,
+    heads: 3, downTime: 5, regrowPct: 0.5,
+    attacks: ['shot', 'circle'], cooldown: [2.4, 3.6],
+    headTints: ['hue-rotate(0deg)', 'hue-rotate(110deg)', 'hue-rotate(230deg)'],
+    groupReward: { coin: 450, gems: 10, xp: 1000 },
   },
   treasure: {
     name: 'Treasure', tier: 'treasure',
@@ -54,4 +105,5 @@ export const ENEMY_TYPES = {
 export const ATTACK_DMG = {
   poke: 6, circle: 14, slash: 16, shot: 10, dash: 20,
   slam: 28, ring: 14, cross: 18, barrage: 10, rain: 14,
+  bite: 14,   // worm head touching your cursor
 };

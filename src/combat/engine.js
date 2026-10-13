@@ -32,7 +32,9 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     ult: { charge: 0, active: null },
     timeStop: 0, frenzy: 0, shake: 0,
     clickCount: 0,
-    timers: { basic: 0.3, elite: 4, treasure: BAL.TREASURE_EVERY, auto: BAL.AUTO_INTERVAL, pulse: 0, weak: 0.7 },
+    timers: { basic: 0.3, elite: 4, horde: 8, treasure: BAL.TREASURE_EVERY, auto: BAL.AUTO_INTERVAL, pulse: 0, weak: 0.7 },
+    reserved: null,   // HUD box (status frame) enemies shouldn't stand behind
+    bossInfo: null,   // { name, maxHp } for the boss bar
   };
 
   const cb = (name, ...args) => callbacks.current?.[name]?.(...args);
@@ -43,7 +45,8 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   // (landscape PC layout) away from the status frame in the bottom-left.
   function inSpawnArea(x, y) {
     if (x < s.W * 0.07 || x > s.W * 0.93 || y < s.H * 0.16 || y > s.H * 0.86) return false;
-    if (s.W > s.H && x < s.W * 0.34 && y > s.H * 0.58) return false;
+    const r = s.reserved;
+    if (r && x > r.x0 - K(30) && x < r.x1 + K(30) && y > r.y0 - K(30) && y < r.y1) return false;
     return true;
   }
   function randomPoint(near = null, radius = 0) {
@@ -77,10 +80,15 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     const p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * 0.62, y: s.H * 0.42 } : randomPoint());
     const e = {
       id: uid++, typeId, type, tier: type.tier, name: type.name, img: type.img,
+      shape: type.shape ?? null, tint: opts.tint ?? type.tint ?? null,
       size: type.size, x: p.x, y: p.y,
       hp, maxHp: hp, speed,
+      // linked bosses (worm parts, hydra heads)
+      group: opts.group ?? null, role: opts.role ?? null, segIndex: opts.segIndex ?? 0,
+      angle: opts.angle ?? Math.PI, wiggle: Math.random() * 6, down: 0,
+      shield: type.shield ? { hp: Math.round(hp * type.shield.pct), max: Math.round(hp * type.shield.pct), regenT: 0 } : null,
       // movement: still enemies stay put, others wander between random points
-      move: speed < 0.12 ? 'still' : type.tier === 'treasure' ? 'hop' : 'wander',
+      move: type.kind === 'worm' ? 'worm' : type.horde ? 'swarm' : speed < 0.12 ? 'still' : type.tier === 'treasure' ? 'hop' : 'wander',
       target: null, hopT: 0,
       armed: opts.armed ?? false,
       cd: rand(...(type.cooldown ?? [4, 6])) * (type.tier === 'boss' ? 0.5 : 1),
@@ -94,7 +102,47 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     return e;
   }
 
-  const countTier = tier => s.enemies.filter(e => e.tier === tier).length;
+  const countTier = tier => s.enemies.filter(e => e.tier === tier && !e.type.horde).length;
+
+  // Bosses: the Devourer is one enemy; the Worm and Hydra are linked groups
+  function spawnBoss(typeId) {
+    const t = ENEMY_TYPES[typeId];
+    const group = uid++;
+    let parts = [];
+    if (t.kind === 'worm') {
+      const start = { x: s.W * 0.92, y: s.H * 0.3 };
+      parts.push(spawnEnemy(typeId, { pos: start, role: 'head', group, segIndex: 0, angle: Math.PI }));
+      for (let i = 1; i <= t.segments; i++) {
+        parts.push(spawnEnemy(t.segmentType, { pos: { x: start.x + i * K(t.spacing) * 0.6, y: start.y }, role: 'seg', group, segIndex: i }));
+      }
+      parts.forEach(p => { p.groupType = typeId; });
+    } else if (t.kind === 'hydra') {
+      const cx = s.W * 0.62, cy = s.H * 0.44;
+      for (let i = 0; i < t.heads; i++) {
+        const off = i - (t.heads - 1) / 2;
+        const h = spawnEnemy(typeId, { pos: { x: cx + off * K(130), y: cy + (off === 0 ? -K(45) : K(15)) }, role: 'hydra', group, segIndex: i, tint: t.headTints?.[i] });
+        h.cd = 1 + i * 0.9;          // stagger their first attacks
+        h.groupType = typeId;
+        parts.push(h);
+      }
+    } else {
+      parts.push(spawnEnemy(typeId));
+    }
+    s.bossInfo = { name: t.name, maxHp: parts.reduce((a, p) => a + p.maxHp, 0), group: parts[0]?.group };
+  }
+
+  function spawnHorde() {
+    const st = s.stage;
+    // burst in from one side of the arena
+    const side = Math.random() < 0.5 ? 0.12 : 0.88;
+    const center = { x: s.W * side, y: rand(s.H * 0.3, s.H * 0.75) };
+    for (let i = 0; i < st.hordeSize; i++) {
+      const pos = { x: clamp(center.x + rand(-K(50), K(50)), s.W * 0.05, s.W * 0.95), y: clamp(center.y + rand(-K(60), K(60)), s.H * 0.15, s.H * 0.9) };
+      const e = spawnEnemy('swarmling', { pos, armed: Math.random() < st.hordeArmedChance });
+      e.swarmOff = { a: rand(0, Math.PI * 2), d: K(rand(70, 130)) };
+    }
+    floater('⚠ HORDE!', center.x, center.y - K(50), '#ff8c00', true);
+  }
 
   function spawnTreasure() {
     // Spawn it next to something dangerous, so grabbing it is a risk
@@ -120,6 +168,13 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
         if (!countTier('treasure') && Math.random() < Math.min(1, BAL.TREASURE_CHANCE * s.stats.treasureMult)) spawnTreasure();
       }
     }
+    if (s.phase === 'fight' && st.hordeEvery) {
+      T.horde -= dt;
+      if (T.horde <= 0) {
+        T.horde = st.hordeEvery;
+        if (s.enemies.filter(e => e.type.horde).length < 4) spawnHorde();
+      }
+    }
     if (s.phase === 'fight') {
       T.elite -= dt;
       if (T.elite <= 0) {
@@ -130,8 +185,46 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   }
 
   // ── Movement ────────────────────────────────────────────────────────────
+  function moveWorm(e, dt) {
+    const t = e.type, P = aimPoint();
+    if (e.role === 'head') {
+      e.wiggle += dt;
+      const headT = ENEMY_TYPES[e.groupType] ?? t;
+      // steer toward you, with a wiggle so it swings instead of beelining
+      const desired = Math.atan2(P.y - e.y, P.x - e.x) + Math.sin(e.wiggle * 2.2) * 0.7;
+      let diff = desired - e.angle;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      e.angle += clamp(diff, -headT.turnRate * dt, headT.turnRate * dt);
+      // turn back in when it gets near the walls
+      if (e.x < s.W * 0.05 || e.x > s.W * 0.95 || e.y < s.H * 0.12 || e.y > s.H * 0.95) {
+        const back = Math.atan2(s.H / 2 - e.y, s.W / 2 - e.x);
+        let d2 = Math.atan2(Math.sin(back - e.angle), Math.cos(back - e.angle));
+        e.angle += clamp(d2, -6 * dt, 6 * dt);
+      }
+      const spd = K(headT.wormSpeed) * (1 + (s.stageNum - 1) * 0.03);
+      e.x += Math.cos(e.angle) * spd * dt;
+      e.y += Math.sin(e.angle) * spd * dt;
+    } else {
+      // follow the part in front of it
+      const leader = s.enemies
+        .filter(o => o.group === e.group && o.segIndex < e.segIndex)
+        .reduce((a, b) => (!a || b.segIndex > a.segIndex ? b : a), null);
+      if (!leader) return;
+      const spacing = K(ENEMY_TYPES[e.groupType]?.spacing ?? 40);
+      const dx = e.x - leader.x, dy = e.y - leader.y, d = Math.hypot(dx, dy) || 1;
+      if (d > spacing) { e.x = leader.x + dx / d * spacing; e.y = leader.y + dy / d * spacing; }
+    }
+  }
+
   function moveEnemy(e, dt) {
+    if (e.move === 'worm') { moveWorm(e, dt); return; }
     if (e.dashing) return;
+    if (e.move === 'swarm' && e.busy === 0) {
+      // crowd around you (not on you) at their own spot in the ring
+      e.swarmOff.a += dt * 0.6;
+      const P = aimPoint();
+      e.target = { x: P.x + Math.cos(e.swarmOff.a) * e.swarmOff.d, y: P.y + Math.sin(e.swarmOff.a) * e.swarmOff.d };
+    }
     if (e.move === 'still' || e.busy > 0) return;
     if (e.move === 'hop') {            // treasure: skittish hops near its anchor
       e.hopT -= dt;
@@ -141,7 +234,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
         const p = anchor ? randomPoint(anchor, K(160)) : randomPoint({ x: e.x, y: e.y }, K(140));
         e.target = p;
       }
-    } else if (!e.target || dist(e.x, e.y, e.target.x, e.target.y) < 4) {
+    } else if (e.move !== 'swarm' && (!e.target || dist(e.x, e.y, e.target.x, e.target.y) < 4)) {
       e.target = randomPoint({ x: e.x, y: e.y }, K(220));
     }
     const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1);
@@ -194,7 +287,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
 
   function startEnemyAttack(e) {
     const t = e.type;
-    if (e.tier === 'boss') { startBossPattern(e, pick(t.bossPatterns)); return; }
+    if (t.bossPatterns) { startBossPattern(e, pick(t.bossPatterns)); return; }
     const pool = e.armed ? t.armedAttacks : t.attacks;
     if (!pool?.length) return;
     const kind = pick(pool);
@@ -318,17 +411,43 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   }
 
   function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false } = {}) {
-    if (e.hp <= 0 || !s.enemies.includes(e)) return 0; // already dead / cleared
+    if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
     let dmg = rawDmg;
     const sk = s.stats.skill;
     if (e.frozen > 0 && sk?.type === 'frost') dmg *= 1 + sk.bonus;
     if (e.tier === 'boss') dmg *= s.stats.bossDmgMult;
     dmg = Math.max(1, Math.round(dmg));
+
+    // A shield bubble (its own or a nearby Shield Bonk's) soaks the hit
+    const sh = s.enemies.find(o => o.shield?.hp > 0 && dist(o.x, o.y, e.x, e.y) <= K(o.type.shield.radius));
+    if (sh) {
+      sh.shield.hp = Math.max(0, sh.shield.hp - dmg);
+      sh.shield.regenT = sh.type.shield.regen; sh.hurt = 0.08;
+      if (!quiet) floater(`🛡-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, '#7dd3fc');
+      if (sh.shield.hp === 0) floater('SHIELD BROKEN!', sh.x, sh.y - K(60), '#7dd3fc', true);
+      chargeUlt(dmg, charge);
+      return dmg;
+    }
+
     e.hp -= dmg; e.hurt = 0.12;
     if (!quiet) floater(`${crit ? 'CRIT ' : ''}${label}-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, color ?? (crit ? '#ff4444' : '#ffd84a'), crit);
     chargeUlt(dmg, charge);
-    if (e.hp <= 0) killEnemy(e);
+    if (e.hp <= 0) {
+      if (e.role === 'hydra') headDown(e);
+      else killEnemy(e);
+    }
     return dmg;
+  }
+
+  // Hydra: a head at 0 HP goes down; all heads down at once = dead
+  function headDown(h) {
+    const t = h.type;
+    h.hp = 0; h.down = t.downTime;
+    s.attacks.forEach(a => { if (a.owner === h.id && (a.phase === 'wait' || a.phase === 'tele')) finishAttack(a); });
+    const heads = s.enemies.filter(x => x.group === h.group);
+    const up = heads.filter(x => !(x.down > 0)).length;
+    if (up === 0) { heads.forEach(x => killEnemy(x)); return; }
+    floater(`HEAD DOWN! ${up} left`, h.x, h.y - K(60), '#facc15', true);
   }
 
   function killEnemy(e, { silent = false } = {}) {
@@ -343,7 +462,31 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     const gems  = t.gems ?? 0;
     if (coins) floater(`+${fmt(coins)}`, e.x, e.y + K(14), '#f0c040', false, 'coin');
     if (gems)  floater(`+${gems}`, e.x, e.y + K(30), '#7aa2ff', false, 'gem');
-    cb('onReward', { coins, gems, xp: BAL.XP[e.tier] ?? 0, kill: e.tier !== 'treasure' });
+    cb('onReward', { coins, gems, xp: t.xp ?? BAL.XP[e.tier] ?? 0, kill: e.tier !== 'treasure' && !e.group });
+
+    // Linked boss parts: the boss only dies when every part is gone
+    if (e.group) {
+      const left = s.enemies.filter(x => x.group === e.group).sort((a, b) => a.segIndex - b.segIndex);
+      if (left.length) {
+        if (e.role === 'head' && e.type.kind === 'worm') {
+          // next segment grows a new head
+          const nh = left[0], ht = ENEMY_TYPES[nh.groupType];
+          nh.role = 'head'; nh.shape = null; nh.img = ht.img; nh.size = ht.size;
+          nh.angle = e.angle; nh.wiggle = e.wiggle;
+          floater('NEW HEAD!', nh.x, nh.y - K(40), '#ff4444', true);
+        }
+        return;
+      }
+      const gt = ENEMY_TYPES[e.groupType], r = gt?.groupReward;
+      if (r) {
+        const c = Math.round(r.coin * s.stage.coinScale * s.stats.coinMult);
+        floater(`+${fmt(c)}`, e.x, e.y + K(14), '#f0c040', true, 'coin');
+        if (r.gems) floater(`+${r.gems}`, e.x, e.y + K(34), '#7aa2ff', true, 'gem');
+        cb('onReward', { coins: c, gems: r.gems ?? 0, xp: r.xp ?? 0, kill: true });
+      }
+      if (e.tier === 'boss') stageClear();
+      return;
+    }
 
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (e.tier === 'boss') { stageClear(); return; }
@@ -500,7 +643,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   function stageClear() {
     s.phase = 'clear'; s.phaseT = 3;
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = [];
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null;
     const r = s.stage.clearReward;
     s.banner = { text: `STAGE ${s.stageNum} CLEAR!`, sub: `+${fmt(r.coins)} coins · +${r.gems} gem`, t: 3, good: true };
     cb('onReward', { coins: r.coins, gems: r.gems, xp: 0, kill: false });
@@ -513,10 +656,10 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   }
   function loadStage(n) {
     s.stageNum = n; s.stage = makeStage(n);
-    s.phase = 'fight'; s.kills = 0;
+    s.phase = 'fight'; s.kills = 0; s.bossInfo = null;
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = [];
     s.player.hp = s.player.maxHp; s.player.invuln = 1;
-    s.timers.basic = 0.3; s.timers.elite = 4;
+    s.timers.basic = 0.3; s.timers.elite = 4; s.timers.horde = 8;
     s.banner = { text: `STAGE ${n}`, sub: 'defeat enemies to summon the boss', t: 2 };
     for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
   }
@@ -524,7 +667,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   function updatePhase(dt) {
     if (s.phase === 'bossIntro') {
       s.phaseT -= dt;
-      if (s.phaseT <= 0) { s.phase = 'boss'; spawnEnemy(s.stage.boss); }
+      if (s.phaseT <= 0) { s.phase = 'boss'; spawnBoss(s.stage.boss); }
     } else if (s.phase === 'clear') {
       s.phaseT -= dt;
       if (s.phaseT <= 0) { const next = s.stageNum + 1; cb('onStageClear', next); loadStage(next); }
@@ -602,8 +745,25 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     }
 
     // Enemies
+    const P = pl.pos;
     for (const e of [...s.enemies]) {
+      if (e.shield && e.shield.hp < e.shield.max) {
+        e.shield.regenT -= dt;
+        if (e.shield.regenT <= 0) { e.shield.hp = e.shield.max; floater('SHIELD UP', e.x, e.y - K(60), '#7dd3fc'); }
+      }
+      if (e.down > 0) {
+        e.down -= dt;
+        if (e.down <= 0) {
+          e.down = 0; e.hp = Math.round(e.maxHp * e.type.regrowPct);
+          floater('REGROWN!', e.x, e.y - K(60), '#ff4444', true);
+        }
+        continue;
+      }
       if (e.frozen > 0) { e.frozen -= dt; continue; }
+      // worm head bites your cursor
+      if (e.move === 'worm' && e.role === 'head' && P && dist(P.x, P.y, e.x, e.y) <= e.size * s.k * 0.45) {
+        hitPlayer(Math.round(ATTACK_DMG.bite * s.stage.dmgScale));
+      }
       if (e.life != null) {
         e.life -= dt;
         if (e.life <= 0) { s.enemies = s.enemies.filter(x => x !== e); floater('it got away…', e.x, e.y - K(20), '#aaa'); continue; }
@@ -621,7 +781,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     updateAttacks(dt);
 
     // Boss weak points
-    const bosses = s.enemies.filter(e => e.tier === 'boss');
+    const bosses = s.enemies.filter(e => e.type.weakPoints);
     s.weakPts = s.weakPts.filter(w => (w.t -= dt) > 0 && bosses.some(b => b.id === w.boss));
     s.timers.weak -= dt;
     if (s.timers.weak <= 0) {
@@ -658,7 +818,9 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   // Big text in the middle of the arena (level-ups etc.)
   const announce = (text, color = '#facc15') => floater(text, s.W / 2, s.H * 0.32, color, true);
 
-  return { state: s, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce };
+  const setReserved = (r) => { s.reserved = r; };
+
+  return { state: s, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

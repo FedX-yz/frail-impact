@@ -13,9 +13,10 @@ const STATUS_PORTRAITS = {
 const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
 
 // Draws the engine every animation frame and feeds it mouse/touch input.
-// `mobile` moves the HP / ult HUD out of the arena into a bar underneath.
+// `mobile` makes the status frame a bit bigger so it's easy to tap on a phone.
 export default function BattleArena({ engine, mainCard, mobile }) {
   const ref = useRef(null);
+  const frameRef = useRef(null);
   const [, setFrame] = useState(0);
   const [touchMode, setTouchMode] = useState(false);
 
@@ -26,9 +27,17 @@ export default function BattleArena({ engine, mainCard, mobile }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => engine.resize(el.clientWidth, el.clientHeight));
+    const measure = () => {
+      engine.resize(el.clientWidth, el.clientHeight);
+      const f = frameRef.current;
+      if (f) {
+        const a = el.getBoundingClientRect(), b = f.getBoundingClientRect();
+        engine.setReserved({ x0: b.left - a.left, y0: b.top - a.top, x1: b.right - a.left, y1: b.bottom - a.top + 20 });
+      }
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    engine.resize(el.clientWidth, el.clientHeight);
+    measure();
     return () => ro.disconnect();
   }, [engine]);
 
@@ -68,7 +77,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
   const pl = s.player;
   const shakeX = s.shake > 0 ? (Math.random() - 0.5) * 10 * s.shake : 0;
   const shakeY = s.shake > 0 ? (Math.random() - 0.5) * 10 * s.shake : 0;
-  const boss = s.enemies.find(e => e.tier === 'boss');
+  const bossParts = s.enemies.filter(e => e.tier === 'boss');
   const ult = s.stats.ult;
   const charge = s.ult.charge;
   const ultReady = ult && charge >= 1 && !s.ult.active;
@@ -102,30 +111,55 @@ export default function BattleArena({ engine, mainCard, mobile }) {
           </svg>
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
+          {/* shield bubbles under everything */}
+          {s.enemies.filter(e => e.shield).map(e => {
+            const R = e.type.shield.radius * k, on = e.shield.hp > 0;
+            return <div key={`sh${e.id}`} style={{
+              position: 'absolute', left: e.x - R, top: e.y - R, width: R * 2, height: R * 2, borderRadius: '50%', pointerEvents: 'none', zIndex: 5,
+              background: on ? `rgba(80,180,255,${0.08 + 0.14 * e.shield.hp / e.shield.max})` : 'transparent',
+              border: on ? '2px solid rgba(125,211,252,0.85)' : '2px dashed rgba(125,211,252,0.25)',
+              boxShadow: on ? 'inset 0 0 24px rgba(125,211,252,0.45)' : 'none',
+            }} />;
+          })}
+
           {s.enemies.map(e => {
             const size = e.size * k;
             const frozen = e.frozen > 0;
-            let filter = 'none';
-            if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
+            const down = e.down > 0;
+            const isWormHead = e.move === 'worm' && e.role === 'head';
+            let filter = e.tint ?? 'none';
+            if (down) filter = 'grayscale(1) brightness(0.5)';
+            else if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
             else if (e.flashRed) filter = 'none';
-            else if (e.hurt > 0) filter = 'brightness(2.2)';
+            else if (e.hurt > 0) filter = `${e.tint ?? ''} brightness(2.2)`;
+            const showBar = e.tier !== 'boss' || e.role === 'hydra' || (e.group && e.role !== 'head');
             return (
               <div key={e.id} style={{
                 position: 'absolute', left: 0, top: 0, width: size, height: size,
                 transform: `translate3d(${e.x - size / 2}px, ${e.y - size / 2}px, 0)`,
-                zIndex: e.tier === 'boss' ? 6 : e.tier === 'treasure' ? 8 : 7, pointerEvents: 'none',
+                zIndex: isWormHead ? 9 : e.tier === 'boss' ? 6 : e.tier === 'treasure' ? 8 : 7, pointerEvents: 'none',
               }}>
                 {e.dashing && <div className="dash-trail" />}
-                <img src={e.img} alt="" draggable={false}
-                  className={`enemy-img${e.tier === 'boss' ? ' boss' : ''}${e.flashRed ? ' flash-red' : ''}${e.tier === 'treasure' ? ' treasure' : ''}`}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', filter, animationPlayState: frozen || s.timeStop > 0 ? 'paused' : 'running' }} />
+                {e.shape === 'segment' ? (
+                  <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : e.hurt > 0 ? 'brightness(2)' : 'none' }} />
+                ) : (
+                  <img src={e.img} alt="" draggable={false}
+                    className={`enemy-img${e.tier === 'boss' && !e.group ? ' boss' : ''}${e.flashRed ? ' flash-red' : ''}${e.tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}`}
+                    style={{ width: '100%', height: '100%', objectFit: isWormHead ? 'cover' : 'contain', filter, animationPlayState: frozen || down || s.timeStop > 0 ? 'paused' : 'running' }} />
+                )}
+                {down && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#facc15', fontWeight: 900, fontSize: 13 * Math.max(0.8, k), textShadow: '0 1px 4px #000' }}>DOWN {e.down.toFixed(1)}s</div>}
+                {e.shield && (
+                  <div style={{ position: 'absolute', left: '10%', right: '10%', bottom: '100%', height: 5, background: '#0b2233', borderRadius: 3, marginBottom: 3 }}>
+                    <div style={{ width: `${e.shield.hp / e.shield.max * 100}%`, height: '100%', borderRadius: 3, background: '#38bdf8' }} />
+                  </div>
+                )}
                 {e.tier === 'treasure' && <div className="lure" />}
                 {e.tier === 'boss' && s.weakPts.filter(w => w.boss === e.id).map(w => (
                   <div key={w.id} className="weak-pt" style={{ left: `${50 + w.rx * 100}%`, top: `${50 + w.ry * 100}%`, width: 30 * k, height: 30 * k }} />
                 ))}
-                {e.tier !== 'boss' && (
-                  <div style={{ position: 'absolute', left: '10%', right: '10%', top: '100%', height: 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
-                    <div style={{ width: `${Math.max(0, e.hp / e.maxHp) * 100}%`, height: '100%', borderRadius: 3, background: e.tier === 'elite' ? '#c084fc' : e.tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
+                {showBar && (
+                  <div style={{ position: 'absolute', left: '10%', right: '10%', top: '100%', height: e.role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
+                    <div style={{ width: `${Math.max(0, e.hp / e.maxHp) * 100}%`, height: '100%', borderRadius: 3, background: e.role === 'hydra' ? '#ff4400' : e.tier === 'elite' ? '#c084fc' : e.tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
                   </div>
                 )}
                 {frozen && <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translate(-50%, 8px)', color: '#67e8f9', fontSize: 11, whiteSpace: 'nowrap' }}>❄</div>}
@@ -161,7 +195,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
         {pl.hitT > 0 && <div style={{ position: 'absolute', inset: 0, boxShadow: `inset 0 0 ${80 * pl.hitT}px rgba(255,0,0,0.9)`, pointerEvents: 'none', zIndex: 11 }} />}
         {s.effects.some(f => f.kind === 'ult') && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.5, pointerEvents: 'none', zIndex: 12, animation: 'ultFlash 0.5s ease-out forwards' }} />}
 
-        <StageBar s={s} boss={boss} />
+        <StageBar s={s} bossParts={bossParts} />
 
         {/* Status chips */}
         <div style={{ position: 'absolute', top: 44, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, zIndex: 13, pointerEvents: 'none' }}>
@@ -181,19 +215,10 @@ export default function BattleArena({ engine, mainCard, mobile }) {
           </div>
         )}
 
-        {/* PC: status frame (portrait / ult orb / HP) inside the arena */}
-        {!mobile && (
-          <StatusFrame mainCard={mainCard} hpRatio={hpRatio} charge={charge} ult={ult} ultReady={ultReady}
-            onUlt={() => engine.activateUlt()} hp={pl.hp} maxHp={pl.maxHp} />
-        )}
+        {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
+        <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard} hpRatio={hpRatio} charge={charge} ult={ult} ultReady={ultReady}
+          onUlt={() => engine.activateUlt()} hp={pl.hp} maxHp={pl.maxHp} />
       </div>
-
-      {/* Phone: compact HUD under the arena */}
-      {mobile && (
-        <MobileHud mainCard={mainCard} hp={pl.hp} maxHp={pl.maxHp} hpRatio={hpRatio}
-          charge={charge} ult={ult} ultReady={ultReady} active={s.ult.active}
-          onUlt={() => engine.activateUlt()} />
-      )}
 
       <style>{ARENA_CSS}</style>
     </>
@@ -242,9 +267,14 @@ function EffectShape({ f, k }) {
   return null;
 }
 
-function StageBar({ s, boss }) {
+function StageBar({ s, bossParts }) {
   let label, ratio, color;
-  if (boss) { label = boss.name; ratio = boss.hp / boss.maxHp; color = '#ff4400'; }
+  const boss = bossParts.length > 0 && s.bossInfo;
+  if (boss) {
+    label = s.bossInfo.name;
+    ratio = bossParts.reduce((a, e) => a + Math.max(0, e.hp), 0) / s.bossInfo.maxHp;
+    color = '#ff4400';
+  }
   else if (s.phase === 'fight') { label = `STAGE ${s.stageNum} · ${s.kills}/${s.stage.killTarget} kills`; ratio = s.kills / s.stage.killTarget; color = '#ff8c00'; }
   else if (s.phase === 'bossIntro') { label = `STAGE ${s.stageNum} · BOSS`; ratio = 1; color = '#ff4400'; }
   else { label = `STAGE ${s.stageNum}`; ratio = 1; color = '#4ade80'; }
@@ -264,11 +294,11 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{children}</div>
 );
 
-function StatusFrame({ mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxHp }) {
+function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxHp }) {
   return (
-    <div style={{ position: 'absolute', left: '2%', bottom: '4%', zIndex: 14, width: '30%', maxWidth: 300 }}>
-      <div style={{ position: 'relative', width: '100%' }}>
-        <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ width: '100%', display: 'block', pointerEvents: 'none' }} />
+    <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', right: '0.5%', bottom: '0.5%', width: '95%', height: '100%', overflow: 'hidden', pointerEvents: 'none' }}>
           {mainCard && <img src={STATUS_PORTRAITS[mainCard.id] ?? mainCard.image} alt="" draggable={false}
             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />}
@@ -285,7 +315,7 @@ function StatusFrame({ mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxH
           title={ult ? `${ult.name} — ${ult.desc}` : 'Ult unlocks at LV50'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
-          {!ult ? 'LV50' : ultReady ? 'E' : `${Math.floor(charge * 100)}%`}
+          {!ult ? 'LV50' : ultReady ? (mobile ? 'TAP' : 'E') : `${Math.floor(charge * 100)}%`}
         </div>
         <img src={`${BASE}ui/ui_statushp.png`} alt="" draggable={false} style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated', pointerEvents: 'none',
@@ -299,41 +329,16 @@ function StatusFrame({ mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxH
   );
 }
 
-function MobileHud({ mainCard, hp, maxHp, hpRatio, charge, ult, ultReady, active, onUlt }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#0f1625', border: '2px solid #334', borderRadius: 6, flexShrink: 0 }}>
-      <div style={{ width: 42, height: 42, borderRadius: 6, overflow: 'hidden', border: '2px solid #f0c040', flexShrink: 0, background: '#1a2035' }}>
-        {mainCard && <img src={mainCard.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#aaa' }}>
-          <span>HP</span><span>{Math.ceil(hp)}/{maxHp}</span>
-        </div>
-        <div style={{ height: 9, background: '#1a0a0a', borderRadius: 4, marginTop: 2 }}>
-          <div style={{ width: `${hpRatio * 100}%`, height: '100%', borderRadius: 4, background: hpRatio > 0.5 ? '#4ade80' : hpRatio > 0.25 ? '#facc15' : '#f87171', transition: 'width 0.15s' }} />
-        </div>
-      </div>
-      <button
-        onPointerDown={e => { e.stopPropagation(); onUlt(); }}
-        disabled={!ultReady}
-        style={{
-          position: 'relative', width: 64, height: 52, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
-          border: `2px solid ${ultReady ? '#c084fc' : '#443355'}`, background: '#1a0a2a', color: '#fff',
-          fontWeight: 900, fontSize: 12, animation: ultReady ? 'orbReady 0.9s ease-in-out infinite' : 'none', touchAction: 'manipulation',
-        }}>
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${(ult ? charge : 0) * 100}%`, background: 'linear-gradient(0deg,#7c3aed,#c084fc)', opacity: 0.75 }} />
-        <span style={{ position: 'relative' }}>{!ult ? 'LV50' : active ? '…' : ultReady ? 'ULT!' : `${Math.floor(charge * 100)}%`}</span>
-      </button>
-    </div>
-  );
-}
-
 const ARENA_CSS = `
   .battle-arena img { -webkit-user-drag: none; user-select: none; }
   .enemy-img { display:block; image-rendering:pixelated; animation: enemyBob 2.4s ease-in-out infinite; }
   .enemy-img.boss { animation: enemyBob 1.8s ease-in-out infinite, bossPulse 1.2s ease-in-out infinite; }
   .enemy-img.flash-red { animation: flashRed 0.22s steps(2) infinite !important; }
   .enemy-img.treasure { animation: treasureWiggle 0.5s ease-in-out infinite; }
+  .worm-seg { width:100%; height:100%; border-radius:50%;
+              background: radial-gradient(circle at 35% 30%, #c2410c, #7f1d1d 55%, #2a0a0a);
+              border: 2px solid #451a03; box-shadow: inset 0 -4px 8px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.6); }
+  .enemy-img.worm-head { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
   .dash-trail { position:absolute; inset:10%; border-radius:50%; box-shadow: 0 0 24px 12px rgba(255,40,40,0.55); }
   .lure { position:absolute; inset:-30%; border-radius:50%; pointer-events:none;
           background: radial-gradient(circle, rgba(255,215,90,0.35) 0%, transparent 65%); animation: lurePulse 1s ease-in-out infinite; }
