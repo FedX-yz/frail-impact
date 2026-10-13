@@ -10,6 +10,7 @@ export default function SettingsScreen({ navigate }) {
 
   const handleReset = () => {
     if (!confirmReset) { setConfirmReset(true); return; }
+    window.__frailResetting = true; // stops App re-saving on unload
     localStorage.removeItem(SAVE_KEY);
     window.location.reload();
   };

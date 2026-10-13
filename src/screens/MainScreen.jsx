@@ -58,7 +58,7 @@ function getDeckBonuses(deck, cardInventory = {}) {
   cards.forEach((card) => {
     if (card.stats) {
       const si = cardInventory[card.id]?.si ?? 0;
-      const siMult = SI_MULT[si];
+      const siMult = SI_MULT[Math.min(si, SI_MULT.length - 1)];
       atkBonus += (card.stats.atk ?? 0) * siMult;
     }
     if (card.passive) {
@@ -121,6 +121,16 @@ export default function MainScreen({
   const [cdAnimating, setCdAnimating] = useState(false);
 
   const enemiesRef   = useRef(enemies);
+  // Every enemy update goes through here so enemiesRef is never stale.
+  // Before, fast clicks read an old ref: damage got lost and one enemy
+  // could die twice (double coins / kills).
+  const updateEnemies = useCallback((next) => {
+    const value = typeof next === 'function' ? next(enemiesRef.current) : next;
+    enemiesRef.current = value;
+    setEnemies(value);
+  }, []);
+  const cardInvRef   = useRef(cardInventory);
+  cardInvRef.current = cardInventory;
   const frozenRef    = useRef(frozenMap);
   const killRef      = useRef(killCount);
   const floaterIdRef = useRef(0);
@@ -130,7 +140,6 @@ export default function MainScreen({
   const mainCardRef = useRef(mainCard);
   useEffect(() => { mainCardRef.current = mainCard; }, [mainCard]);
 
-  useEffect(() => { enemiesRef.current  = enemies;  }, [enemies]);
   useEffect(() => { frozenRef.current   = frozenMap; }, [frozenMap]);
   useEffect(() => {
     const hasFrozen = Object.keys(frozenMap).length > 0;
@@ -166,20 +175,21 @@ export default function MainScreen({
         const xpGain = killed.isBoss ? 1000 : killed.tier === 'elite' ? 300 : killed.tier === 'treasure' ? 10 : 100;
         const mc = mainCardRef.current;
         if (mc && mc.rarity >= 5) {
-          setCardInventory(prev => {
-            const entry = prev[mc.id] ?? { si: 0, xp: 0, level: 1 };
-            const prevLevel = entry.level ?? 1;
-            const newXp = (entry.xp ?? 0) + xpGain;
-            const xpNeeded = prevLevel * 100;
-            if (newXp >= xpNeeded) {
-              const newLevel = prevLevel + 1;
-              addFloater(`${mc.name} LV${newLevel}!`, 50, 40, '#facc15', true);
-              if (newLevel === 20) addFloater('SKILL UNLOCKED!', 50, 30, '#4ade80', true);
-              if (newLevel === 50) addFloater('ULT UNLOCKED!', 50, 30, '#c084fc', true);
-              return { ...prev, [mc.id]: { ...entry, xp: newXp - xpNeeded, level: newLevel } };
-            }
-            return { ...prev, [mc.id]: { ...entry, xp: newXp } };
-          });
+          const inv   = cardInvRef.current;
+          const entry = inv[mc.id] ?? { si: 0, xp: 0, level: 1 };
+          let level = entry.level ?? 1;
+          let xp    = (entry.xp ?? 0) + xpGain;
+          // A boss can be worth several levels at once
+          while (xp >= level * 100) {
+            xp -= level * 100;
+            level++;
+            addFloater(`${mc.name} LV${level}!`, 50, 40, '#facc15', true);
+            if (level === 20) addFloater('SKILL UNLOCKED!', 50, 30, '#4ade80', true);
+            if (level === 50) addFloater('ULT UNLOCKED!', 50, 30, '#c084fc', true);
+          }
+          const next = { ...inv, [mc.id]: { ...entry, xp, level } };
+          cardInvRef.current = next;
+          setCardInventory(next);
         }
 
         if (killed.tier === 'treasure' && killed.pullReward) {
@@ -198,10 +208,10 @@ export default function MainScreen({
 
       checkUpcomingBoss(newKills);
 
-      let bossSpawned = false;
+      let bossSpawned = alive.some(e => e.isBoss);
       const replacements = dead.map((_, i) => {
         const k         = newKills - dead.length + i + 1;
-        const spawnBoss = !bossSpawned && k > 0 && k % 10 === 0;
+        const spawnBoss = !bossSpawned && k > 0 && k % 10 === 0; // skipped while a boss is alive
         if (spawnBoss) bossSpawned = true;
         return spawnEnemy(spawnBoss, newKills);
       });
@@ -216,11 +226,11 @@ export default function MainScreen({
       });
       if (coinsEarned > 0) { setCoins(c => c + coinsEarned); setTotalEarned(t => t + coinsEarned); }
       if (gemsEarned  > 0) setPullCurrency(c => c + gemsEarned);
-      setEnemies([...alive, ...replacements]);
+      updateEnemies([...alive, ...replacements]);
     } else {
-      setEnemies(updated);
+      updateEnemies(updated);
     }
-  }, [addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency, setCardInventory]);
+  }, [addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency, setCardInventory, setKillCount, updateEnemies]);
 
   // Player death + regen
   useEffect(() => {
@@ -257,12 +267,9 @@ export default function MainScreen({
   // Auto-attack
   useEffect(() => {
     const interval = setInterval(() => {
-      const now     = Date.now();
       const current = enemiesRef.current;
-      if (!current.length) { setEnemies([spawnEnemy(false, killRef.current)]); return; }
-      const targets = current.filter(en => !frozenRef.current[en.id] || frozenRef.current[en.id] < now);
-      if (!targets.length) return;
-      const target = targets[Math.floor(Math.random() * targets.length)];
+      if (!current.length) { updateEnemies([spawnEnemy(false, killRef.current)]); return; }
+      const target = current[Math.floor(Math.random() * current.length)];
       const isCrit = Math.random() < critRate;
       const dmg    = Math.floor((cps + atkBonus * 0.1) * dmgMult * (0.85 + Math.random() * 0.3) * (isCrit ? 2 : 1));
       addFloater((isCrit ? 'CRIT\n' : '') + '-' + fmt(dmg), target.x + (Math.random()-0.5)*8, target.y - 8, isCrit ? '#ff4444' : '#ffffff', isCrit);
@@ -270,13 +277,15 @@ export default function MainScreen({
       processDead(current, updated);
     }, 1000);
     return () => clearInterval(interval);
-  }, [cps, dmgMult, critRate, atkBonus, addFloater, processDead]);
+  }, [cps, dmgMult, critRate, atkBonus, addFloater, processDead, updateEnemies]);
 
   // Enemy movement
   useEffect(() => {
     const interval = setInterval(() => {
-      setEnemies(prev => prev.map(en => {
+      const now = Date.now();
+      updateEnemies(prev => prev.map(en => {
         if (en.isBoss || en.speed === 0) return en;
+        if (frozenRef.current[en.id] > now) return en;
         if (en.movePattern === 'erratic' && Math.random() < 0.45) {
           return { ...en, x: 50 + Math.random() * 35, y: 25 + Math.random() * 50 };
         }
@@ -287,7 +296,7 @@ export default function MainScreen({
       }));
     }, 600);
     return () => clearInterval(interval);
-  }, []);
+  }, [updateEnemies]);
 
   // Lure mechanic
   useEffect(() => {
@@ -318,8 +327,8 @@ export default function MainScreen({
           patrolDir: 1,
           state: 'idle',
         };
-        setEnemies(prev => [...prev, treasure]);
-        const t = setTimeout(() => setEnemies(prev => prev.filter(e => e.id !== treasure.id)), 10000);
+        updateEnemies(prev => [...prev, treasure]);
+        const t = setTimeout(() => updateEnemies(prev => prev.filter(e => e.id !== treasure.id)), 10000);
         treasureTimeouts.push(t);
       }
     }, 15000);
@@ -327,7 +336,7 @@ export default function MainScreen({
       clearInterval(interval);
       treasureTimeouts.forEach(clearTimeout);
     };
-  }, []);
+  }, [updateEnemies]);
 
   // Boss weak points
   useEffect(() => {
@@ -355,8 +364,9 @@ export default function MainScreen({
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      setEnemies(prev => prev.map(en => {
+      updateEnemies(prev => prev.map(en => {
         if (en.tier === 'basic') return en;
+        if (frozenRef.current[en.id] > now) return en;
         if (en.state === 'telegraphing') return en;
         if (!en.attacks?.length) return en;
 
@@ -382,11 +392,25 @@ export default function MainScreen({
           delete telegraphTimeoutsRef.current[en.id];
           const liveEnemy = enemiesRef.current.find(e => e.id === en.id);
           if (!liveEnemy) return;
-          const p = playerPosRef.current;
-          const ex = liveEnemy.x;
-          const ey = liveEnemy.y;
-          const hit = Math.abs(p.x - ex) < (isBossAttack ? 18 : 8) &&
-                      Math.abs(p.y - ey) < (isBossAttack ? 18 : 8);
+          // Hit test uses the zone that was drawn (pixels, centred on the
+          // enemy). It used to be a fixed % square that didn't match the
+          // visual, so dodging a sweep's edge still hurt and vice versa.
+          const p    = playerPosRef.current;
+          const rect = arenaRef.current?.getBoundingClientRect();
+          let hit = false;
+          if (rect && zone) {
+            const dx = (p.x - liveEnemy.x) / 100 * rect.width;
+            const dy = (p.y - liveEnemy.y) / 100 * rect.height;
+            hit = attack === 'sweep'
+              ? Math.abs(dx) <= zone.w / 2 && Math.abs(dy) <= zone.h / 2
+              : Math.hypot(dx, dy) <= zone.w / 2;
+          } else if (!zone) {
+            // body attack ('chase'): you get hit if the cursor is on the enemy
+            const half = (isBossAttack ? BOSS_SIZE : REGULAR_SIZE) / 2;
+            const dx = rect ? (p.x - liveEnemy.x) / 100 * rect.width : Infinity;
+            const dy = rect ? (p.y - liveEnemy.y) / 100 * rect.height : Infinity;
+            hit = Math.abs(dx) <= half && Math.abs(dy) <= half;
+          }
           if (hit) {
             const dmgAmount = en.isBoss ? (attack === 'slam' ? 35 : attack === 'sweep' ? 22 : 18) : en.tier === 'elite' ? (attack === 'chase' ? 20 : 14) : 10;
             setPlayerHp(hp => Math.max(0, hp - dmgAmount));
@@ -394,11 +418,11 @@ export default function MainScreen({
             setTimeout(() => { setTakingDamage(false); setHitFlash(false); }, 300);
             addFloater(`-${dmgAmount} HP`, 10, 20, '#ff4444', false);
           }
-          setEnemies(prev2 => prev2.map(e =>
+          updateEnemies(prev2 => prev2.map(e =>
             e.id === en.id ? { ...e, state: 'attacking' } : e
           ));
           setTimeout(() => {
-            setEnemies(prev2 => prev2.map(e =>
+            updateEnemies(prev2 => prev2.map(e =>
               e.id === en.id
                 ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
                 : e
@@ -415,7 +439,7 @@ export default function MainScreen({
       Object.values(telegraphTimeoutsRef.current).forEach(clearTimeout);
       telegraphTimeoutsRef.current = {};
     };
-  }, [addFloater]);
+  }, [addFloater, updateEnemies]);
 
   const handleEnemyClick = useCallback((enemy, e) => {
     e.stopPropagation();
@@ -884,7 +908,7 @@ export default function MainScreen({
                   <div style={{ color:'#5588ff', marginBottom:2, fontWeight:700 }}>{card.name} <span style={{ color:'#445', fontWeight:400 }}>support</span></div>
                   {card.stats && (() => {
                     const si = cardInventory[card.id]?.si ?? 0;
-                    const siMult = SI_MULT[si];
+                    const siMult = SI_MULT[Math.min(si, SI_MULT.length - 1)];
                     const boostedAtk = Math.round(card.stats.atk * siMult);
                     return <span style={{ color:'#aaa' }}>+{boostedAtk} ATK{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>S{si+1}</span>}</span>;
                   })()}

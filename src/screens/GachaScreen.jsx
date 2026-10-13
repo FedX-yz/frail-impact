@@ -37,7 +37,10 @@ function doPulls(count, pity4, pity5, banner) {
     p4++; p5++;
     const rand = Math.random() * 100;
     let rarity;
-    if (p5 >= 90 || (p5 >= 60 && rand < 2 + (p5 - 60) * 6)) {
+    // 0.6% base 5★ rate, soft pity from 60, hard pity at 90.
+    // (Before, 5★ was impossible until pull 60.)
+    const rate5 = p5 >= 60 ? 2 + (p5 - 60) * 6 : 0.6;
+    if (p5 >= 90 || rand < rate5) {
       rarity = Math.random() < 0.1 ? 6 : 5; p5 = 0;
     } else if (p4 >= 10 || rand < 5.1) {
       rarity = 4; p4 = 0;
@@ -70,14 +73,21 @@ function doPulls(count, pity4, pity5, banner) {
 }
 
 // ── Countdown hook ─────────────────────────────────────────────
-// Set BANNER_END_DATE to your actual banner end date/time
-const BANNER_END_DATE = new Date('2025-06-01T00:00:00Z');
+// Banners rotate on a 21-day cycle so the timer never sits on "Ended".
+// (The old fixed date, 2025-06-01, had already passed.)
+const BANNER_CYCLE_MS    = 21 * 86400000;
+const BANNER_CYCLE_START = Date.UTC(2026, 0, 1);
+function nextBannerEnd() {
+  const elapsed = Date.now() - BANNER_CYCLE_START;
+  return new Date(BANNER_CYCLE_START + (Math.floor(elapsed / BANNER_CYCLE_MS) + 1) * BANNER_CYCLE_MS);
+}
 
 function useCountdown(endDate) {
   const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
     const tick = () => {
-      const diff = endDate - Date.now();
+      const end  = typeof endDate === 'function' ? endDate() : endDate;
+      const diff = end - Date.now();
       if (diff <= 0) { setTimeLeft('Ended'); return; }
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
@@ -119,7 +129,7 @@ export default function GachaScreen({
   const [hovBtn1, setHovBtn1] = useState(false);
   const [hovBtn2, setHovBtn2] = useState(false);
 
-  const timeLeft = useCountdown(BANNER_END_DATE);
+  const timeLeft = useCountdown(nextBannerEnd);
 
   const activeBanner = BANNERS.find(b => b.id === activeBannerId) || BANNERS[0];
 
@@ -675,7 +685,7 @@ zIndex: 10,
               <div>
                 <div style={{ fontSize:'clamp(22px,4vw,44px)', fontWeight:900, letterSpacing:1, color:rc(c.rarity), animation:isHigh?'highPulse 2s ease-in-out infinite':'none', opacity: isS5Dupe ? 0.6 : 1 }}>{c.name}</div>
                 <div style={{ color:'rgba(255,255,255,0.55)', fontSize:16, marginTop:4, opacity: isS5Dupe ? 0.6 : 1 }}>{c.subtitle}</div>
-                {c.ability && <div style={{ color:'rgba(196,181,253,0.7)', fontSize:13, marginTop:6, opacity: isS5Dupe ? 0.6 : 1 }}>✦ {c.ability.name}</div>}
+                {c.skill && <div style={{ color:'rgba(196,181,253,0.7)', fontSize:13, marginTop:6, opacity: isS5Dupe ? 0.6 : 1 }}>✦ {c.skill.name}{c.ult ? ` · ⚡ ${c.ult.name}` : ''}</div>}
               </div>
 
               <div style={{ color:'rgba(255,255,255,0.2)', fontSize:13, animation:'tapHint 2s infinite' }}>
@@ -828,13 +838,13 @@ zIndex: 10,
               </div>
             )}
 
-            {selectedResult.ability && (
-              <div style={{ background:'rgba(240,192,64,0.07)', border:'1px solid rgba(240,192,64,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:8 }}>
-                <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>✦ {selectedResult.ability.name}</div>
-                <div style={{ color:'#aaa', fontSize:12 }}>{selectedResult.ability.description}</div>
-                {selectedResult.ability.cooldown && <div style={{ color:'#556', fontSize:11, marginTop:4 }}>CD: {selectedResult.ability.cooldown}s</div>}
+            {[['✦ Skill', selectedResult.skill], ['⚡ Ult', selectedResult.ult]].filter(([, a]) => a).map(([tag, a]) => (
+              <div key={tag} style={{ background:'rgba(240,192,64,0.07)', border:'1px solid rgba(240,192,64,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:8 }}>
+                <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{tag}: {a.name}</div>
+                <div style={{ color:'#aaa', fontSize:12 }}>{a.description}</div>
+                {a.cooldown && <div style={{ color:'#556', fontSize:11, marginTop:4 }}>CD: {a.cooldown}s</div>}
               </div>
-            )}
+            ))}
 
             {selectedResult.passive && (
               <div style={{ background:'rgba(85,136,255,0.07)', border:'1px solid rgba(85,136,255,0.2)', borderRadius:8, padding:'8px 12px' }}>

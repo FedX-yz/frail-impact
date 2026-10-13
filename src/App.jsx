@@ -6,8 +6,20 @@ import DeckScreen     from './screens/DeckScreen';
 import CardsScreen    from './screens/CardsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CardShop       from './screens/CardShop';
+import { CHARACTERS }  from './data/characters';
 
 const SAVE_KEY = 'rhg_v3';
+
+// Settings sets this before wiping the save, so the unload handler
+// below doesn't write the old progress straight back.
+const isResetting = () => window.__frailResetting === true;
+
+// The deck is saved as full card objects; swap them for the current
+// definitions so edits to characters.js reach old saves.
+function rehydrateCard(card) {
+  if (!card) return null;
+  return CHARACTERS.find(c => c.id === card.id) ?? card;
+}
 
 function loadSave() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch { return null; }
@@ -18,6 +30,7 @@ function useDebouncedSave(data, delay = 1500) {
   useEffect(() => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      if (isResetting()) return;
       try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
     }, delay);
     return () => clearTimeout(timer.current);
@@ -26,7 +39,8 @@ function useDebouncedSave(data, delay = 1500) {
 
 
 export default function App() {
-  const s = loadSave() || {};
+  // Read the save once, not on every render.
+  const [s] = useState(() => loadSave() || {});
 
   const [screen,        setScreen]        = useState('main');
   const [pullCurrency,  setPullCurrency]  = useState(s.pullCurrency  ?? 10);
@@ -47,10 +61,8 @@ export default function App() {
   const defaultDeck = { main: null, supports: [null, null, null, null] };
   const [deck, setDeck] = useState(() => {
     const saved = s.deck ?? defaultDeck;
-    if ((saved.supports?.length ?? 0) < 4) {
-      saved.supports = [...(saved.supports || []), null, null, null, null].slice(0, 4);
-    }
-    return saved;
+    const supports = [...(saved.supports || []), null, null, null, null].slice(0, 4);
+    return { main: rehydrateCard(saved.main), supports: supports.map(rehydrateCard) };
   });
 
   // NO auto-income — coins come from kills only
@@ -63,6 +75,7 @@ export default function App() {
 
   useEffect(() => {
     const handleUnload = () => {
+      if (isResetting()) return;
       try {
         localStorage.setItem(SAVE_KEY, JSON.stringify({
           pullCurrency, coins, collection, cardInventory,

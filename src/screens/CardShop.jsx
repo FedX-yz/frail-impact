@@ -90,18 +90,17 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
       showToast('Already at S5 – MAX!', '#ff8c00'); 
       return; 
     }
-    if (totalCount < 2) { 
-      showToast('Need 1 more copy to fuse!', '#ff4444'); 
+    // S(n+1) needs n+1 copies in total. Copies aren't removed when you
+    // fuse; the requirement just goes up. (Before, only shop copies were
+    // removed, so 2 gacha copies could be fused all the way to S5.)
+    if (totalCount < si + 2) { 
+      showToast(`Need ${si + 2 - totalCount} more cop${si + 2 - totalCount === 1 ? 'y' : 'ies'} to fuse!`, '#ff4444'); 
       return; 
     }
     
     setCollection(prev => {
       const cur = prev[card.id] ?? { count: 0, si: 0 };
-      const newSi = cur.si + 1;
-      const newCount = Math.max(0, cur.count - 1);
-      
-      // ALWAYS keep the entry to preserve SI — don't delete it!
-      return { ...prev, [card.id]: { count: newCount, si: newSi } };
+      return { ...prev, [card.id]: { ...cur, si: (cur.si ?? 0) + 1 } };
     });
     
     showToast(`${card.name} → ${SI_BONUSES[si + 1].label}`, RARITY_COLOR[card.rarity]);
@@ -189,9 +188,9 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
                   <span>DEF <span style={{ color: '#88aaff' }}>{card.stats.def}</span></span>
                 </div>
 
-                {card.ability && (
+                {card.skill && (
                   <div style={{ background: '#1a0a2a', border: '1px solid #3a1a5a', borderRadius: 4, padding: '3px 7px', fontSize: 10, color: '#cc88ff' }}>
-                    ✦ {card.ability.name}
+                    ✦ {card.skill.name}
                   </div>
                 )}
 
@@ -238,7 +237,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
                   const count     = getCardCounts(card.id);
                   const { si } = entry;
                   const maxed     = si >= 4;
-                  const canFuse   = !maxed && count >= 2;
+                  const canFuse   = !maxed && count >= si + 2;
                   const bonus     = SI_BONUSES[si];
                   const nextBonus = !maxed ? SI_BONUSES[si + 1] : null;
 
@@ -282,12 +281,12 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
 
                       {!maxed && (
                         <div style={{ fontSize: 11, color: canFuse ? '#66ff88' : '#664', textAlign: 'center' }}>
-                          {canFuse ? '✓ Ready to fuse!' : `Need 1 more copy · have ×${count}`}
+                          {canFuse ? '✓ Ready to fuse!' : `Need ×${si + 2} copies · have ×${count}`}
                         </div>
                       )}
 
                       <button className="cs-fuse-btn" disabled={!canFuse} onClick={() => handleFuse(card)}>
-                        {maxed ? '✦ MAX REACHED' : canFuse ? `⚡ FUSE → S${si + 2}` : 'FUSE (need ×2)'}
+                        {maxed ? '✦ MAX REACHED' : canFuse ? `⚡ FUSE → S${si + 2}` : `FUSE (need ×${si + 2})`}
                       </button>
                     </div>
                   );

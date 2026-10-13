@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { playClose } from '../utils/sfx';
+import { CHARACTERS } from '../data/characters';
+
+const SI_MULT = [1, 1.12, 1.25, 1.40, 1.60];
+const siMultFor = (si) => SI_MULT[Math.min(si, SI_MULT.length - 1)];
 
 const rc     = (r) => ({ 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' }[r] || '#888');
 const rLabel = (r) => ({ 6:'6★', 5:'5★', 4:'4★', 3:'3★' }[r] || '?');
@@ -71,8 +75,10 @@ Object.entries(cardInventory || {}).forEach(([cardId, entry]) => {
   cardCounts[cardId] = (cardCounts[cardId] || 0) + (entry.count || 0);
 });
 
-// Deduplicate by card.id for display (keep highest rarity instance)
-const pool = [...new Map(collection.map(c => [c.id, c])).values()]
+// Every owned card, from the gacha OR the shop. (Shop-bought cards
+// used to be missing here, so you couldn't equip them.)
+const pool = CHARACTERS
+  .filter(c => (cardCounts[c.id] || 0) > 0)
   .filter(c => {
     if (activeSlot === 'main') return c.rarity >= 5;
     return true;
@@ -80,7 +86,8 @@ const pool = [...new Map(collection.map(c => [c.id, c])).values()]
   .filter(c => filter === 'all' || c.rarity === Number(filter))
   .sort((a, b) => b.rarity - a.rarity);
 
-  const totalAtkBonus = [deck?.main, ...supports].filter(Boolean).reduce((s, c) => s + (c.stats?.atk ?? 0), 0);
+  const totalAtkBonus = Math.round([deck?.main, ...supports].filter(Boolean)
+    .reduce((s, c) => s + (c.stats?.atk ?? 0) * siMultFor(cardInventory?.[c.id]?.si ?? 0), 0));
 
   return (
     <div style={{ width:'100%', height:'100vh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#fff' }}>
@@ -101,7 +108,7 @@ const pool = [...new Map(collection.map(c => [c.id, c])).values()]
         <div style={{ fontSize:18, fontWeight:700, color:'#ff8c00', letterSpacing:1 }}>DECK</div>
         <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★</div>
         <div style={{ flex:1 }} />
-        <div style={{ color:'#445', fontSize:13 }}>{[...new Map(collection.map(c => [c.id, c])).values()].length} unique cards</div>
+        <div style={{ color:'#445', fontSize:13 }}>{CHARACTERS.filter(c => cardCounts[c.id] > 0).length} unique cards</div>
       </div>
 
       <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
@@ -116,7 +123,7 @@ const pool = [...new Map(collection.map(c => [c.id, c])).values()]
   const isMain   = slotKey === 'main';
   const accent   = isMain ? '#f0c040' : '#5588ff';
   const si       = card ? (cardInventory[card.id]?.si ?? 0) : 0;
-  const siMult   = [1, 1.12, 1.25, 1.40, 1.60][si];
+  const siMult   = siMultFor(si);
   const boostedAtk = card ? Math.round(card.stats?.atk * siMult) : 0;
   
   return (
@@ -151,9 +158,9 @@ const pool = [...new Map(collection.map(c => [c.id, c])).values()]
                 ATK {boostedAtk}{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>+{Math.round((boostedAtk - card.stats.atk))} (S{si + 1})</span>} · HP {card.stats.hp}
               </div>
             )}
-            {isMain && card.ability && (
+            {isMain && card.skill && (
               <div style={{ color:'rgba(255,255,255,0.35)', fontSize:11, marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                ✦ {card.ability.name}
+                ✦ {card.skill.name}{card.ult ? ` · ⚡ ${card.ult.name}` : ''}
               </div>
             )}
           </>
@@ -197,7 +204,7 @@ const pool = [...new Map(collection.map(c => [c.id, c])).values()]
             </div>
           )}
 
-          {collection.length === 0 && (
+          {pool.length === 0 && filter === 'all' && !activeSlot && (
             <div style={{ color:'#445', fontSize:12, textAlign:'center', marginTop:12 }}>
               No cards yet!
               <br />
@@ -225,7 +232,7 @@ const pool = [...new Map(collection.map(c => [c.id, c])).values()]
 
           {/* Grid */}
           <div style={{ flex:1, overflowY:'auto', padding:12 }}>
-            {collection.length === 0 ? (
+            {CHARACTERS.every(c => !cardCounts[c.id]) ? (
               <div style={{ textAlign:'center', color:'#334', marginTop:60, fontSize:15 }}>No cards yet. Go pull!</div>
             ) : pool.length === 0 ? (
               <div style={{ textAlign:'center', color:'#334', marginTop:60, fontSize:14 }}>

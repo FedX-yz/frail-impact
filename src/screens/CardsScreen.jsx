@@ -274,13 +274,13 @@ export default function CardsScreen({ navigate, collection }) {
                 </div>
               )}
 
-              {selected.ability && (
-                <div style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
-                  <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>✦ {selected.ability.name}</div>
-                  <div style={{ color:'#aaa', fontSize:12 }}>{selected.ability.description}</div>
-                  <div style={{ color:'#556', fontSize:11, marginTop:4 }}>CD: {selected.ability.cooldown}s</div>
+              {[['✦ Skill · LV20', selected.skill], ['⚡ Ult · LV50', selected.ult]].filter(([, a]) => a).map(([tag, a]) => (
+                <div key={tag} style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
+                  <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{a.name} <span style={{ color:'#776', fontWeight:400, fontSize:11 }}>{tag}</span></div>
+                  <div style={{ color:'#aaa', fontSize:12 }}>{a.description}</div>
+                  <div style={{ color:'#556', fontSize:11, marginTop:4 }}>CD: {a.cooldown}s</div>
                 </div>
-              )}
+              ))}
 
               {selected.passive && (
                 <div style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
@@ -289,7 +289,7 @@ export default function CardsScreen({ navigate, collection }) {
                 </div>
               )}
 
-              {!selected.ability && selected.rarity < 5 && (
+              {!selected.skill && !selected.ult && selected.rarity < 5 && (
                 <div style={{ color:'#445', fontSize:12, textAlign:'center', marginTop:8 }}>no abilities — stat support only</div>
               )}
 
