@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { playClose } from '../utils/sfx';
+import { thumb } from '../utils/assets';
 import { upgradeSubs, formatSub } from '../combat/sets';
 
 const BASE = import.meta.env.BASE_URL;
@@ -173,7 +174,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
 
                 <div style={IMG_WRAP(RARITY_COLOR[card.rarity], 72)}>
                   {card.image
-                    ? <img src={card.image} alt={card.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={thumb(card.image)} alt={card.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span style={{ color: RARITY_COLOR[card.rarity], fontSize: 10 }}>{card.name.slice(0, 6)}</span>}
                 </div>
 
@@ -253,7 +254,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
                       <div style={{ position: 'relative' }}>
                         <div style={IMG_WRAP(RARITY_COLOR[card.rarity], 60)}>
                           {card.image
-                            ? <img src={card.image} alt={card.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ? <img src={thumb(card.image)} alt={card.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : <span style={{ color: RARITY_COLOR[card.rarity], fontSize: 9 }}>{card.name.slice(0, 6)}</span>}
                         </div>
                         <div style={{ position: 'absolute', bottom: -5, right: -8, background: '#0f1420', border: `1px solid ${RARITY_COLOR[card.rarity]}`, borderRadius: 10, padding: '1px 7px', fontSize: 11, color: RARITY_COLOR[card.rarity], fontWeight: 900 }}>
@@ -326,7 +327,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
           <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: RARITY_BG[pendingCard.rarity], border: `2px solid ${RARITY_COLOR[pendingCard.rarity]}`, borderRadius: 12, padding: '28px 32px', zIndex: 101, textAlign: 'center', minWidth: 260, animation: 'cs-modalIn 0.18s ease-out' }}>
             <div style={{ color: RARITY_COLOR[pendingCard.rarity], fontSize: 13, letterSpacing: 2, marginBottom: 8 }}>{RARITY_LABEL[pendingCard.rarity]}</div>
             <div style={{ ...IMG_WRAP(RARITY_COLOR[pendingCard.rarity], 80), margin: '0 auto 12px' }}>
-              {pendingCard.image && <img src={pendingCard.image} alt={pendingCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+              {pendingCard.image && <img src={thumb(pendingCard.image)} alt={pendingCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </div>
             <div style={{ color: '#fff', fontWeight: 900, fontSize: 18, marginBottom: 4 }}>{pendingCard.name}</div>
             <div style={{ color: '#556', fontSize: 13, marginBottom: 16 }}>{pendingCard.subtitle}</div>

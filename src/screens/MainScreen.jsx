@@ -6,6 +6,7 @@ import { SKILL_UNLOCK, ULT_UNLOCK } from '../combat/kits';
 import { formatSub } from '../combat/sets';
 import BattleArena from '../combat/BattleArena';
 import useIsMobile from '../hooks/useIsMobile';
+import { thumb } from '../utils/assets';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -135,9 +136,9 @@ export default function MainScreen({
 
   const heroBar = (
     <div style={{ background: '#0f1625', border: '2px solid #334', borderRadius: 6, padding: mobile ? '8px 8px' : '10px 14px', display: 'flex', flexDirection: mobile && portrait ? 'column' : 'row', alignItems: mobile && portrait ? 'stretch' : 'center', justifyContent: 'center', gap: mobile ? 8 : 12, flex: mobile && portrait ? 1 : undefined, flexShrink: 0, flexWrap: mobile && !portrait ? 'wrap' : 'nowrap' }}>
-      {!mobile && (
+      {(
         <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, overflow: 'hidden', border: `2px solid ${mainCard ? '#f0c040' : '#334'}`, background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {mainCard ? <img src={mainCard.image} alt={mainCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {mainCard ? <img src={thumb(mainCard.image)} alt={mainCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span style={{ fontSize: 9, color: '#445', textAlign: 'center' }}>NO CARD</span>}
         </div>
       )}
@@ -146,6 +147,41 @@ export default function MainScreen({
         {!mobile && <div style={{ color: '#ccc', fontSize: 14 }}>{mainCard ? mainCard.name : 'No card equipped'} {mainCard && <span style={{ color: '#556', fontSize: 12 }}>{mainCard.subtitle}</span>}</div>}
         {mainCard ? kitInfo : <div style={{ fontSize: 11, color: '#556' }}>Equip a 5★ card in Deck to get skills and an ult.</div>}
       </div>
+      {trainBtn}
+    </div>
+  );
+
+  // Phone: compact card panel next to the menu art
+  const xpNeed = level * 100, xpHave = xpEntry?.xp ?? 0;
+  const mobilePanel = (
+    <div className="m-panel">
+      {mainCard ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <img src={thumb(mainCard.image)} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', border: '2px solid #f0c040', flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: '#eee', fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mainCard.name}</div>
+              <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 700 }}>LV {level}</div>
+            </div>
+          </div>
+          {mainCard.rarity >= 5 && (
+            <div>
+              <div style={{ height: 5, background: '#0a1a10', borderRadius: 3 }}>
+                <div style={{ width: `${Math.min(100, xpHave / xpNeed * 100)}%`, height: '100%', background: '#4ade80', borderRadius: 3 }} />
+              </div>
+              <div style={{ color: '#4a6', fontSize: 9, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{xpHave}/{xpNeed} xp</div>
+            </div>
+          )}
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+            {mainCard.skill && <div style={{ color: stats.skill ? '#4ade80' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>✦ {mainCard.skill.name}{!stats.skill && <span style={{ color: '#f87171' }}> · LV{SKILL_UNLOCK}</span>}</div>}
+            {mainCard.ult && <div style={{ color: stats.ult ? '#c084fc' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>⚡ {mainCard.ult.name}{!stats.ult && <span style={{ color: '#f87171' }}> · LV{ULT_UNLOCK}</span>}</div>}
+            {stats.sets.map(set => <div key={set.id} style={{ color: set.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>◆ {set.name}</div>)}
+          </div>
+        </>
+      ) : (
+        <div style={{ color: '#778', fontSize: 12, lineHeight: 1.4 }}>No main card.<br />Equip a 5★ in <b style={{ color: '#ff8c00' }}>Deck</b> for skills and an ult.</div>
+      )}
+      <div style={{ flex: 1 }} />
       {trainBtn}
     </div>
   );
@@ -200,7 +236,8 @@ export default function MainScreen({
         .train-btn { border:2px solid #f0c040; background:#2a2000; color:#f0c040; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; padding:7px 12px; white-space:nowrap; display:flex; gap:6px; align-items:center; flex-shrink:0; touch-action:manipulation; }
         .train-btn:disabled { opacity:0.4; cursor:not-allowed; }
         .train-btn:hover:not(:disabled) { background:#3a2c00; }
-        ${mobile && portrait ? '.train-btn { justify-content:center; padding:10px 8px; }' : ''}
+        .m-panel { flex:1; display:flex; flex-direction:column; gap:7px; background:#0f1625; border:2px solid #334; border-radius:6px; padding:8px; min-height:0; }
+        ${mobile ? '.train-btn { justify-content:center; padding:9px 6px; width:100%; }' : ''}
       `}</style>
 
       {topBar}
@@ -214,13 +251,13 @@ export default function MainScreen({
             // menu art (left) + your card / Train (right)
             <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'stretch' }}>
               {navArt({ width: '58%', aspectRatio: '2045 / 1971', flexShrink: 0 })}
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {heroBar}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                {mobilePanel}
               </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 230, flexShrink: 0, overflowY: 'auto' }}>
-              {heroBar}
+              {mobilePanel}
               {navArt({ width: '100%', aspectRatio: '2045 / 1971', flexShrink: 0 })}
             </div>
           )}

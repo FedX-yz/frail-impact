@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
 import { playClose } from '../utils/sfx';
+import { thumb } from '../utils/assets';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -15,6 +16,8 @@ const SUMMON_VID   = {
 };
 
 const rc = r => RARITY_COLOR[r] || '#fff';
+// 1×1 black poster: hides the grey "play" placeholder phones show before a video starts
+const BLANK_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const rg = r => RARITY_GLOW[r]  || 'transparent';
 const isHighRarity = card => card && card.rarity >= 5;
 
@@ -137,6 +140,8 @@ export default function GachaScreen({
   const revealRef = useRef(null);
   const audioRef  = useRef(null);
   const batchRef  = useRef([]);
+  const phaseRef  = useRef('idle');
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   useEffect(() => { batchRef.current = batch; }, [batch]);
 
@@ -153,12 +158,28 @@ export default function GachaScreen({
     audioRef.current.load();
     audioRef.current.play().catch(() => {});
   };
-  const playVideo = (ref, src) => {
-    if (!ref.current || !src) return;
-    ref.current.src = src;
-    ref.current.load();
-    ref.current.play().catch(() => {});
+  // Phones (and the Claude app) can block video with sound until you've
+  // interacted, and Android shows a grey "play" placeholder while a video
+  // isn't playing. So: stay invisible until frames actually play, retry
+  // muted if sound is blocked, and skip ahead if it still won't start.
+  const [vidPlaying, setVidPlaying] = useState(false);
+  const vidTimer = useRef(null);
+  const playVideo = (ref, src, onFail) => {
+    const v = ref.current;
+    if (!v || !src) { onFail?.(); return; }
+    setVidPlaying(false);
+    clearTimeout(vidTimer.current);
+    v.muted = false;
+    v.src = src;
+    v.load();
+    v.play().catch(() => {
+      v.muted = true;
+      v.play().catch(() => onFail?.());
+    });
+    // slow connection / stuck decoder: don't leave the player staring at black
+    vidTimer.current = setTimeout(() => { if (v.paused) onFail?.(); }, 9000);
   };
+  useEffect(() => () => clearTimeout(vidTimer.current), []);
 
   const enterCard = (idx, cards) => {
     const b    = cards || batchRef.current;
@@ -173,13 +194,14 @@ export default function GachaScreen({
 
   useEffect(() => {
     if (phase !== 'summon') return;
-    playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3]);
+    playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3], () => skipSummonRef.current());
   }, [phase, highestRar]);
 
   useEffect(() => {
     if (phase !== 'card-video') return;
     const card = batchRef.current[queueIdx];
-    if (card?.resultVideo) playVideo(revealRef, card.resultVideo);
+    if (card?.resultVideo) playVideo(revealRef, card.resultVideo, () => setPhase('reveal-queue'));
+    else setPhase('reveal-queue');
   }, [phase, queueIdx]);
 
   useEffect(() => {
@@ -232,13 +254,18 @@ export default function GachaScreen({
   const onSummonEnd = () => enterCard(0, batchRef.current);
 
   const skipSummon = () => {
-    if (!summonRef.current) return;
-    summonRef.current.onended = null;
-    summonRef.current.pause();
-    onSummonEnd();
+    clearTimeout(vidTimer.current);
+    if (summonRef.current) summonRef.current.pause();
+    if (phaseRef.current === 'summon') onSummonEnd();
   };
+  const skipSummonRef = useRef(skipSummon);
+  skipSummonRef.current = skipSummon;
 
-  const onCardVideoEnd = () => setPhase('reveal-queue');
+  const onCardVideoEnd = () => {
+    clearTimeout(vidTimer.current);
+    if (revealRef.current) revealRef.current.pause();
+    setPhase('reveal-queue');
+  };
 
   const advanceQueue = () => {
     stopAudio();
@@ -288,26 +315,35 @@ export default function GachaScreen({
       <audio ref={audioRef} style={{ display:'none' }} />
 
       {/* Summon intro video */}
+      {(phase === 'summon' || phase === 'card-video') && <div style={{ position:'absolute', inset:0, background:'#000', zIndex:49 }} />}
       <video
         ref={summonRef}
-        onEnded={onSummonEnd}
-        playsInline
+        onEnded={() => { if (phaseRef.current === 'summon') onSummonEnd(); }}
+        onPlaying={() => setVidPlaying(true)}
+        onError={() => { if (phaseRef.current === 'summon') skipSummon(); }}
+        playsInline preload="auto" poster={BLANK_POSTER}
+        disablePictureInPicture controls={false}
         style={{
           position:'absolute', inset:0, width:'100%', height:'100%',
           objectFit:'cover', background:'#000', zIndex:50,
           display: phase === 'summon' ? 'block' : 'none',
+          opacity: vidPlaying ? 1 : 0,
         }}
       />
 
       {/* Per-card reveal video */}
       <video
         ref={revealRef}
-        onEnded={onCardVideoEnd}
-        playsInline
+        onEnded={() => { if (phaseRef.current === 'card-video') onCardVideoEnd(); }}
+        onPlaying={() => setVidPlaying(true)}
+        onError={() => { if (phaseRef.current === 'card-video') onCardVideoEnd(); }}
+        playsInline preload="auto" poster={BLANK_POSTER}
+        disablePictureInPicture controls={false}
         style={{
           position:'absolute', inset:0, width:'100%', height:'100%',
           objectFit:'cover', background:'#000', zIndex:50,
           display: phase === 'card-video' ? 'block' : 'none',
+          opacity: vidPlaying ? 1 : 0,
         }}
       />
 
@@ -593,7 +629,8 @@ zIndex: 10,
 
       {/* ── CARD-VIDEO: name hint only ────────────────────────── */}
       {phase === 'card-video' && currentCard && (
-        <div style={{ position:'absolute', inset:0, zIndex:51, pointerEvents:'none' }}>
+        <div onClick={onCardVideoEnd} style={{ position:'absolute', inset:0, zIndex:51, cursor:'pointer' }}>
+          <div style={{ position:'absolute', top:20, right:20, color:'rgba(255,255,255,0.5)', fontSize:13 }}>tap to skip</div>
           <div style={{ position:'absolute', bottom:32, left:0, right:0, textAlign:'center' }}>
             <div style={{ color:rc(currentCard.rarity), fontSize:18, fontWeight:700, textShadow:'0 0 20px rgba(0,0,0,0.8)' }}>
               {'★'.repeat(Math.min(currentCard.rarity,6))} {currentCard.name}
@@ -731,7 +768,7 @@ zIndex: 10,
                   }}
                 >
                   <img
-                    src={c.characterImage || c.image}
+                    src={thumb(c.characterImage || c.image)}
                     alt={c.name}
                     draggable={false}
                     style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'contain', objectPosition:'center center', filter:`brightness(${isHigh ? 1.05 : 0.85})` }}

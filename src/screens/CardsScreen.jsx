@@ -1,5 +1,6 @@
 import { useState, useMemo, memo, useCallback, useTransition, useRef } from 'react';
 import { playClose } from '../utils/sfx';
+import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { setOfCard, formatSub } from '../combat/sets';
 import useIsMobile from '../hooks/useIsMobile';
@@ -8,13 +9,15 @@ const RARITY_COLOR = { 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' };
 const RARITY_LABEL = { 6:'6★', 5:'5★', 4:'4★', 3:'3★' };
 const ELEMENT_ICON = { Geo:'🪨', Hydro:'💧', Ice:'❄️', Fire:'🔥', Lightning:'⚡', Physical:'⚔️', Quantum:'🌌', Imaginary:'✨', Wind:'💨' };
 
-const CardImage = memo(({ card, size = 28 }) => {
-  const src = card.characterImage || card.image;
+const CardImage = memo(({ card, size = 28, small = false }) => {
+  const full = card.characterImage || card.image;
+  const src = small ? thumb(full) : full;
   const isPlaceholder = !src || src.includes('placeholder');
   return isPlaceholder
     ? <span style={{ fontSize: size, fontWeight: 900, color: '#fff' }}>{card.name[0]}</span>
     : <img src={src} alt={card.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        onError={e => { e.target.src = card.characterImage || card.image; }}
+        loading={small ? 'lazy' : undefined} decoding="async"
+        onError={e => { if (e.target.src !== full) e.target.src = full; }}
       />;
 });
 
@@ -42,7 +45,7 @@ const CardTile = memo(({ card, isSelected, count, onSelect }) => {
         justifyContent:'center',
         flexShrink: 0,
       }}>
-        <CardImage card={card} size={28} />
+        <CardImage card={card} size={28} small />
       </div>
       <div style={{ fontSize:11, fontWeight:700, color:'#eee', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{card.name}</div>
       <div style={{ fontSize:10, color:RARITY_COLOR[card.rarity] }}>{RARITY_LABEL[card.rarity]}</div>

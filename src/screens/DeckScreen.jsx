@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { playClose } from '../utils/sfx';
+import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { CARD_SETS, setOfCard, formatSub } from '../combat/sets';
 import { siMult as siMultFor } from '../combat/stats';
@@ -148,7 +149,7 @@ const pool = CHARACTERS
       {/* Avatar */}
       <div style={{ width: isMain ? 56 : 44, height: isMain ? 56 : 44, flexShrink:0, borderRadius:6, overflow:'hidden', background:'#0f1625', border:`1px solid ${card ? rc(card.rarity)+'55' : '#223'}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
         {card
-          ? <img src={card.characterImage || card.image} alt={card.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { e.target.style.display='none'; }} />
+          ? <img src={thumb(card.characterImage || card.image)} alt={card.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { e.target.style.display='none'; }} />
           : <span style={{ color:'#334', fontSize:20 }}>+</span>}
       </div>
       {/* Info */}
@@ -299,7 +300,8 @@ const pool = CHARACTERS
       )}
 
       <img
-        src={card.characterImage || card.image}
+        src={thumb(card.characterImage || card.image)}
+        loading="lazy" decoding="async"
         alt={card.name}
         style={{ width:'100%', height:88, objectFit:'contain', marginBottom:6, filter:`drop-shadow(0 0 6px ${rc(card.rarity)}77)` }}
         onError={e => {

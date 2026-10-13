@@ -298,11 +298,23 @@ function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultRead
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', right: '0.5%', bottom: '0.5%', width: '95%', height: '100%', overflow: 'hidden', pointerEvents: 'none' }}>
-          {mainCard && <img src={STATUS_PORTRAITS[mainCard.id] ?? mainCard.image} alt="" draggable={false}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />}
-        </div>
+        {/* Portrait first, so the frame's ring and bar sit on top of it */}
+        {mainCard && STATUS_PORTRAITS[mainCard.id] && (
+          <div style={{ position: 'absolute', right: '0.5%', bottom: '0.5%', width: '95%', height: '100%', overflow: 'hidden', pointerEvents: 'none' }}>
+            <img src={STATUS_PORTRAITS[mainCard.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+          </div>
+        )}
+        {/* No custom status portrait yet → crop the card art into the portrait area */}
+        {mainCard && !STATUS_PORTRAITS[mainCard.id] && (
+          <div style={{
+            position: 'absolute', left: '2%', top: '4%', width: '54%', height: '84%', overflow: 'hidden', pointerEvents: 'none',
+            WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
+            maskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
+          }}>
+            <img src={mainCard.characterImage || mainCard.image} alt="" draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 18%', transform: 'scale(1.35)', transformOrigin: '50% 25%' }} />
+          </div>
+        )}
         {/* Ult orb — fills from the bottom with charge */}
         <img src={`${BASE}ui/ul_statusult.png`} alt="" draggable={false} style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none',
@@ -310,6 +322,7 @@ function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultRead
           filter: ultReady ? 'drop-shadow(0 0 10px #c084fc) brightness(1.2)' : 'none',
           animation: ultReady ? 'orbReady 0.9s ease-in-out infinite' : 'none',
         }} />
+        <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         <div
           onPointerDown={e => { e.stopPropagation(); onUlt(); }}
           title={ult ? `${ult.name} — ${ult.desc}` : 'Ult unlocks at LV50'}
