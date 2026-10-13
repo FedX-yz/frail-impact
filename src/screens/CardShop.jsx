@@ -42,11 +42,7 @@ const CoinIcon = ({ size = 30 }) => (
   />
 );
 
-// ─── Exported helper for MainScreen SI bonus ──────────────────────────────────
-export function getSiAtkMult(cardInventory, cardId) {
-  const si = cardInventory?.[cardId]?.si ?? 0;
-  return SI_BONUSES[Math.min(si, 4)]?.atkMult ?? 1;
-}
+// (SI → ATK multiplier for battle lives in src/combat/stats.js → siMult)
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CardShop({ navigate, coins, setCoins, collection, setCollection, gachaCollection = [] }) {

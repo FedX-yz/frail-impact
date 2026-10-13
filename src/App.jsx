@@ -26,16 +26,38 @@ function loadSave() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch { return null; }
 }
 
-function useDebouncedSave(data, delay = 1500) {
+function writeSave(data) {
+  if (isResetting()) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch { /* storage full or blocked: keep playing */ }
+}
+
+// Saves within 1.5s of any change, and immediately when the page is closed,
+// hidden or the phone switches apps (phones often kill a backgrounded tab
+// without firing beforeunload, which used to lose recent progress).
+function useSave(data, delay = 1500) {
+  const latest = useRef(data);
+  latest.current = data;
+  // At most one save every `delay` ms, but always within `delay` of a change.
+  // (Restarting the timer on every change meant that during combat, where
+  // something changes every second, the save kept getting postponed.)
   const timer = useRef(null);
   useEffect(() => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      if (isResetting()) return;
-      try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
-    }, delay);
-    return () => clearTimeout(timer.current);
+    if (timer.current) return;
+    timer.current = setTimeout(() => { timer.current = null; writeSave(latest.current); }, delay);
   });
+  useEffect(() => () => { clearTimeout(timer.current); timer.current = null; }, []);
+  useEffect(() => {
+    const flush = () => writeSave(latest.current);
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 }
 
 
@@ -85,28 +107,12 @@ export default function App() {
     });
   }, [collection, cardInventory]);
 
-  // NO auto-income — coins come from kills only
-  // Add killCount to useDebouncedSave:
-  useDebouncedSave({
+  // Coins come from kills only (no idle income)
+  useSave({
     pullCurrency, coins, collection, cardInventory,
     clickPower, cps, multiplier, totalEarned, upgradeCost,
     deck, pity4, pity5, killCount, stage,
   });
-
-  useEffect(() => {
-    const handleUnload = () => {
-      if (isResetting()) return;
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify({
-          pullCurrency, coins, collection, cardInventory,
-          clickPower, cps, multiplier, totalEarned, upgradeCost,
-          deck, pity4, pity5, killCount, stage,
-        }));
-      } catch {}
-    };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [pullCurrency, coins, collection, cardInventory, clickPower, cps, multiplier, totalEarned, upgradeCost, deck, pity4, pity5, killCount, stage]);
 
   const buyUpgrade = () => {
     if (coins < upgradeCost) return;

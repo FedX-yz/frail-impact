@@ -21,7 +21,7 @@ export default function SettingsScreen({ navigate }) {
       a.volume = 0.85;
       a.currentTime = 1.15; 
       a.play().catch(() => {});
-    } catch {}
+    } catch { /* audio blocked: the jumpscare still shows */ }
     
     setScare(true);
     setTimeout(() => setScare(false), 650); 

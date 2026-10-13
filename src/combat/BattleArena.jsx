@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 
 const BASE = import.meta.env.BASE_URL;
@@ -17,11 +17,18 @@ const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
 export default function BattleArena({ engine, mainCard, mobile }) {
   const ref = useRef(null);
   const frameRef = useRef(null);
+  // enemy id → DOM node; positions are written straight to these every frame
+  const nodes = useRef(new Map());
+  const register = useCallback((id, el) => { if (el) nodes.current.set(id, el); else nodes.current.delete(id); }, []);
+  const onUlt = useCallback(() => engine.activateUlt(), [engine]);
   const [, setFrame] = useState(0);
   const [touchMode, setTouchMode] = useState(false);
 
-  // Dev builds only: lets you poke the battle from the browser console (window.__battle)
-  useEffect(() => { if (import.meta.env.DEV) window.__battle = engine; }, [engine]);
+  // Debug handle for the browser console (window.__battle): always in dev,
+  // and on the live site when you open it with ?debug at the end of the URL
+  useEffect(() => {
+    if (import.meta.env.DEV || location.search.includes('debug')) window.__battle = engine;
+  }, [engine]);
 
   // Arena size → engine
   useEffect(() => {
@@ -83,6 +90,17 @@ export default function BattleArena({ engine, mainCard, mobile }) {
   const ultReady = ult && charge >= 1 && !s.ult.active;
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
+  // Move every enemy by setting its transform directly (no React re-render
+  // needed for movement). Runs after each frame's render, before paint.
+  useLayoutEffect(() => {
+    for (const e of s.enemies) {
+      const el = nodes.current.get(e.id);
+      if (!el) continue;
+      const half = e.size * s.k / 2;
+      el.style.transform = `translate3d(${e.x - half}px, ${e.y - half}px, 0)`;
+    }
+  });
+
   return (
     <>
       <div
@@ -111,73 +129,23 @@ export default function BattleArena({ engine, mainCard, mobile }) {
           </svg>
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
-          {/* shield bubbles under everything */}
-          {s.enemies.filter(e => e.shield).map(e => {
-            const R = e.type.shield.radius * k, on = e.shield.hp > 0;
-            return <div key={`sh${e.id}`} style={{
-              position: 'absolute', left: e.x - R, top: e.y - R, width: R * 2, height: R * 2, borderRadius: '50%', pointerEvents: 'none', zIndex: 5,
-              background: on ? `rgba(80,180,255,${0.08 + 0.14 * e.shield.hp / e.shield.max})` : 'transparent',
-              border: on ? '2px solid rgba(125,211,252,0.85)' : '2px dashed rgba(125,211,252,0.25)',
-              boxShadow: on ? 'inset 0 0 24px rgba(125,211,252,0.45)' : 'none',
-            }} />;
-          })}
-
           {s.enemies.map(e => {
-            const size = e.size * k;
-            const frozen = e.frozen > 0;
-            const down = e.down > 0;
             const isWormHead = e.move === 'worm' && e.role === 'head';
-            let filter = e.tint ?? 'none';
-            if (down) filter = 'grayscale(1) brightness(0.5)';
-            else if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
-            else if (e.flashRed) filter = 'none';
-            else if (e.hurt > 0) filter = `${e.tint ?? ''} brightness(2.2)`;
-            const showBar = e.tier !== 'boss' || e.role === 'hydra' || (e.group && e.role !== 'head');
             return (
-              <div key={e.id} style={{
-                position: 'absolute', left: 0, top: 0, width: size, height: size,
-                transform: `translate3d(${e.x - size / 2}px, ${e.y - size / 2}px, 0)`,
-                zIndex: isWormHead ? 9 : e.tier === 'boss' ? 6 : e.tier === 'treasure' ? 8 : 7, pointerEvents: 'none',
-              }}>
-                {e.dashing && <div className="dash-trail" />}
-                {e.shape === 'segment' ? (
-                  <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : e.hurt > 0 ? 'brightness(2)' : 'none' }} />
-                ) : (
-                  <img src={e.img} alt="" draggable={false}
-                    className={`enemy-img${e.tier === 'boss' && !e.group ? ' boss' : ''}${e.flashRed ? ' flash-red' : ''}${e.tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}`}
-                    style={{ width: '100%', height: '100%', objectFit: isWormHead ? 'cover' : 'contain', filter, animationPlayState: frozen || down || s.timeStop > 0 ? 'paused' : 'running' }} />
-                )}
-                {down && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#facc15', fontWeight: 900, fontSize: 13 * Math.max(0.8, k), textShadow: '0 1px 4px #000' }}>DOWN {e.down.toFixed(1)}s</div>}
-                {e.shield && (
-                  <div style={{ position: 'absolute', left: '10%', right: '10%', bottom: '100%', height: 5, background: '#0b2233', borderRadius: 3, marginBottom: 3 }}>
-                    <div style={{ width: `${e.shield.hp / e.shield.max * 100}%`, height: '100%', borderRadius: 3, background: '#38bdf8' }} />
-                  </div>
-                )}
-                {e.tier === 'treasure' && <div className="lure" />}
-                {e.tier === 'boss' && s.weakPts.filter(w => w.boss === e.id).map(w => (
-                  <div key={w.id} className="weak-pt" style={{ left: `${50 + w.rx * 100}%`, top: `${50 + w.ry * 100}%`, width: 30 * k, height: 30 * k }} />
-                ))}
-                {showBar && (
-                  <div style={{ position: 'absolute', left: '10%', right: '10%', top: '100%', height: e.role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
-                    <div style={{ width: `${Math.max(0, e.hp / e.maxHp) * 100}%`, height: '100%', borderRadius: 3, background: e.role === 'hydra' ? '#ff4400' : e.tier === 'elite' ? '#c084fc' : e.tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
-                  </div>
-                )}
-                {frozen && <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translate(-50%, 8px)', color: '#67e8f9', fontSize: 11, whiteSpace: 'nowrap' }}>❄</div>}
-              </div>
+              <EnemySprite key={e.id} id={e.id} register={register}
+                img={e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
+                size={e.size * k} k={k} isWormHead={isWormHead}
+                frozen={e.frozen > 0} down={e.down > 0 ? Math.ceil(e.down * 10) / 10 : 0}
+                flashRed={e.flashRed} hurt={e.hurt > 0} dashing={!!e.dashing} paused={s.timeStop > 0}
+                hpPct={Math.max(0, Math.round(e.hp / e.maxHp * 200) / 2)}
+                shieldR={e.shield ? e.type.shield.radius * k : 0}
+                shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
+                weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
             );
           })}
 
-          {/* ── Floating numbers ─────────────────────────────────────── */}
-          {s.floaters.map(f => (
-            <div key={f.id} className="dmg-float" style={{
-              left: f.x, top: f.y, color: f.color,
-              fontSize: (f.big ? 20 : 15) * Math.max(0.8, k), fontWeight: f.big ? 900 : 700,
-            }}>
-              {f.text}
-              {f.icon === 'coin' && <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
-              {f.icon === 'gem'  && <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
-            </div>
-          ))}
+          {/* ── Floating numbers (re-rendered only when one is added/removed) ── */}
+          <FloaterLayer floaters={s.floaters} ver={s.floaterVer} k={k} />
 
           {/* Your position on touch screens (a mouse already shows a cursor) */}
           {touchMode && pl.pos && (
@@ -195,7 +163,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
         {pl.hitT > 0 && <div style={{ position: 'absolute', inset: 0, boxShadow: `inset 0 0 ${80 * pl.hitT}px rgba(255,0,0,0.9)`, pointerEvents: 'none', zIndex: 11 }} />}
         {s.effects.some(f => f.kind === 'ult') && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.5, pointerEvents: 'none', zIndex: 12, animation: 'ultFlash 0.5s ease-out forwards' }} />}
 
-        <StageBar s={s} bossParts={bossParts} />
+        <StageBarView {...stageBarProps(s, bossParts)} />
 
         {/* Status chips */}
         <div style={{ position: 'absolute', top: 44, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, zIndex: 13, pointerEvents: 'none' }}>
@@ -216,8 +184,9 @@ export default function BattleArena({ engine, mainCard, mobile }) {
         )}
 
         {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
-        <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard} hpRatio={hpRatio} charge={charge} ult={ult} ultReady={ultReady}
-          onUlt={() => engine.activateUlt()} hp={pl.hp} maxHp={pl.maxHp} />
+        <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
+          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady}
+          onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} />
       </div>
 
       <style>{ARENA_CSS}</style>
@@ -267,7 +236,7 @@ function EffectShape({ f, k }) {
   return null;
 }
 
-function StageBar({ s, bossParts }) {
+function stageBarProps(s, bossParts) {
   let label, ratio, color;
   const boss = bossParts.length > 0 && s.bossInfo;
   if (boss) {
@@ -278,23 +247,95 @@ function StageBar({ s, bossParts }) {
   else if (s.phase === 'fight') { label = `STAGE ${s.stageNum} · ${s.kills}/${s.stage.killTarget} kills`; ratio = s.kills / s.stage.killTarget; color = '#ff8c00'; }
   else if (s.phase === 'bossIntro') { label = `STAGE ${s.stageNum} · BOSS`; ratio = 1; color = '#ff4400'; }
   else { label = `STAGE ${s.stageNum}`; ratio = 1; color = '#4ade80'; }
+  return { label, ratio: Math.round(Math.max(0, Math.min(1, ratio)) * 400) / 400, color, boss: !!boss };
+}
+
+const StageBarView = memo(function StageBarView({ label, ratio, color, boss }) {
   return (
     <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', width: 'min(70%, 460px)', zIndex: 13, pointerEvents: 'none', textAlign: 'center' }}>
       <div style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: 1, textShadow: '0 1px 4px #000', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {boss && '⚔ '}{label}
       </div>
       <div style={{ height: boss ? 10 : 6, background: 'rgba(0,0,0,0.55)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)' }}>
-        <div style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.15s' }} />
+        <div style={{ width: `${ratio * 100}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.15s' }} />
       </div>
     </div>
   );
-}
+});
+
+// One enemy. Only re-renders when how it LOOKS changes; its position is set
+// directly on the DOM node by BattleArena every frame.
+const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak }) {
+  let filter = tint ?? 'none';
+  if (down) filter = 'grayscale(1) brightness(0.5)';
+  else if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
+  else if (flashRed) filter = 'none';
+  else if (hurt) filter = `${tint ?? ''} brightness(2.2)`;
+  const showBar = tier !== 'boss' || role === 'hydra' || (grouped && role !== 'head');
+  return (
+    <div ref={el => register(id, el)} style={{
+      position: 'absolute', left: 0, top: 0, width: size, height: size, willChange: 'transform',
+      zIndex: isWormHead ? 9 : tier === 'boss' ? 6 : tier === 'treasure' ? 8 : 7, pointerEvents: 'none',
+    }}>
+      {shieldR > 0 && (
+        <div style={{
+          position: 'absolute', left: '50%', top: '50%', width: shieldR * 2, height: shieldR * 2, transform: 'translate(-50%,-50%)',
+          borderRadius: '50%', pointerEvents: 'none', zIndex: -1,
+          background: shieldPct > 0 ? `rgba(80,180,255,${0.08 + 0.14 * shieldPct / 100})` : 'transparent',
+          border: shieldPct > 0 ? '2px solid rgba(125,211,252,0.85)' : '2px dashed rgba(125,211,252,0.25)',
+          boxShadow: shieldPct > 0 ? 'inset 0 0 24px rgba(125,211,252,0.45)' : 'none',
+        }} />
+      )}
+      {dashing && <div className="dash-trail" />}
+      {shape === 'segment' ? (
+        <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
+      ) : (
+        <img src={img} alt="" draggable={false} decoding="async"
+          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}`}
+          style={{ width: '100%', height: '100%', objectFit: isWormHead ? 'cover' : 'contain', filter, animationPlayState: frozen || down || paused ? 'paused' : 'running' }} />
+      )}
+      {down > 0 && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#facc15', fontWeight: 900, fontSize: 13 * Math.max(0.8, k), textShadow: '0 1px 4px #000' }}>DOWN {down.toFixed(1)}s</div>}
+      {shieldR > 0 && (
+        <div style={{ position: 'absolute', left: '10%', right: '10%', bottom: '100%', height: 5, background: '#0b2233', borderRadius: 3, marginBottom: 3 }}>
+          <div style={{ width: `${shieldPct}%`, height: '100%', borderRadius: 3, background: '#38bdf8' }} />
+        </div>
+      )}
+      {tier === 'treasure' && <div className="lure" />}
+      {weak && weak.split('|').map(w => {
+        const [wid, rx, ry] = w.split(':');
+        return <div key={wid} className="weak-pt" style={{ left: `${50 + rx * 100}%`, top: `${50 + ry * 100}%`, width: 30 * k, height: 30 * k }} />;
+      })}
+      {showBar && (
+        <div style={{ position: 'absolute', left: '10%', right: '10%', top: '100%', height: role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
+          <div style={{ width: `${hpPct}%`, height: '100%', borderRadius: 3, background: role === 'hydra' ? '#ff4400' : tier === 'elite' ? '#c084fc' : tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
+        </div>
+      )}
+      {frozen && <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translate(-50%, 8px)', color: '#67e8f9', fontSize: 11, whiteSpace: 'nowrap' }}>❄</div>}
+    </div>
+  );
+});
+
+// Floating damage numbers: they animate with CSS once placed, so this layer
+// only re-renders when one is added or removed (ver changes).
+const FloaterLayer = memo(function FloaterLayer({ floaters, k }) {
+  return floaters.map(f => (
+    <div key={f.id} className="dmg-float" style={{
+      left: f.x, top: f.y, color: f.color,
+      fontSize: (f.big ? 20 : 15) * Math.max(0.8, k), fontWeight: f.big ? 900 : 700,
+    }}>
+      {f.text}
+      {f.icon === 'coin' && <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
+      {f.icon === 'gem'  && <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
+    </div>
+  ));
+}, (a, b) => a.ver === b.ver && a.k === b.k);
 
 const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{children}</div>
 );
 
-function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxHp }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxHp }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -340,7 +381,7 @@ function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultRead
       </div>
     </div>
   );
-}
+});
 
 const ARENA_CSS = `
   .battle-arena img { -webkit-user-drag: none; user-select: none; }

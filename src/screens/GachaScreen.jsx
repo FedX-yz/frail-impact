@@ -301,12 +301,6 @@ export default function GachaScreen({
     }
   };
 
-  // ── Derived button image src ──────────────────────────────────
-  const pullBtnSrc = () => {
-    if (hovBtn1) return `${BASE}ui/ui_pullbtnhover1.png`;
-    if (hovBtn2) return `${BASE}ui/ui_pullbtnhover2.png`;
-    return `${BASE}ui/ui_pullbtn.png`;
-  };
 
   // ─────────────────────────────────────────────────────────────────
   return (

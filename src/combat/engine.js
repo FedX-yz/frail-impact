@@ -33,6 +33,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     timeStop: 0, frenzy: 0, shake: 0,
     clickCount: 0,
     timers: { basic: 0.3, elite: 4, horde: 8, treasure: BAL.TREASURE_EVERY, auto: BAL.AUTO_INTERVAL, pulse: 0, weak: 0.7 },
+    floaterVer: 0,
     reserved: null,   // HUD box (status frame) enemies shouldn't stand behind
     bossInfo: null,   // { name, maxHp } for the boss bar
   };
@@ -67,6 +68,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   function floater(text, x, y, color = '#fff', big = false, icon = null) {
     s.floaters.push({ id: uid++, text, x, y, color, big, icon, t: 0 });
     if (s.floaters.length > 60) s.floaters.shift();
+    s.floaterVer++;   // lets the renderer skip the floater layer when nothing changed
   }
   const effect = (e) => s.effects.push({ id: uid++, t: 0, ...e });
 
@@ -689,8 +691,9 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     s.shake   = Math.max(0, s.shake - dt);
     s.frenzy  = Math.max(0, s.frenzy - dt);
     if (s.banner) { s.banner.t -= dt; if (s.banner.t <= 0) s.banner = null; }
-    s.floaters.forEach(f => { f.t += dt; });
-    s.floaters = s.floaters.filter(f => f.t < 1.1);
+    let expired = false;
+    s.floaters.forEach(f => { f.t += dt; if (f.t >= 1.1) expired = true; });
+    if (expired) { s.floaters = s.floaters.filter(f => f.t < 1.1); s.floaterVer++; }
     s.effects.forEach(f => { f.t += dt; });
     s.effects = s.effects.filter(f => f.t < 0.5);
     s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); });
@@ -816,7 +819,12 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   }
 
   // Big text in the middle of the arena (level-ups etc.)
-  const announce = (text, color = '#facc15') => floater(text, s.W / 2, s.H * 0.32, color, true);
+  // Several at once (level-up + "ULT UNLOCKED!") stack instead of overlapping
+  let lastAnnounce = { t: -1, n: 0 };
+  const announce = (text, color = '#facc15') => {
+    lastAnnounce = s.time - lastAnnounce.t < 1 ? { t: s.time, n: lastAnnounce.n + 1 } : { t: s.time, n: 0 };
+    floater(text, s.W / 2, s.H * 0.32 + lastAnnounce.n * 28 * s.k, color, true);
+  };
 
   const setReserved = (r) => { s.reserved = r; };
 
