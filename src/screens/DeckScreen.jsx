@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { playClose } from '../utils/sfx';
 import { CHARACTERS } from '../data/characters';
-
-const SI_MULT = [1, 1.12, 1.25, 1.40, 1.60];
-const siMultFor = (si) => SI_MULT[Math.min(si, SI_MULT.length - 1)];
+import { CARD_SETS, setOfCard, formatSub } from '../combat/sets';
+import { siMult as siMultFor } from '../combat/stats';
+import useIsMobile from '../hooks/useIsMobile';
 
 const rc     = (r) => ({ 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' }[r] || '#888');
 const rLabel = (r) => ({ 6:'6★', 5:'5★', 4:'4★', 3:'3★' }[r] || '?');
-const cardKey = (c) => c?.instanceId ?? c?.id;
 
 const SLOT_KEYS  = ['main', 'sup0', 'sup1', 'sup2', 'sup3'];
 const SLOT_LABEL = { main:'Main Card (5★/6★ only)', sup0:'Support 1', sup1:'Support 2', sup2:'Support 3', sup3:'Support 4' };
@@ -15,6 +14,7 @@ const SLOT_LABEL = { main:'Main Card (5★/6★ only)', sup0:'Support 1', sup1:'
 export default function DeckScreen({ navigate, collection, deck, setDeck, cardInventory }) {
   const [activeSlot,  setActiveSlot]  = useState(null);
   const [filter,      setFilter]      = useState('all');
+  const { mobile } = useIsMobile();
   
   const supports = deck?.supports || [null, null, null, null];
 
@@ -89,8 +89,14 @@ const pool = CHARACTERS
   const totalAtkBonus = Math.round([deck?.main, ...supports].filter(Boolean)
     .reduce((s, c) => s + (c.stats?.atk ?? 0) * siMultFor(cardInventory?.[c.id]?.si ?? 0), 0));
 
+  // Set progress: how many members of each set are in the support slots
+  const supportIds = new Set(supports.filter(Boolean).map(c => c.id));
+  const setProgress = CARD_SETS
+    .map(set => ({ set, have: set.members.filter(m => supportIds.has(m)).length }))
+    .filter(x => x.have > 0);
+
   return (
-    <div style={{ width:'100%', height:'100vh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#fff' }}>
+    <div style={{ width:'100%', height:'100dvh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#fff' }}>
 
       <style>{`
         img { -webkit-user-drag:none; user-select:none; }
@@ -106,15 +112,17 @@ const pool = CHARACTERS
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 18px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
       <button onClick={() => { playClose(); navigate('main'); }} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
         <div style={{ fontSize:18, fontWeight:700, color:'#ff8c00', letterSpacing:1 }}>DECK</div>
-        <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★</div>
+        {!mobile && <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★ · 3 of a set in supports = set bonus</div>}
         <div style={{ flex:1 }} />
         <div style={{ color:'#445', fontSize:13 }}>{CHARACTERS.filter(c => cardCounts[c.id] > 0).length} unique cards</div>
       </div>
 
-      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+      <div style={{ flex:1, display:'flex', flexDirection: mobile ? 'column' : 'row', overflow:'hidden' }}>
 
         {/* LEFT — slots */}
-        <div style={{ width:290, flexShrink:0, borderRight:'1px solid #2a3050', display:'flex', flexDirection:'column', padding:14, gap:8, overflowY:'auto' }}>
+        <div style={mobile
+          ? { maxHeight:'46dvh', flexShrink:0, borderBottom:'1px solid #2a3050', display:'flex', flexDirection:'column', padding:10, gap:6, overflowY:'auto' }
+          : { width:290, flexShrink:0, borderRight:'1px solid #2a3050', display:'flex', flexDirection:'column', padding:14, gap:8, overflowY:'auto' }}>
           <div style={{ color:'#445', fontSize:11, letterSpacing:3, marginBottom:4 }}>EQUIPPED</div>
 
           {SLOT_KEYS.map(slotKey => {
@@ -158,6 +166,12 @@ const pool = CHARACTERS
                 ATK {boostedAtk}{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>+{Math.round((boostedAtk - card.stats.atk))} (S{si + 1})</span>} · HP {card.stats.hp}
               </div>
             )}
+            {!isMain && (cardInventory[card.id]?.subs?.length > 0) && (
+              <div style={{ color:'#88aaff', fontSize:10, marginTop:1 }}>{cardInventory[card.id].subs.map(formatSub).join(' · ')}</div>
+            )}
+            {!isMain && setOfCard(card.id) && (
+              <div style={{ color:setOfCard(card.id).color, fontSize:10 }}>◆ {setOfCard(card.id).name}</div>
+            )}
             {isMain && card.skill && (
               <div style={{ color:'rgba(255,255,255,0.35)', fontSize:11, marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                 ✦ {card.skill.name}{card.ult ? ` · ⚡ ${card.ult.name}` : ''}
@@ -177,6 +191,19 @@ const pool = CHARACTERS
     </div>
   );
 })}
+
+          {/* Set progress */}
+          {setProgress.length > 0 && (
+            <div style={{ background:'rgba(0,0,0,0.3)', border:'1px solid #2a3050', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ color:'#445', fontSize:10, letterSpacing:2, marginBottom:6 }}>SETS</div>
+              {setProgress.map(({ set, have }) => (
+                <div key={set.id} style={{ marginBottom:5, opacity: have >= 3 ? 1 : 0.6 }}>
+                  <div style={{ color:set.color, fontSize:12, fontWeight:700 }}>◆ {set.name} {have}/3 {have >= 3 && '✓'}</div>
+                  <div style={{ color:'rgba(255,255,255,0.45)', fontSize:11 }}>{set.desc}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Bonuses */}
           {totalAtkBonus > 0 && (
@@ -214,7 +241,7 @@ const pool = CHARACTERS
         </div>
 
         {/* RIGHT — card picker */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
           {/* Filter bar */}
           <div style={{ display:'flex', gap:8, padding:'10px 14px', borderBottom:'1px solid #2a3050', flexShrink:0, flexWrap:'wrap', alignItems:'center' }}>
@@ -239,7 +266,7 @@ const pool = CHARACTERS
                 {activeSlot === 'main' ? 'No 5★/6★ cards yet' : `No ${filter}★ cards`}
               </div>
             ) : (
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(108px,1fr))', gap:10 }}>
+              <div style={{ display:'grid', gridTemplateColumns:`repeat(auto-fill,minmax(${mobile ? 92 : 108}px,1fr))`, gap: mobile ? 6 : 10 }}>
                 {pool.map(card => {
   const equipped   = alreadyEquipped(card);
   const isSelected = activeSlot && getSlotCard(activeSlot)?.id === card.id;
@@ -286,6 +313,9 @@ const pool = CHARACTERS
       <div style={{ color:'#ccc', fontSize:11, fontWeight:600, lineHeight:1.3, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
         {card.name}
       </div>
+      {setOfCard(card.id) && (
+        <div style={{ color:setOfCard(card.id).color, fontSize:9, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>◆ {setOfCard(card.id).name}</div>
+      )}
 
       {activeSlot && !cantEquip && !equipped && (
         <div style={{ marginTop:5, background:'rgba(255,140,0,0.2)', border:'1px solid rgba(255,140,0,0.5)', borderRadius:4, color:'#ff8c00', fontSize:11, padding:'2px 0' }}>

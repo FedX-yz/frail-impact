@@ -1,951 +1,234 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ENEMY_TYPES } from '../data/enemyTypes';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { playSFX, playPress } from '../utils/sfx';
+import { createBattle, fmt } from '../combat/engine';
+import { computePlayerStats, siMult } from '../combat/stats';
+import { SKILL_UNLOCK, ULT_UNLOCK } from '../combat/kits';
+import { formatSub } from '../combat/sets';
+import BattleArena from '../combat/BattleArena';
+import useIsMobile from '../hooks/useIsMobile';
 
 const BASE = import.meta.env.BASE_URL;
 
-const REGULAR_SIZE  = 74;
-const BOSS_SIZE     = 120;
-const BASE_CRIT     = 0.20;
-const MOVE_PATTERNS = ['stationary', 'stationary', 'patrol', 'erratic'];
-const SI_MULT = [1, 1.12, 1.25, 1.40, 1.60];
-
 const NAV_CONFIG = [
-  { label: 'shop',     screen: 'shop',     hoverImg: `${BASE}ui/ui_hovershop.png`,     tabSfx: 'ui_shop.mp3',  uniqueSfx: true  },
-  { label: 'gamble',   screen: 'gacha',    hoverImg: `${BASE}ui/ui_hovergamble.png`,   tabSfx: 'ui_warp.mp3',  uniqueSfx: true  },
-  { label: 'deck',     screen: 'deck',     hoverImg: `${BASE}ui/ui_hoverdeck.png`,     tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
-  { label: 'tower',    screen: 'tower',    hoverImg: `${BASE}ui/ui_hovertower.png`,    tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
-  { label: 'codex',    screen: 'cards',    hoverImg: `${BASE}ui/ui_hovercodex.png`,    tabSfx: 'ui_codex.mp3', uniqueSfx: true,  closeSfx: 'ui_close.mp3' },
-  { label: 'settings', screen: 'settings', hoverImg: `${BASE}ui/ui_hoversettings.png`, tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
+  { label: 'shop',     icon: '🛍', screen: 'shop',     hoverImg: `${BASE}ui/ui_hovershop.png`,     tabSfx: 'ui_shop.mp3',  uniqueSfx: true  },
+  { label: 'gamble',   icon: '✨', screen: 'gacha',    hoverImg: `${BASE}ui/ui_hovergamble.png`,   tabSfx: 'ui_warp.mp3',  uniqueSfx: true  },
+  { label: 'deck',     icon: '🃏', screen: 'deck',     hoverImg: `${BASE}ui/ui_hoverdeck.png`,     tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
+  { label: 'tower',    icon: '🏰', screen: 'tower',    hoverImg: `${BASE}ui/ui_hovertower.png`,    tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
+  { label: 'codex',    icon: '📖', screen: 'cards',    hoverImg: `${BASE}ui/ui_hovercodex.png`,    tabSfx: 'ui_codex.mp3', uniqueSfx: true  },
+  { label: 'settings', icon: '⚙', screen: 'settings', hoverImg: `${BASE}ui/ui_hoversettings.png`, tabSfx: 'ui_warp.mp3',  uniqueSfx: false },
 ];
-
-const STATUS_PORTRAITS = {
-  1:  `${BASE}ui/ui_statusastrec.png`,
-  2:  `${BASE}ui/ui_statusbio.png`,
-  6:  `${BASE}ui/ui_statusice.png`,
-  9:  `${BASE}ui/ul_statusreef.png`,
-  10: `${BASE}ui/ui_statusforbiddenone.png`,
-  99: `${BASE}ui/ui_statushox.png`,
-};
-const MENU_BG      = `${BASE}ui/ui_menu.png`;
-const BATTLE_BG    = `${BASE}backgrounds/bg1.png`;
-
-function spawnEnemy(forceBoss = false, currentKills = 0) {
-  const spawnableTypes = ENEMY_TYPES.filter(t => t.tier !== 'boss' && t.tier !== 'treasure');
-  const bossType = ENEMY_TYPES.find(t => t.tier === 'boss');
-  const pool = forceBoss
-    ? bossType
-    : spawnableTypes[Math.floor(Math.random() * spawnableTypes.length)];
-  const wave  = Math.floor(currentKills / 10);
-  const scale = 1 + wave * 0.3;
-  const pattern = pool.isBoss ? 'stationary' : MOVE_PATTERNS[Math.floor(Math.random() * MOVE_PATTERNS.length)];
-  return {
-    ...pool,
-    hp:          Math.floor(pool.maxHp * scale),
-    maxHp:       Math.floor(pool.maxHp * scale),
-    coinReward:  Math.floor((pool.coinReward || 0) * scale),
-    id:          Date.now() + Math.random(),
-    x:           50 + Math.random() * 35,
-    y:           25 + Math.random() * 50,
-    movePattern: pattern,
-    patrolDir:   Math.random() > 0.5 ? 1 : -1,
-  };
-}
-
-function getDeckBonuses(deck, cardInventory = {}) {
-  let atkBonus = 0, dmgMult = 1;
-  const cards = [deck?.main, ...(deck?.supports ?? [])].filter(Boolean);
-  cards.forEach((card) => {
-    if (card.stats) {
-      const si = cardInventory[card.id]?.si ?? 0;
-      const siMult = SI_MULT[Math.min(si, SI_MULT.length - 1)];
-      atkBonus += (card.stats.atk ?? 0) * siMult;
-    }
-    if (card.passive) {
-      if (card.passive.effect === 'global_dmg_boost')  dmgMult  += card.passive.value;
-      if (card.passive.effect === 'atk_boost_high_hp') atkBonus += (card.stats?.atk ?? 0) * card.passive.value;
-    }
-  });
-  return { atkBonus, dmgMult };
-}
-
-const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'k' : Math.floor(n);
+const NAV_BOXES = [
+  { left: '2%',  top: '2%',  width: '47%', height: '29%' },
+  { left: '51%', top: '2%',  width: '47%', height: '29%' },
+  { left: '2%',  top: '33%', width: '47%', height: '31%' },
+  { left: '51%', top: '33%', width: '47%', height: '31%' },
+  { left: '2%',  top: '66%', width: '62%', height: '32%' },
+  { left: '66%', top: '66%', width: '32%', height: '32%' },
+];
+const MENU_BG = `${BASE}ui/ui_menu.png`;
 const PIX = { imageRendering: 'pixelated' };
 
-const CoinIcon = ({ size = 28 }) => (
-  <img src={`${BASE}ui/ui_cucoin.png`} alt="coin" style={{ width: size, height: size, objectFit: 'contain', ...PIX, flexShrink: 0 }} />
-);
-const GemIcon = ({ size = 28 }) => (
-  <img src={`${BASE}ui/ui_frailite.png`} alt="gem" style={{ width: size, height: size, objectFit: 'contain', ...PIX, flexShrink: 0 }} />
-);
+const CoinIcon = ({ size = 26 }) => <img src={`${BASE}ui/ui_cucoin.png`} alt="coin" style={{ width: size, height: size, objectFit: 'contain', ...PIX, flexShrink: 0 }} />;
+const GemIcon  = ({ size = 26 }) => <img src={`${BASE}ui/ui_frailite.png`} alt="gem" style={{ width: size, height: size, objectFit: 'contain', ...PIX, flexShrink: 0 }} />;
 
 export default function MainScreen({
   navigate,
   pullCurrency, setPullCurrency,
   coins, setCoins,
   clickPower, cps, multiplier,
-  totalEarned, setTotalEarned,
+  setTotalEarned,
   upgradeCost, buyUpgrade,
   deck,
   cardInventory, setCardInventory,
-  killCount, setKillCount
+  setKillCount,
+  stage, setStage,
 }) {
-  const bonuses      = getDeckBonuses(deck, cardInventory);
-  const critRate     = BASE_CRIT;
-  const atkBonus     = bonuses.atkBonus;
-  const dmgMult      = bonuses.dmgMult * multiplier;
-  const mainCard     = deck?.main ?? null;
-  const abilityCdMax = mainCard?.ult?.cooldown ?? 10;
-  const cardEntry    = cardInventory[mainCard?.id] ?? { si: 0, xp: 0, level: 1 };
-  const cardLevel    = cardEntry.level ?? 1;
-  const cardXp       = cardEntry.xp ?? 0;
+  const { mobile, portrait } = useIsMobile();
+  const mainCard = deck?.main ?? null;
 
-  const [playerHp, setPlayerHp]     = useState(100);
-  const [playerMaxHp]               = useState(100);
-  const playerPosRef                = useRef({ x: 50, y: 50 });
-  const arenaRef                    = useRef(null);
-  const [enemies,      setEnemies]      = useState(() => [spawnEnemy(false, 0), spawnEnemy(false, 0)]);
-  const [floaters,     setFloaters]     = useState([]);
-  const [bossWarning,  setBossWarning]  = useState(false);
-  const [abilityCd,    setAbilityCd]    = useState(0);
-  const [abilityReady, setAbilityReady] = useState(true);
-  const [bossWeakPts,  setBossWeakPts]  = useState({});
-  const [frozenMap,    setFrozenMap]    = useState({});
-  const [hoveredNav,   setHoveredNav]   = useState(null);
-  const [takingDamage, setTakingDamage] = useState(false);
-  const [hitFlash,     setHitFlash]     = useState(false);
-  const [skillCd,      setSkillCd]      = useState(0);
-  const [skillReady,   setSkillReady]   = useState(true);
-  const [lureFloaters, setLureFloaters] = useState([]);
-  const [activeNav,    setActiveNav]    = useState(null);
-  const [cdAnimating, setCdAnimating] = useState(false);
+  const stats = useMemo(
+    () => computePlayerStats({ deck, cardInventory, clickPower, cps, multiplier }),
+    [deck, cardInventory, clickPower, cps, multiplier],
+  );
 
-  const enemiesRef   = useRef(enemies);
-  // Every enemy update goes through here so enemiesRef is never stale.
-  // Before, fast clicks read an old ref: damage got lost and one enemy
-  // could die twice (double coins / kills).
-  const updateEnemies = useCallback((next) => {
-    const value = typeof next === 'function' ? next(enemiesRef.current) : next;
-    enemiesRef.current = value;
-    setEnemies(value);
-  }, []);
-  const cardInvRef   = useRef(cardInventory);
-  cardInvRef.current = cardInventory;
-  const frozenRef    = useRef(frozenMap);
-  const killRef      = useRef(killCount);
-  const floaterIdRef = useRef(0);
-  const dmgMultRef   = useRef(dmgMult);
-  const [, forceUpdate] = useState(0);
+  // Engine callbacks read the latest props through this ref
+  const handlers = useRef({});
+  const cardInvRef = useRef(cardInventory);
+  useEffect(() => { cardInvRef.current = cardInventory; }, [cardInventory]);
 
-  const mainCardRef = useRef(mainCard);
-  useEffect(() => { mainCardRef.current = mainCard; }, [mainCard]);
+  const [engine] = useState(() => createBattle({ stageNum: stage ?? 1, stats, callbacks: handlers }));
+  useEffect(() => { engine.setStats(stats); }, [engine, stats]);
 
-  useEffect(() => { frozenRef.current   = frozenMap; }, [frozenMap]);
   useEffect(() => {
-    const hasFrozen = Object.keys(frozenMap).length > 0;
-    if (!hasFrozen) return;
-    const interval = setInterval(() => forceUpdate(n => n + 1), 500);
-    return () => clearInterval(interval);
-  }, [frozenMap]);
-  useEffect(() => { dmgMultRef.current  = dmgMult;  }, [dmgMult]);
-
-  useEffect(() => { killRef.current = killCount; }, [killCount]);
-
-  const addFloater = useCallback((text, x, y, color = '#f0c040', isCrit = false, icon = null) => {
-    const id = floaterIdRef.current++;
-    setFloaters(f => [...f, { id, text, x, y, color, isCrit, icon }]);
-    setTimeout(() => setFloaters(f => f.filter(fl => fl.id !== id)), 1100);
-  }, []);
-
-  const checkUpcomingBoss = useCallback((kills) => {
-    if (kills > 0 && kills % 10 === 9) {
-      setBossWarning(true);
-      setTimeout(() => setBossWarning(false), 2600);
-    }
-  }, []);
-
-  const processDead = useCallback((current, updated) => {
-    const dead  = updated.filter(e => e.hp <= 0);
-    const alive = updated.filter(e => e.hp > 0);
-    if (dead.length > 0) {
-      let newKills = killRef.current;
-      let coinsEarned = 0, gemsEarned = 0;
-      dead.forEach(killed => {
-        newKills++;
-        const xpGain = killed.isBoss ? 1000 : killed.tier === 'elite' ? 300 : killed.tier === 'treasure' ? 10 : 100;
-        const mc = mainCardRef.current;
-        if (mc && mc.rarity >= 5) {
-          const inv   = cardInvRef.current;
+    handlers.current = {
+      onReward: ({ coins: c = 0, gems = 0, xp = 0, kill }) => {
+        if (c) { setCoins(v => v + c); setTotalEarned(v => v + c); }
+        if (gems) setPullCurrency(v => v + gems);
+        if (kill) setKillCount(v => v + 1);
+        // XP goes to the main card (5★/6★)
+        const mc = deck?.main;
+        if (xp && mc && mc.rarity >= 5) {
+          const inv = cardInvRef.current;
           const entry = inv[mc.id] ?? { si: 0, xp: 0, level: 1 };
-          let level = entry.level ?? 1;
-          let xp    = (entry.xp ?? 0) + xpGain;
-          // A boss can be worth several levels at once
-          while (xp >= level * 100) {
-            xp -= level * 100;
-            level++;
-            addFloater(`${mc.name} LV${level}!`, 50, 40, '#facc15', true);
-            if (level === 20) addFloater('SKILL UNLOCKED!', 50, 30, '#4ade80', true);
-            if (level === 50) addFloater('ULT UNLOCKED!', 50, 30, '#c084fc', true);
+          let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
+          while (cur >= level * 100) {
+            cur -= level * 100; level++;
+            engine.announce(`${mc.name} LV${level}!`);
+            if (level === SKILL_UNLOCK) engine.announce('SKILL UNLOCKED!', '#4ade80');
+            if (level === ULT_UNLOCK)   engine.announce('ULT UNLOCKED!', '#c084fc');
           }
-          const next = { ...inv, [mc.id]: { ...entry, xp, level } };
+          const next = { ...inv, [mc.id]: { ...entry, xp: cur, level } };
           cardInvRef.current = next;
           setCardInventory(next);
         }
-
-        if (killed.tier === 'treasure' && killed.pullReward) {
-          gemsEarned += killed.pullReward;
-          addFloater(`+${killed.pullReward}`, killed.x, killed.y + 10, '#5588ff', false, 'gem');
-        } else {
-          const coinGain = Math.floor(killed.coinReward * dmgMultRef.current);
-          coinsEarned += coinGain;
-          addFloater(`+${fmt(coinGain)}`, killed.x, killed.y + 10, '#f0c040', false, 'coin');
-        }
-        if (killed.isBoss && killed.gemReward) {
-          gemsEarned += killed.gemReward;
-          addFloater(`+${killed.gemReward}`, killed.x, killed.y + 22, '#5588ff', false, 'gem');
-        }
-      });
-
-      checkUpcomingBoss(newKills);
-
-      let bossSpawned = alive.some(e => e.isBoss);
-      const replacements = dead.map((_, i) => {
-        const k         = newKills - dead.length + i + 1;
-        const spawnBoss = !bossSpawned && k > 0 && k % 10 === 0; // skipped while a boss is alive
-        if (spawnBoss) bossSpawned = true;
-        return spawnEnemy(spawnBoss, newKills);
-      });
-
-      killRef.current = newKills;
-      setKillCount(newKills);
-      const deadIds = dead.map(e => e.id);
-      setFrozenMap(prev => {
-        const next = { ...prev };
-        deadIds.forEach(id => delete next[id]);
-        return next;
-      });
-      if (coinsEarned > 0) { setCoins(c => c + coinsEarned); setTotalEarned(t => t + coinsEarned); }
-      if (gemsEarned  > 0) setPullCurrency(c => c + gemsEarned);
-      updateEnemies([...alive, ...replacements]);
-    } else {
-      updateEnemies(updated);
-    }
-  }, [addFloater, checkUpcomingBoss, setCoins, setTotalEarned, setPullCurrency, setCardInventory, setKillCount, updateEnemies]);
-
-  // Player death + regen
-  useEffect(() => {
-    if (playerHp <= 0) {
-      addFloater('DEFEATED!', 50, 50, '#ff4444', true);
-      setTimeout(() => setPlayerHp(playerMaxHp), 3000);
-      return;
-    }
-    if (playerHp >= playerMaxHp) return;
-    const regen = setTimeout(() => {
-      setPlayerHp(hp => Math.min(playerMaxHp, hp + 1));
-    }, 2000);
-    return () => clearTimeout(regen);
-  }, [playerHp, addFloater, playerMaxHp]);
-
-  // Ability CD
-  useEffect(() => {
-    if (abilityCd <= 0) return;
-    const t = setInterval(() => {
-      setAbilityCd(cd => { if (cd <= 1) { setAbilityReady(true); setCdAnimating(false); clearInterval(t); return 0; } return cd - 1; });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [abilityCd]);
-
-  // Skill CD
-  useEffect(() => {
-    if (skillCd <= 0) return;
-    const t = setInterval(() => {
-      setSkillCd(cd => { if (cd <= 1) { setSkillReady(true); clearInterval(t); return 0; } return cd - 1; });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [skillCd]);
-
-  // Auto-attack
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const current = enemiesRef.current;
-      if (!current.length) { updateEnemies([spawnEnemy(false, killRef.current)]); return; }
-      const target = current[Math.floor(Math.random() * current.length)];
-      const isCrit = Math.random() < critRate;
-      const dmg    = Math.floor((cps + atkBonus * 0.1) * dmgMult * (0.85 + Math.random() * 0.3) * (isCrit ? 2 : 1));
-      addFloater((isCrit ? 'CRIT\n' : '') + '-' + fmt(dmg), target.x + (Math.random()-0.5)*8, target.y - 8, isCrit ? '#ff4444' : '#ffffff', isCrit);
-      const updated = current.map(en => en.id === target.id ? { ...en, hp: en.hp - dmg } : en);
-      processDead(current, updated);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [cps, dmgMult, critRate, atkBonus, addFloater, processDead, updateEnemies]);
-
-  // Enemy movement
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      updateEnemies(prev => prev.map(en => {
-        if (en.isBoss || en.speed === 0) return en;
-        if (frozenRef.current[en.id] > now) return en;
-        if (en.movePattern === 'erratic' && Math.random() < 0.45) {
-          return { ...en, x: 50 + Math.random() * 35, y: 25 + Math.random() * 50 };
-        }
-        const step = (en.speed ?? 2) * 0.7;
-        const newX = en.x + en.patrolDir * step;
-        const clamped = Math.max(50, Math.min(85, newX));
-        return { ...en, x: clamped, patrolDir: (newX > 85 || newX < 50) ? -en.patrolDir : en.patrolDir };
-      }));
-    }, 600);
-    return () => clearInterval(interval);
-  }, [updateEnemies]);
-
-  // Lure mechanic
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const treasures = enemiesRef.current.filter(e => e.tier === 'treasure');
-      if (!treasures.length) return;
-      treasures.forEach(t => {
-        const id = Date.now() + Math.random();
-        setLureFloaters(prev => [...prev, { id, x: t.x + (Math.random() - 0.5) * 10, y: t.y - 8 }]);
-        setTimeout(() => setLureFloaters(prev => prev.filter(l => l.id !== id)), 1200);
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Treasure spawner
-  useEffect(() => {
-    const treasureTimeouts = [];
-    const interval = setInterval(() => {
-      if (Math.random() < 0.2) {
-        const base = ENEMY_TYPES.find(t => t.tier === 'treasure');
-        const treasure = {
-          ...base,
-          id: Date.now() + Math.random(),
-          x: 50 + Math.random() * 35,
-          y: 25 + Math.random() * 50,
-          movePattern: 'erratic',
-          patrolDir: 1,
-          state: 'idle',
-        };
-        updateEnemies(prev => [...prev, treasure]);
-        const t = setTimeout(() => updateEnemies(prev => prev.filter(e => e.id !== treasure.id)), 10000);
-        treasureTimeouts.push(t);
-      }
-    }, 15000);
-    return () => {
-      clearInterval(interval);
-      treasureTimeouts.forEach(clearTimeout);
+      },
+      onStageClear: (next) => setStage(next),
     };
-  }, [updateEnemies]);
+  }, [deck, engine, setCoins, setTotalEarned, setPullCurrency, setKillCount, setCardInventory, setStage]);
 
-  // Boss weak points
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now    = Date.now();
-      const bosses = enemiesRef.current.filter(e => e.isBoss);
-      if (!bosses.length) { setBossWeakPts({}); return; }
-      setBossWeakPts(prev => {
-        const next = {};
-        bosses.forEach(boss => {
-          const active = (prev[boss.id] || []).filter(wp => wp.expiresAt > now);
-          if (active.length < 3 && Math.random() < 0.65) {
-            active.push({ id: Math.random(), relX: 12 + Math.random()*76, relY: 12 + Math.random()*76, expiresAt: now + 1200 + Math.random()*900, dmgMult: 3 + Math.floor(Math.random()*3) });
-          }
-          next[boss.id] = active;
-        });
-        return next;
-      });
-    }, 650);
-    return () => clearInterval(interval);
-  }, []);
-
-  const telegraphTimeoutsRef = useRef({});
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      updateEnemies(prev => prev.map(en => {
-        if (en.tier === 'basic') return en;
-        if (frozenRef.current[en.id] > now) return en;
-        if (en.state === 'telegraphing') return en;
-        if (!en.attacks?.length) return en;
-
-        const nextAttack = en._nextAttack ?? (now + (en.attackCooldown ?? 4000));
-        if (now < nextAttack) return { ...en, _nextAttack: nextAttack };
-
-        const attack = en.attacks[Math.floor(Math.random() * en.attacks.length)];
-        const isBossAttack = en.isBoss;
-        const isBodyAttack = attack === 'chase';
-        const spriteSize = en.isBoss ? BOSS_SIZE : REGULAR_SIZE;
-        const r = Math.round((spriteSize + 20) / 3);
-        const zone = isBodyAttack ? null : {
-          x: en.x, y: en.y, radius: r,
-          w: attack === 'sweep' ? r * 5 : r * 3,
-          h: attack === 'sweep' ? r * 1.2 : r * 3,
-        };
-
-        if (telegraphTimeoutsRef.current[en.id]) {
-          clearTimeout(telegraphTimeoutsRef.current[en.id]);
-        }
-
-        telegraphTimeoutsRef.current[en.id] = setTimeout(() => {
-          delete telegraphTimeoutsRef.current[en.id];
-          const liveEnemy = enemiesRef.current.find(e => e.id === en.id);
-          if (!liveEnemy) return;
-          // Hit test uses the zone that was drawn (pixels, centred on the
-          // enemy). It used to be a fixed % square that didn't match the
-          // visual, so dodging a sweep's edge still hurt and vice versa.
-          const p    = playerPosRef.current;
-          const rect = arenaRef.current?.getBoundingClientRect();
-          let hit = false;
-          if (rect && zone) {
-            const dx = (p.x - liveEnemy.x) / 100 * rect.width;
-            const dy = (p.y - liveEnemy.y) / 100 * rect.height;
-            hit = attack === 'sweep'
-              ? Math.abs(dx) <= zone.w / 2 && Math.abs(dy) <= zone.h / 2
-              : Math.hypot(dx, dy) <= zone.w / 2;
-          } else if (!zone) {
-            // body attack ('chase'): you get hit if the cursor is on the enemy
-            const half = (isBossAttack ? BOSS_SIZE : REGULAR_SIZE) / 2;
-            const dx = rect ? (p.x - liveEnemy.x) / 100 * rect.width : Infinity;
-            const dy = rect ? (p.y - liveEnemy.y) / 100 * rect.height : Infinity;
-            hit = Math.abs(dx) <= half && Math.abs(dy) <= half;
-          }
-          if (hit) {
-            const dmgAmount = en.isBoss ? (attack === 'slam' ? 35 : attack === 'sweep' ? 22 : 18) : en.tier === 'elite' ? (attack === 'chase' ? 20 : 14) : 10;
-            setPlayerHp(hp => Math.max(0, hp - dmgAmount));
-            setTakingDamage(true); setHitFlash(true);
-            setTimeout(() => { setTakingDamage(false); setHitFlash(false); }, 300);
-            addFloater(`-${dmgAmount} HP`, 10, 20, '#ff4444', false);
-          }
-          updateEnemies(prev2 => prev2.map(e =>
-            e.id === en.id ? { ...e, state: 'attacking' } : e
-          ));
-          setTimeout(() => {
-            updateEnemies(prev2 => prev2.map(e =>
-              e.id === en.id
-                ? { ...e, state: 'idle', attackZone: null, _nextAttack: Date.now() + (e.attackCooldown ?? 4000) }
-                : e
-            ));
-          }, 200);
-        }, 1000);
-
-        return { ...en, state: 'telegraphing', attackZone: zone, _currentAttack: attack };
-      }));
-    }, 300);
-
-    return () => {
-      clearInterval(interval);
-      Object.values(telegraphTimeoutsRef.current).forEach(clearTimeout);
-      telegraphTimeoutsRef.current = {};
-    };
-  }, [addFloater, updateEnemies]);
-
-  const handleEnemyClick = useCallback((enemy, e) => {
-    e.stopPropagation();
-    const isCrit = Math.random() < critRate;
-    const dmg    = Math.floor((clickPower + atkBonus) * dmgMult * (0.85 + Math.random() * 0.3) * (isCrit ? 2 : 1));
-    addFloater((isCrit ? 'CRIT\n' : '') + '-' + fmt(dmg), enemy.x, enemy.y - 12, isCrit ? '#ff4444' : '#f0c040', isCrit);
-    const updated = enemiesRef.current.map(en => en.id === enemy.id ? { ...en, hp: en.hp - dmg } : en);
-    processDead(enemiesRef.current, updated);
-  }, [clickPower, atkBonus, dmgMult, critRate, addFloater, processDead]);
-
-  const handleWeakPointClick = useCallback((enemy, wp, e) => {
-    e.stopPropagation();
-    const dmg = Math.floor((clickPower + atkBonus) * dmgMult * wp.dmgMult * (0.9 + Math.random() * 0.2));
-    addFloater(`⚡WEAK!\n-${fmt(dmg)}`, enemy.x, enemy.y - 15, '#ffff00', true);
-    setBossWeakPts(prev => ({ ...prev, [enemy.id]: (prev[enemy.id] || []).filter(w => w.id !== wp.id) }));
-    const updated = enemiesRef.current.map(en => en.id === enemy.id ? { ...en, hp: en.hp - dmg } : en);
-    processDead(enemiesRef.current, updated);
-  }, [clickPower, atkBonus, dmgMult, addFloater, processDead]);
-
-  const triggerSkill = useCallback(() => {
-    if (!skillReady || !mainCard?.skill) return;
-    if (cardLevel < 20) { addFloater('Skill unlocks at LV20', 50, 35, '#aaa', false); return; }
-    const effect  = mainCard.skill.effect;
-    const baseDmg = Math.floor((clickPower + atkBonus) * dmgMult);
-    const current = enemiesRef.current;
-    let updated   = current;
-    switch (effect) {
-      case 'rock_shard': {
-        if (!current.length) break;
-        const t = current[Math.floor(Math.random() * current.length)];
-        const dmg = baseDmg * 3;
-        addFloater(`🪨-${fmt(dmg)}`, t.x, t.y - 12, '#F59E0B', true);
-        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
-        break;
-      }
-      case 'quantum_burst': {
-        const dmg = baseDmg * 2;
-        current.forEach(en => addFloater(`⚛-${fmt(dmg)}`, en.x, en.y - 12, '#8B5CF6', true));
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp - dmg) }));
-        break;
-      }
-      case 'frost_bolt': {
-        if (!current.length) break;
-        const t = current[Math.floor(Math.random() * current.length)];
-        const dmg = baseDmg * 2;
-        addFloater(`❄-${fmt(dmg)}`, t.x, t.y - 12, '#06B6D4', true);
-        setFrozenMap(prev => ({ ...prev, [t.id]: Date.now() + 2000 }));
-        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
-        break;
-      }
-      case 'healing_tide': {
-        if (!current.length) break;
-        const t = current[Math.floor(Math.random() * current.length)];
-        const dmg = baseDmg;
-        addFloater(`💧-${fmt(dmg)}`, t.x, t.y - 12, '#3B82F6', true);
-        addFloater('+15 HP', 10, 20, '#4ade80', false);
-        setPlayerHp(hp => Math.min(playerMaxHp, hp + 15));
-        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
-        break;
-      }
-      case 'reality_slice': {
-        if (!current.length) break;
-        const t = current.reduce((a, b) => a.hp > b.hp ? a : b);
-        const dmg = baseDmg * 5;
-        addFloater(`✦-${fmt(dmg)}`, t.x, t.y - 12, '#EAB308', true);
-        updated = current.map(en => en.id === t.id ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
-        break;
-      }
-      case 'devour': {
-        const dmg = baseDmg * 2;
-        let totalHeal = 0;
-        updated = current.map(en => {
-          const actual = Math.min(en.hp, dmg);
-          totalHeal += actual;
-          addFloater(`👁-${fmt(dmg)}`, en.x, en.y - 12, '#ff0000', true);
-          return { ...en, hp: Math.max(0, en.hp - dmg) };
-        });
-        addFloater(`+${fmt(totalHeal)} HP`, 10, 20, '#4ade80', false);
-        setPlayerHp(hp => Math.min(playerMaxHp, hp + totalHeal));
-        break;
-      }
-      case 'swag_strike': {
-        const dmg = baseDmg * 3;
-        current.forEach(en => addFloater(`💃-${fmt(dmg)}`, en.x, en.y - 12, '#8B5CF6', true));
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp - dmg) }));
-        break;
-      }
-      default: {
-        if (!current.length) break;
-        const dmg = baseDmg * 2;
-        addFloater(`✦-${fmt(dmg)}`, current[0].x, current[0].y - 12, '#cc44ff', true);
-        updated = current.map((en, i) => i === 0 ? { ...en, hp: Math.max(0, en.hp - dmg) } : en);
-      }
-    }
-    processDead(current, updated);
-    setSkillReady(false);
-    setSkillCd(mainCard.skill.cooldown);
-  }, [skillReady, mainCard, cardLevel, clickPower, atkBonus, dmgMult, addFloater, processDead, setFrozenMap, playerMaxHp]);
-
-  const triggerAbility = useCallback(() => {
-    if (!abilityReady || !mainCard?.ult) return;
-    if (cardLevel < 50) { addFloater('Ult unlocks at LV50', 50, 35, '#aaa', false); return; }
-    const effect  = mainCard.ult.effect;
-    const baseDmg = Math.floor((clickPower + atkBonus) * dmgMult);
-    const current = enemiesRef.current;
-    let updated   = current;
-
-    switch (effect) {
-      case 'tectonic_wrath': {
-        const dmg = baseDmg * 8;
-        current.forEach(en => addFloater(`🗿-${fmt(dmg)}`, en.x, en.y-12, '#F59E0B', true));
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp - dmg) }));
-        break;
-      }
-      case 'black_hole': {
-        const dmg = baseDmg * 10;
-        current.forEach(en => addFloater(`🌌-${fmt(dmg)}`, en.x, en.y-12, '#8B5CF6', true));
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp-dmg), x: 65+(Math.random()-0.5)*10, y: 50+(Math.random()-0.5)*10 }));
-        break;
-      }
-      case 'permafrost': {
-        const dmg = baseDmg * 5;
-        const now = Date.now();
-        current.forEach(en => addFloater(`❄️-${fmt(dmg)}`, en.x, en.y-12, '#06B6D4', true));
-        const nf = {};
-        current.forEach(en => { nf[en.id] = now + 4000; });
-        setFrozenMap(prev => ({ ...prev, ...nf }));
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp-dmg) }));
-        break;
-      }
-      case 'tidal_surge': {
-        const dmg = baseDmg * 6, bon = baseDmg * 3;
-        current.forEach(en => addFloater(`💧-${fmt(dmg)}`, en.x, en.y-12, '#3B82F6', true));
-        addFloater(`+${fmt(bon)}`, 50, 24, '#f0c040', false, 'coin');
-        setCoins(c => c + bon); setTotalEarned(t => t + bon);
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp-dmg) }));
-        break;
-      }
-      case 'reality_break': {
-        if (!current.length) break;
-        const dmg = baseDmg * 18;
-        addFloater(`✨REALITY\n-${fmt(dmg)}`, current[0].x, current[0].y-15, '#EAB308', true);
-        updated = current.map((en, i) => i === 0 ? { ...en, hp: Math.max(0, en.hp-dmg) } : en);
-        break;
-      }
-      default: {
-        const dmg = baseDmg * 5;
-        current.forEach(en => addFloater(`✦-${fmt(dmg)}`, en.x, en.y-12, '#cc44ff', true));
-        updated = current.map(en => ({ ...en, hp: Math.max(0, en.hp-dmg) }));
-      }
-    }
-    processDead(current, updated);
-    setAbilityReady(false);
-    setAbilityCd(abilityCdMax);
-    setTimeout(() => setCdAnimating(true), 50);
-  }, [abilityReady, mainCard, cardLevel, clickPower, atkBonus, dmgMult, abilityCdMax, addFloater, processDead, setCoins, setTotalEarned]);
-
-  // Ability keybind — must be after triggerAbility is defined
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'e' || e.key === 'E') triggerAbility();
-      if (e.key === 'q' || e.key === 'Q') triggerSkill();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [triggerAbility, triggerSkill]);
-
+  const [hoveredNav, setHoveredNav] = useState(null);
   const handleNavClick = (cfg) => {
-    if (activeNav === 'cards' && cfg.screen !== 'cards') {
-      const codexCfg = NAV_CONFIG.find(c => c.screen === 'cards');
-      if (codexCfg?.closeSfx) playSFX(`${BASE}sounds/${codexCfg.closeSfx}`);
-    }
-    if (cfg.uniqueSfx && cfg.tabSfx) {
-      playSFX(`${BASE}sounds/${cfg.tabSfx}`);
-    } else {
-      playPress();
-    }
-    setActiveNav(cfg.screen);
+    if (cfg.uniqueSfx && cfg.tabSfx) playSFX(`${BASE}sounds/${cfg.tabSfx}`);
+    else playPress();
     navigate(cfg.screen);
   };
 
-  return (
-    <div style={{ width:'100%', height:'100vh', background:'#1a2035', cursor:`url(${BASE}ui/mouse.png) 0 0, auto`, display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", userSelect:'none' }}>
+  const level = stats.level;
+  const xpEntry = mainCard ? cardInventory[mainCard.id] : null;
+  const canTrain = coins >= upgradeCost;
 
+  // ── Pieces shared by both layouts ─────────────────────────────────────────
+  const topBar = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 8 : 12, padding: mobile ? '6px 10px' : '8px 16px', background: '#141928', borderBottom: '2px solid #ff8c00', flexShrink: 0, flexWrap: 'wrap' }}>
+      <div className="pill" style={{ borderColor: '#5588ff' }}><GemIcon size={mobile ? 20 : 26} /><span style={{ color: '#fff' }}>{pullCurrency}</span></div>
+      <div className="pill" style={{ borderColor: '#cc8800' }}><CoinIcon size={mobile ? 20 : 26} /><span style={{ color: '#f0c040' }}>{fmt(coins)}</span></div>
+      <div style={{ fontSize: mobile ? 11 : 13, color: '#778', lineHeight: 1.3 }}>
+        dmg <b style={{ color: '#f0c040' }}>{fmt(stats.clickDmg)}</b>
+        {' · '}auto <b style={{ color: '#f0c040' }}>{fmt(stats.autoDps)}/s</b>
+        {' · '}crit <b style={{ color: '#ff8844' }}>{Math.round(stats.critRate * 100)}%</b>
+        {mainCard?.rarity >= 5 && <>{' · '}lv <b style={{ color: '#4ade80' }}>{level}</b> <span style={{ color: '#4a6' }}>({xpEntry?.xp ?? 0}/{level * 100})</span></>}
+      </div>
+    </div>
+  );
+
+  const trainBtn = (
+    <button className="train-btn" disabled={!canTrain} onClick={() => { buyUpgrade(); playPress(); }}
+      title="+5 click power and +5 auto damage">
+      ⬆ Train <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><CoinIcon size={14} />{fmt(upgradeCost)}</span>
+    </button>
+  );
+
+  const kitInfo = mainCard && (
+    <div style={{ fontSize: 11, color: '#778', lineHeight: 1.45, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {mainCard.skill && (
+        <div style={{ color: stats.skill ? '#4ade80' : '#556' }} title={mainCard.skill.description}>
+          ✦ {mainCard.skill.name} {!stats.skill && <span style={{ color: '#f87171' }}>LV{SKILL_UNLOCK}</span>}
+        </div>
+      )}
+      {mainCard.ult && (
+        <div style={{ color: stats.ult ? '#c084fc' : '#556' }} title={mainCard.ult.description}>
+          ⚡ {mainCard.ult.name} {!stats.ult ? <span style={{ color: '#f87171' }}>LV{ULT_UNLOCK}</span> : <span style={{ color: '#667' }}>[E]</span>}
+        </div>
+      )}
+    </div>
+  );
+
+  const heroBar = (
+    <div style={{ background: '#0f1625', border: '2px solid #334', borderRadius: 6, padding: mobile ? '6px 10px' : '10px 14px', display: 'flex', alignItems: 'center', gap: mobile ? 8 : 12, flexShrink: 0, flexWrap: mobile && !portrait ? 'wrap' : 'nowrap' }}>
+      {!mobile && (
+        <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, overflow: 'hidden', border: `2px solid ${mainCard ? '#f0c040' : '#334'}`, background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {mainCard ? <img src={mainCard.image} alt={mainCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 9, color: '#445', textAlign: 'center' }}>NO CARD</span>}
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: mobile && !portrait ? '100%' : 0 }}>
+        {!mobile && <div style={{ color: '#ccc', fontSize: 14 }}>{mainCard ? mainCard.name : 'No card equipped'} {mainCard && <span style={{ color: '#556', fontSize: 12 }}>{mainCard.subtitle}</span>}</div>}
+        {mainCard ? kitInfo : <div style={{ fontSize: 11, color: '#556' }}>Equip a 5★ card in Deck to get skills and an ult.</div>}
+      </div>
+      {trainBtn}
+    </div>
+  );
+
+  const supportsPanel = !mobile && deck?.supports?.some(Boolean) && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {deck.supports.map((card, i) => card && (
+          <div key={i} style={{ background: '#0a1020', border: '1px solid #1a2a40', borderRadius: 4, padding: '5px 9px', fontSize: 11 }}>
+            <div style={{ color: '#5588ff', fontWeight: 700 }}>{card.name}
+              <span style={{ color: '#aaa', fontWeight: 400, marginLeft: 6 }}>+{Math.round((card.stats?.atk ?? 0) * siMult(cardInventory[card.id]?.si))} ATK</span>
+            </div>
+            <div style={{ color: '#778' }}>{(cardInventory[card.id]?.subs ?? []).map(formatSub).join(' · ') || card.passive?.description}</div>
+          </div>
+        ))}
+      </div>
+      {stats.sets.map(set => (
+        <div key={set.id} style={{ fontSize: 11, color: set.color, background: '#0a1020', border: `1px solid ${set.color}55`, borderRadius: 4, padding: '4px 9px' }}>
+          ◆ {set.name}: <span style={{ color: '#bbb' }}>{set.desc}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const mobileNav = (
+    <div style={{ display: 'grid', gridTemplateColumns: portrait ? 'repeat(3, 1fr)' : '1fr 1fr', gap: 6, flexShrink: 0 }}>
+      {NAV_CONFIG.map(cfg => (
+        <button key={cfg.label} className="nav-btn-m" data-nav={cfg.label} onClick={() => handleNavClick(cfg)}>
+          <span style={{ fontSize: 16 }}>{cfg.icon}</span> {cfg.label.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+
+  const arena = <BattleArena engine={engine} mainCard={mainCard} mobile={mobile} />;
+
+  return (
+    <div style={{ width: '100%', height: '100dvh', background: '#1a2035', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none', cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
       <style>{`
+        ${mobile ? '' : `* { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }`}
         img { -webkit-user-drag:none; user-select:none; }
-        * { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }
-        @keyframes floatDmg { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)} 65%{opacity:1} 100%{opacity:0;transform:translateX(-50%) translateY(-64px) scale(0.8)} }
-        @keyframes enemyFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
-        @keyframes bossPulse { 0%,100%{filter:drop-shadow(0 0 6px #ff4400)} 50%{filter:drop-shadow(0 0 22px #ff4400)} }
-        @keyframes bossWarn { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.7)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.08)} 80%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-50%) scale(0.95)} }
-        @keyframes weakPulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1} 50%{transform:translate(-50%,-50%) scale(1.38);opacity:0.75} }
-        @keyframes telegraphPulse { 0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)} 50%{opacity:0.4;transform:translate(-50%,-50%) scale(1.2)} }
-        @keyframes telegraphPulseBoss { 0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1);box-shadow:0 0 12px red} 50%{opacity:0.5;transform:translate(-50%,-50%) scale(1.25);box-shadow:0 0 28px red} }
-        @keyframes arenaShake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-4px,2px)} 50%{transform:translate(4px,-2px)} 80%{transform:translate(-2px,3px)} }
-        @keyframes chaseFlash { 0%,100%{filter:brightness(1) drop-shadow(0 0 0px red)} 50%{filter:brightness(2) drop-shadow(0 0 18px red)} }
-        .dmg-float { position:absolute;pointer-events:none;z-index:30;animation:floatDmg 1.1s ease-out forwards;text-align:center;line-height:1.25;white-space:pre; }
-        .enemy-wrap { position:absolute;text-align:center;z-index:10;cursor:pointer; }
-        .enemy-wrap:hover .enemy-sprite { filter:brightness(1.4) !important; }
-        .enemy-sprite { image-rendering:pixelated;display:block;animation:enemyFloat 2.4s ease-in-out infinite;transition:none; }
-        .enemy-sprite.boss { animation:enemyFloat 1.8s ease-in-out infinite,bossPulse 1.2s ease-in-out infinite; }
-        .boss-warning { position:absolute;top:50%;left:50%;animation:bossWarn 2.6s ease-in-out forwards;pointer-events:none;z-index:40;text-align:center; }
-        .weak-pt { position:absolute;width:28px;height:28px;border-radius:50%;background:radial-gradient(circle,#ffff44 30%,#ff8800);border:2px solid #fff;cursor:crosshair;z-index:25;animation:weakPulse 0.45s ease-in-out infinite;box-shadow:0 0 14px #ffff44;transform:translate(-50%,-50%); }
-        .nav-btn { background:#1a2035;border:2px solid #ff8c00;color:#ff8c00;font-size:clamp(15px,2.3vw,23px);cursor:pointer;border-radius:6px;transition:background 0.12s;padding:0; }
-        .nav-btn:hover { background:#ff8c0022; }
-        .hp-bar-bg { background:#333;border-radius:3px;height:7px;width:100%;margin-top:4px; }
-        .hp-bar-fill { border-radius:3px;height:100%;transition:width 0.3s; }
-        .ability-btn { border:2px solid #aa44ff;background:#1a0a2a;color:#cc88ff;border-radius:6px;cursor:pointer;font-size:14px;padding:8px 14px;transition:background 0.12s;white-space:nowrap; }
-        .ability-btn:hover:not(:disabled){background:#2a1040}
-        .ability-btn:disabled{opacity:0.4;cursor:not-allowed;border-color:#554466;color:#554466}
-        .cd-bar-bg{background:#2a1040;border-radius:3px;height:4px;width:100%;margin-top:4px}
-        .cd-bar-fill{background:#aa44ff;border-radius:3px;height:100%;transition:width 1s linear}
+        .pill { display:flex; align-items:center; gap:6px; background:#0f1420; border:2px solid; border-radius:20px; padding:3px 12px 3px 6px; font-weight:700; font-size:${mobile ? 14 : 17}px; }
+        .train-btn { border:2px solid #f0c040; background:#2a2000; color:#f0c040; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; padding:7px 12px; white-space:nowrap; display:flex; gap:6px; align-items:center; flex-shrink:0; touch-action:manipulation; }
+        .train-btn:disabled { opacity:0.4; cursor:not-allowed; }
+        .train-btn:hover:not(:disabled) { background:#3a2c00; }
+        .nav-btn-m { background:linear-gradient(180deg,#ff8c00,#c25e00); border:2px solid #ffb347; color:#fff; font-weight:900; font-size:12px; letter-spacing:1px; border-radius:8px; padding:9px 4px; text-shadow:0 1px 2px #0008; touch-action:manipulation; display:flex; align-items:center; justify-content:center; gap:5px; }
+        .nav-btn-m:active { filter:brightness(1.2); transform:scale(0.97); }
       `}</style>
 
-      {/* TOP BAR */}
-      <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 16px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, background:'#0f1420', border:'2px solid #5588ff', borderRadius:20, padding:'4px 14px 4px 8px' }}>
-          <GemIcon />
-          <span style={{ color:'#fff', fontWeight:700, fontSize:17 }}>{pullCurrency}</span>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:6, background:'#0f1420', border:'2px solid #cc8800', borderRadius:20, padding:'4px 14px 4px 8px' }}>
-          <CoinIcon />
-          <span style={{ color:'#f0c040', fontWeight:700, fontSize:17 }}>{fmt(coins)}</span>
-        </div>
-        <div style={{ fontSize:13, color:'#667' }}>
-          atk <span style={{ color:'#f0c040' }}>{fmt((clickPower+atkBonus)*dmgMult)}</span>
-          {' · '}
-          auto <span style={{ color:'#f0c040' }}>{fmt(cps*dmgMult)}/s</span>
-          {' · '}
-          wave <span style={{ color:'#ff8c00' }}>{Math.floor(killCount/10)+1}</span>
-          {' · '}
-          {mainCard?.rarity >= 5 && <>
-            lv <span style={{ color:'#4ade80' }}>{cardLevel}</span>
-            {' · '}
-            <span style={{ color:'#4ade80' }}>{cardXp}/{cardLevel * 100} xp</span>
-          </>}
-        </div>
-        <div style={{ flex:1 }} />
-      </div>
+      {topBar}
 
-      {/* BODY */}
-      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
-
-        {/* LEFT */}
-        <div style={{ flex:'0 0 55%', display:'flex', flexDirection:'column', padding:'14px 12px 14px 16px', gap:10 }}>
-
-          {/* Battle viewport */}
-          <div
-            ref={arenaRef}
-            onMouseMove={(e) => {
-              const rect = arenaRef.current?.getBoundingClientRect();
-              if (!rect) return;
-              playerPosRef.current = {
-                x: ((e.clientX - rect.left) / rect.width)  * 100,
-                y: ((e.clientY - rect.top)  / rect.height) * 100,
-              };
-            }}
-            style={{ flex:1, border:'2px solid #cc8800', borderRadius:6, position:'relative', overflow:'hidden', backgroundImage:`url(${BATTLE_BG})`, backgroundSize:'cover', backgroundPosition:'center', backgroundColor:'#0f1625', animation: hitFlash ? 'arenaShake 0.3s ease-out' : 'none' }}
-          >
-
-            <div style={{ position:'absolute', inset:0, background:'rgba(10,14,30,0.45)', zIndex:1, pointerEvents:'none' }} />
-            {takingDamage && (
-              <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:50,
-                background: hitFlash ? 'rgba(255,255,255,0.45)' : 'rgba(255,0,0,0.2)',
-                transition:'background 0.15s' }} />
-            )}
-
-            <div style={{ position:'absolute', top:10, left:12, color:'#aaa', fontSize:14, zIndex:10, pointerEvents:'none' }}>
-              auto <span style={{ color:'#f0c040' }}>{fmt(cps*dmgMult)}</span>/s · kills <span style={{ color:'#f0c040' }}>{killCount}</span>
-            </div>
-
-            {bossWarning && (
-              <div className="boss-warning">
-                <div style={{ color:'#ff4400', fontSize:'clamp(30px,4.5vw,56px)', fontWeight:900, letterSpacing:5, textShadow:'0 0 32px #ff4400,0 0 12px #ff2200' }}>⚠ BOSS ⚠</div>
-                <div style={{ color:'#ff8855', fontSize:'clamp(15px,2.2vw,22px)', marginTop:6, letterSpacing:3 }}>INCOMING!</div>
-              </div>
-            )}
-
-            {enemies.map(en => {
-              const size     = en.isBoss ? BOSS_SIZE : REGULAR_SIZE;
-              const isFrozen = frozenMap[en.id] && frozenMap[en.id] > Date.now();
-              const isMoving = !en.isBoss && en.movePattern !== 'stationary';
-              return (
-                <div key={en.id} className="enemy-wrap"
-                  onClick={(e) => handleEnemyClick(en, e)}
-                  style={{
-                    left: en.x+'%', top: en.y+'%',
-                    transform:'translate(-50%,-50%)',
-                    transition: (isMoving && en.movePattern !== 'erratic') ? 'left 0.55s linear, top 0.55s linear' : 'none',
-                  }}
-                >
-                  {(en.state === 'telegraphing' || en.state === 'attacking') && en.attackZone && (
-                    <>
-                      <div style={{
-                        position:'absolute', left:'50%', top:'50%',
-                        width:  (en.attackZone.w ?? en.attackZone.radius * 3) + 'px',
-                        height: (en.attackZone.h ?? en.attackZone.radius * 3) + 'px',
-                        transform:'translate(-50%, -50%)',
-                        borderRadius: en._currentAttack === 'sweep' ? '4px' : '50%',
-                        background: en.state === 'attacking' ? 'rgba(255,255,255,0.85)' : en._currentAttack === 'sweep' ? 'rgba(255,150,0,0.3)' : 'rgba(255,0,0,0.35)',
-                        border: `2px solid ${en.state === 'attacking' ? '#fff' : en._currentAttack === 'sweep' ? 'orange' : 'red'}`,
-                        boxShadow: en.state === 'attacking' ? '0 0 24px #fff' : 'none',
-                        animation: en.state === 'attacking' ? 'none' : `${en.isBoss ? 'telegraphPulseBoss' : 'telegraphPulse'} 0.4s ease-in-out infinite`,
-                        pointerEvents:'none', zIndex:20,
-                      }} />
-                      <div style={{ position:'absolute', left:'50%', top:'-18px', transform:'translateX(-50%)', fontSize:16, pointerEvents:'none', zIndex:21 }}>
-                        {en._currentAttack === 'sweep' ? '〰' : en._currentAttack === 'chase' ? '👁' : en.isBoss && en._currentAttack === 'slam' ? '💥' : '⚡'}
-                      </div>
-                    </>
-                  )}
-
-                  <div style={{ position:'relative', display:'inline-block' }}>
-                    <img src={en.image} alt={en.name}
-                      className={`enemy-sprite${en.isBoss ? ' boss' : ''}`}
-                      style={{ width:size, height:size, objectFit:'contain',
-                        filter: isFrozen ? 'hue-rotate(180deg) brightness(1.5) saturate(2)' :
-                          en.state === 'attacking' && !en.attackZone ? 'brightness(3) sepia(1) saturate(10) hue-rotate(310deg) drop-shadow(0 0 16px #fff)' :
-                          undefined,
-                        animation: (!isFrozen && en.state === 'telegraphing' && !en.attackZone)
-                          ? 'chaseFlash 0.35s ease-in-out infinite'
-                          : undefined,
-                      }}
-                    />
-                    {en.isBoss && (bossWeakPts[en.id] || []).map(wp => (
-                      <div key={wp.id} className="weak-pt" title={`${wp.dmgMult}× DAMAGE!`}
-                        onClick={(e) => handleWeakPointClick(en, wp, e)}
-                        style={{ left:wp.relX+'%', top:wp.relY+'%' }}
-                      />
-                    ))}
-                  </div>
-                  <div style={{ width:size, margin:'4px auto 0' }}>
-                    <div className="hp-bar-bg">
-                      <div className="hp-bar-fill" style={{ width:Math.max(0,en.hp/en.maxHp*100)+'%', background:en.isBoss?'#ff4400':'#ff4444' }} />
-                    </div>
-                  </div>
-                  {en.isBoss && <div style={{ color:'#ff6622', fontSize:13, fontWeight:700, marginTop:2 }}>⚔ BOSS</div>}
-                  {isFrozen && <div style={{ color:'#06B6D4', fontSize:12, marginTop:1 }}>❄ FROZEN</div>}
-                </div>
-              );
-            })}
-
-            {/* HUD */}
-
-<div style={{ position:'absolute', left:'2%', bottom:'5%', zIndex:20, width:'30%', pointerEvents:'none' }}>
-  <div style={{ position:'relative', width:'100%' }}>
-
-    {/* Base frame */}
-    <img src={`${BASE}ui/ui_status.png`} alt="" style={{ width:'100%', display:'block', }} />
-
-    {/* Portrait — above the HP bar on the left */}
-    <div style={{ position:'absolute', right:'0.5%', bottom:'0.5%', width:'95%', height:'100%', overflow:'hidden'}}>
-      <img src={STATUS_PORTRAITS[mainCard?.id] ?? mainCard?.image ?? null} alt=""
-        style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top',display: mainCard ? 'block' : 'none' }}
-      />
-    </div>
-
-{/* Orb fill */}
-<div style={{ position:'absolute', right:'0%', top:'0%', width:'100%', height:'100%', borderRadius:'50%', overflow:'hidden' }}>
-  <img src={`${BASE}ui/ul_statusult.png`} alt="" style={{
-    width:'100%', height:'100%', objectFit:'cover', display:'block',
-    clipPath: (abilityReady || cdAnimating) ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
-    transition: cdAnimating ? `clip-path ${abilityCdMax}s linear` : 'none',
-  }} />
-</div>
-
-{/* CD timer — outside overflow:hidden, centered on the orb */}
-{!abilityReady && (
-  <div style={{ position:'absolute', right:'0%', top:'0%', width:'50%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:900, fontSize:'clamp(12px,2vw,20px)', textShadow:'0 0 8px #000', pointerEvents:'none' }}>
-    {abilityCd}s
-  </div>
-)}
-
-    {/* HP fill — clips from right as HP drops */}
-    <div style={{ position:'absolute', bottom:'0%', left:'0%', width:'100%', height:'100%', overflow:'hidden', borderRadius:0 }}>
-      <img src={`${BASE}ui/ui_statushp.png`} alt="" style={{
-        width:'100%', height:'100%', objectFit:'fill', imageRendering:'pixelated', display:'block',
-        clipPath: `inset(0 ${100 - (playerHp / playerMaxHp) * 100}% 0 0)`,
-        transition: 'clip-path 0.2s',
-      }} />
-    </div>
-
-  </div>
-</div>
-
-            {lureFloaters.map(l => (
-              <div key={l.id} style={{ position:'absolute', left:l.x+'%', top:l.y+'%', transform:'translateX(-50%)', pointerEvents:'none', zIndex:30, display:'flex', alignItems:'center', gap:4, animation:'floatDmg 1.2s ease-out forwards' }}>
-                <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width:22, height:22, imageRendering:'pixelated' }} />
-                <span style={{ color:'#5588ff', fontWeight:700, fontSize:14 }}>+1</span>
-              </div>
-            ))}
-
-            {floaters.map(f => (
-              <div key={f.id} className="dmg-float" style={{ left:f.x+'%', top:f.y+'%', color:f.color, fontSize:f.isCrit?'clamp(14px,2.3vw,23px)':'clamp(12px,1.9vw,18px)', fontWeight:f.isCrit?900:600, textShadow:f.isCrit?'0 0 10px rgba(255,60,60,0.9)':'0 1px 4px rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
-                <span>{f.text}</span>
-                {f.icon === 'coin' && <img src={`${BASE}ui/ui_cucoin.png`}    alt="" style={{ width:24, height:24, objectFit:'contain', imageRendering:'pixelated', flexShrink:0 }} />}
-                {f.icon === 'gem'  && <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width:24, height:24, objectFit:'contain', imageRendering:'pixelated', flexShrink:0 }} />}
-              </div>
-            ))}
+      {mobile ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: portrait ? 'column' : 'row', gap: 6, padding: 6 }}>
+          <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {arena}
           </div>
-
-          {/* Hero stat bar */}
-          <div style={{ background:'#0f1625', border:'2px solid #334', borderRadius:6, padding:'10px 14px', display:'flex', alignItems:'center', gap:14, flexShrink:0 }}>
-            <div style={{ width:44, height:44, flexShrink:0, borderRadius:4, overflow:'hidden', border:`2px solid ${mainCard?'#f0c040':'#334'}`, background:'#1a2035', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {mainCard && !mainCard.image?.includes('placeholder')
-                ? <img src={mainCard.image} alt={mainCard.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                : <span style={{ fontSize:9, color:mainCard?'#f0c040':'#445', textAlign:'center', lineHeight:1.3 }}>{mainCard?mainCard.name.slice(0,4):'NO\nCARD'}</span>}
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ color:'#ccc', fontSize:14 }}>{mainCard ? mainCard.name : 'No card equipped'}</div>
-              {mainCard && <div style={{ color:'#556', fontSize:12 }}>{mainCard.subtitle}</div>}
-            </div>
-            <div style={{ display:'flex', gap:14, flexShrink:0 }}>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ color:'#556', fontSize:11 }}>DMG</div>
-                <div style={{ color:'#f0c040', fontWeight:700, fontSize:13 }}>{fmt((clickPower+atkBonus)*dmgMult)}</div>
-              </div>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ color:'#556', fontSize:11 }}>CRIT</div>
-                <div style={{ color:'#ff8844', fontWeight:700, fontSize:13 }}>{Math.round(critRate*100)}%</div>
-              </div>
-            </div>
-            <div style={{ flexShrink:0, textAlign:'center' }}>
-            <button className="ability-btn"
-                disabled={!abilityReady || !mainCard?.ult || cardLevel < 50}
-                onClick={triggerAbility}>
-                {!mainCard?.ult ? 'no ult' : cardLevel < 50 ? `ULT [E] LV50` : abilityReady ? `⚡ ${mainCard.ult.name}` : `CD ${abilityCd}s`}
-              </button>
-              {!abilityReady && (
-                <div className="cd-bar-bg">
-                  <div className="cd-bar-fill" style={{ width:((abilityCdMax-abilityCd)/abilityCdMax*100)+'%' }} />
-                </div>
-              )}
-            </div>
-            <div style={{ flexShrink:0, minWidth:80, textAlign:'center' }}>
-              <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>HP</div>
-              <div style={{ background:'#1a0a0a', borderRadius:3, height:8, width:80 }}>
-                <div style={{ height:'100%', borderRadius:3, width:(playerHp/playerMaxHp*100)+'%', background: playerHp>50?'#4ade80':playerHp>25?'#facc15':'#f87171', transition:'width 0.2s,background 0.3s' }} />
-              </div>
-              <div style={{ color:'#aaa', fontSize:11, marginTop:2 }}>{playerHp}/{playerMaxHp}</div>
-            </div>
-            {mainCard?.skill && (
-              <div style={{ flexShrink:0, textAlign:'center' }}>
-                <div style={{ color:'#556', fontSize:11, marginBottom:3 }}>
-                  SKILL [Q] {cardLevel < 20 && <span style={{ color:'#ff4444' }}>LV20</span>}
-                </div>
-                <button className="ability-btn"
-                  style={{ borderColor: cardLevel >= 20 ? '#4ade80' : '#334', color: cardLevel >= 20 ? '#4ade80' : '#445' }}
-                  disabled={!skillReady || cardLevel < 20}
-                  onClick={triggerSkill}>
-                  {skillReady ? `✦ ${mainCard.skill.name}` : `CD ${skillCd}s`}
-                </button>
-                {!skillReady && (
-                  <div className="cd-bar-bg">
-                    <div className="cd-bar-fill" style={{ width:((mainCard.skill.cooldown - skillCd) / mainCard.skill.cooldown * 100)+'%', background:'#4ade80' }} />
-                  </div>
-                )}
-              </div>
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: portrait ? 'auto' : 220, flexShrink: 0, overflowY: portrait ? 'visible' : 'auto' }}>
+            {heroBar}
+            {mobileNav}
           </div>
-
-          {/* Support buffs */}
-          {deck?.supports?.some(Boolean) && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, flexShrink:0 }}>
-              {deck.supports.map((card, i) => card && (
-                <div key={i} style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:4, padding:'6px 10px', fontSize:11 }}>
-                  <div style={{ color:'#5588ff', marginBottom:2, fontWeight:700 }}>{card.name} <span style={{ color:'#445', fontWeight:400 }}>support</span></div>
-                  {card.stats && (() => {
-                    const si = cardInventory[card.id]?.si ?? 0;
-                    const siMult = SI_MULT[Math.min(si, SI_MULT.length - 1)];
-                    const boostedAtk = Math.round(card.stats.atk * siMult);
-                    return <span style={{ color:'#aaa' }}>+{boostedAtk} ATK{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>S{si+1}</span>}</span>;
-                  })()}
-                  {card.passive && <div style={{ color:'#778', marginTop:1 }}>{card.passive.description}</div>}
-                </div>
+        </div>
+      ) : (
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div style={{ flex: '0 0 58%', display: 'flex', flexDirection: 'column', padding: '14px 12px 14px 16px', gap: 10, minWidth: 0 }}>
+            {arena}
+            {heroBar}
+            {supportsPanel}
+          </div>
+          <div style={{ flex: '0 0 42%', padding: '14px 16px 14px 4px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ position: 'relative', width: '95%', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <img src={MENU_BG} alt="" style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none' }} />
+              {NAV_CONFIG.map(cfg => hoveredNav === cfg.label && (
+                <img key={cfg.label} src={cfg.hoverImg} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }} />
+              ))}
+              {NAV_CONFIG.map((cfg, i) => (
+                <div key={cfg.label} data-nav={cfg.label} style={{ position: 'absolute', cursor: 'pointer', ...NAV_BOXES[i] }}
+                  onMouseEnter={() => setHoveredNav(cfg.label)}
+                  onMouseLeave={() => setHoveredNav(null)}
+                  onClick={() => handleNavClick(cfg)} />
               ))}
             </div>
-          )}
-        </div>
-
-        {/* RIGHT: nav grid */}
-        <div style={{ flex:'0 0 45%', padding:'14px 16px 14px 4px', display:'flex', flexDirection:'column', gap:8, minHeight:0 }}>
-          <div style={{ position:'relative', width:'95%', flex:1, minHeight:0, overflow:'hidden' }}>
-            <img src={MENU_BG} alt="" style={{ width:'100%', height:'100%', objectFit:'fill', display:'block', pointerEvents:'none' }} />
-            {NAV_CONFIG.map((cfg) => (
-              hoveredNav === cfg.label && (
-                <img key={cfg.label} src={cfg.hoverImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'fill', pointerEvents:'none' }} />
-              )
-            ))}
-            {[
-              { cfg: NAV_CONFIG[0], style: { left:'2%',  top:'2%',  width:'47%', height:'29%' } },
-              { cfg: NAV_CONFIG[1], style: { left:'51%', top:'2%',  width:'47%', height:'29%' } },
-              { cfg: NAV_CONFIG[2], style: { left:'2%',  top:'33%', width:'47%', height:'31%' } },
-              { cfg: NAV_CONFIG[3], style: { left:'51%', top:'33%', width:'47%', height:'31%' } },
-              { cfg: NAV_CONFIG[4], style: { left:'2%',  top:'66%', width:'62%', height:'32%' } },
-              { cfg: NAV_CONFIG[5], style: { left:'66%', top:'66%', width:'32%', height:'32%' } },
-            ].map(({ cfg, style }) => (
-              <div key={cfg.label} style={{ position:'absolute', cursor:'pointer', ...style }}
-                onMouseEnter={() => setHoveredNav(cfg.label)}
-                onMouseLeave={() => setHoveredNav(null)}
-                onClick={() => handleNavClick(cfg)}
-              />
-            ))}
           </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }

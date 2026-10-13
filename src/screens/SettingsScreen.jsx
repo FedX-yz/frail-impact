@@ -28,7 +28,7 @@ export default function SettingsScreen({ navigate }) {
   };
 
   return (
-    <div style={{ width:'100%', height:'100vh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#eee', position:'relative' }}>
+    <div style={{ width:'100%', height:"100dvh", background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#eee', position:'relative' }}>
 
       <style>{`
         @keyframes phantomVisibleSnap {

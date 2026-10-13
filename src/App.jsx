@@ -7,6 +7,7 @@ import CardsScreen    from './screens/CardsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CardShop       from './screens/CardShop';
 import { CHARACTERS }  from './data/characters';
+import { rollSubs }    from './combat/sets';
 
 const SAVE_KEY = 'rhg_v3';
 
@@ -47,6 +48,7 @@ export default function App() {
   const [coins,         setCoins]         = useState(s.coins         ?? 0);
   const [collection,    setCollection]    = useState(s.collection    ?? []);
   const [killCount, setKillCount] = useState(s.killCount ?? 0);
+  const [stage,     setStage]     = useState(s.stage ?? 1);
   // ── Shop inventory: { [cardId]: { count: number, si: number (0–4) } }  ──────
   // Kept separate from `collection` (the gacha array) so nothing breaks.
   const [cardInventory, setCardInventory] = useState(s.cardInventory ?? {}); // ← NEW
@@ -65,12 +67,30 @@ export default function App() {
     return { main: rehydrateCard(saved.main), supports: supports.map(rehydrateCard) };
   });
 
+  // 3★/4★ cards roll relic sub-stats the first time you own them
+  useEffect(() => {
+    const owned = new Set([
+      ...collection.map(c => c.id),
+      ...Object.entries(cardInventory).filter(([, e]) => (e.count ?? 0) > 0).map(([id]) => Number(id)),
+    ]);
+    const missing = CHARACTERS.filter(c => c.rarity <= 4 && owned.has(c.id) && !cardInventory[c.id]?.subs);
+    if (!missing.length) return;
+    setCardInventory(prev => {
+      const next = { ...prev };
+      missing.forEach(c => {
+        if (next[c.id]?.subs) return;
+        next[c.id] = { count: 0, si: 0, ...next[c.id], subs: rollSubs(c.rarity) };
+      });
+      return next;
+    });
+  }, [collection, cardInventory]);
+
   // NO auto-income — coins come from kills only
   // Add killCount to useDebouncedSave:
   useDebouncedSave({
     pullCurrency, coins, collection, cardInventory,
     clickPower, cps, multiplier, totalEarned, upgradeCost,
-    deck, pity4, pity5, killCount,
+    deck, pity4, pity5, killCount, stage,
   });
 
   useEffect(() => {
@@ -80,13 +100,13 @@ export default function App() {
         localStorage.setItem(SAVE_KEY, JSON.stringify({
           pullCurrency, coins, collection, cardInventory,
           clickPower, cps, multiplier, totalEarned, upgradeCost,
-          deck, pity4, pity5, killCount,
+          deck, pity4, pity5, killCount, stage,
         }));
       } catch {}
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [pullCurrency, coins, collection, cardInventory, clickPower, cps, multiplier, totalEarned, upgradeCost, deck, pity4, pity5, killCount]);
+  }, [pullCurrency, coins, collection, cardInventory, clickPower, cps, multiplier, totalEarned, upgradeCost, deck, pity4, pity5, killCount, stage]);
 
   const buyUpgrade = () => {
     if (coins < upgradeCost) return;
@@ -100,7 +120,7 @@ export default function App() {
   const common   = { navigate, pullCurrency, setPullCurrency, coins, setCoins, collection, setCollection };
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
-  if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} />;
+  if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} />;
   if (screen === 'settings') return <SettingsScreen navigate={navigate} />;
 
   if (screen === 'gacha' || screen === 'gamble') return (
@@ -145,6 +165,8 @@ export default function App() {
       killCount={killCount}
       setKillCount={setKillCount}
       setCardInventory={setCardInventory}
+      stage={stage}
+      setStage={setStage}
     />
   );
 

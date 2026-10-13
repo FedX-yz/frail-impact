@@ -19,13 +19,13 @@ export const CHARACTERS = [
     stats: { hp: 1400, atk: 160, def: 80 },
     skill: {
       name: 'Rock Shard',
-      description: 'Launches a rock at one enemy for 3× click DMG.',
+      description: 'Every click also sends rock shards into enemies near the target for 50% click DMG.',
       effect: 'rock_shard',
       cooldown: 4,
     },
     ult: {
       name: 'Tectonic Wrath',
-      description: 'Summons a rock spire that deals 400% ATK to all enemies.',
+      description: 'Rock spires hit every enemy for 1000% click DMG.',
       effect: 'tectonic_wrath',
       cooldown: 6,
     },
@@ -53,13 +53,13 @@ export const CHARACTERS = [
     stats: { hp: 1200, atk: 200, def: 50 },
     skill: {
       name: 'Quantum Burst',
-      description: 'Deals 2× click DMG to all enemies.',
+      description: 'Every 2.5s a quantum pulse at your cursor deals 150% click DMG around it.',
       effect: 'quantum_burst',
       cooldown: 5,
     },
     ult: {
       name: 'Black Hole',
-      description: 'Tears open a singularity. Pulls all enemies in and deals 600% ATK.',
+      description: 'Pulls every enemy into the centre, stuns them for 3s and deals 700% click DMG.',
       effect: 'black_hole',
       cooldown: 8,
     },
@@ -87,14 +87,14 @@ export const CHARACTERS = [
     stats: { hp: 1200, atk: 200, def: 50 },
     skill: {
       name: 'Swag Strike',
-      description: 'Deals 3× click DMG to all enemies.',
+      description: 'Click empty space to fire a homing shot at the nearest enemy for 100% click DMG — hit from afar.',
       effect: 'swag_strike',
       cooldown: 4,
     },
     ult: {
       name: 'Idk',
-      description: 'type shi',
-      effect: 'black_hole',
+      description: 'SWAG MODE for 10s: 2.5× click DMG and 6 automatic clicks per second.',
+      effect: 'swag_mode',
       cooldown: 8,
     },
     passive: {
@@ -121,13 +121,13 @@ export const CHARACTERS = [
     stats: { hp: 1350, atk: 140, def: 100 },
     skill: {
       name: 'Frost Bolt',
-      description: 'Deals 2× click DMG to one enemy and freezes it for 2s.',
+      description: 'Clicks have a 15% chance to freeze an enemy for 2s. Frozen enemies take +30% DMG.',
       effect: 'frost_bolt',
       cooldown: 4,
     },
     ult: {
       name: 'Permafrost',
-      description: 'Freezes all enemies 4s and deals 250% ATK.',
+      description: 'Stops time for 6s — every attack is cancelled — and deals 300% click DMG to all enemies.',
       effect: 'permafrost',
       cooldown: 5,
     },
@@ -155,21 +155,21 @@ export const CHARACTERS = [
     stats: { hp: 1600, atk: 120, def: 90 },
     skill: {
       name: 'Healing Tide',
-      description: 'Deals 1× click DMG to one enemy and restores 15 HP.',
+      description: 'Clicks heal you for 1 HP + 2% of the damage dealt (up to 6 per click).',
       effect: 'healing_tide',
       cooldown: 5,
     },
     ult: {
       name: 'Tidal Surge',
-      description: 'Deals 350% ATK to all enemies and drops a bonus coin pile.',
+      description: 'Deals 600% click DMG to all enemies, fully heals you and drops a pile of coins.',
       effect: 'tidal_surge',
       cooldown: 7,
     },
     passive: {
       name: 'Hydro Blessing',
-      description: 'Restores 30 HP per second passively.',
+      description: 'Regenerate 3 HP per second.',
       effect: 'hp_regen',
-      value: 30,
+      value: 3,
     },
   },
 
@@ -189,13 +189,13 @@ export const CHARACTERS = [
     stats: { hp: 1300, atk: 170, def: 70 },
     skill: {
       name: 'Reality Slice',
-      description: 'Deals 5× click DMG to the highest HP enemy.',
+      description: '+15% crit rate and +100% crit DMG.',
       effect: 'reality_slice',
       cooldown: 6,
     },
     ult: {
       name: 'Reality Break',
-      description: 'Ignores all enemy DEF and deals 500% ATK.',
+      description: 'Stops time for 3s, hits the strongest enemy for 2000% click DMG and executes non-bosses under 20% HP.',
       effect: 'reality_break',
       cooldown: 7,
     },
@@ -224,13 +224,13 @@ export const CHARACTERS = [
     stats: { hp: 9999, atk: 999, def: 999 },
     skill: {
       name: 'Devour',
-      description: 'Deals 2× click DMG to all enemies. Heals HP equal to damage dealt.',
+      description: "Clicks also bite off 4% of the target's current HP and heal you for 2 HP.",
       effect: 'devour',
       cooldown: 3,
     },
     ult: {
       name: 'HOX',
-      description: 'eats everyone',
+      description: "Eats every non-boss enemy, bites 25% of the boss's max HP and fully heals you.",
       effect: 'hox',
       cooldown: 60,
     },

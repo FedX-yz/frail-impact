@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { playClose } from '../utils/sfx';
+import { upgradeSubs, formatSub } from '../combat/sets';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -100,7 +101,9 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
     
     setCollection(prev => {
       const cur = prev[card.id] ?? { count: 0, si: 0 };
-      return { ...prev, [card.id]: { ...cur, si: (cur.si ?? 0) + 1 } };
+      // 3★/4★: each fusion also upgrades one sub-stat
+      const subs = card.rarity <= 4 ? upgradeSubs(cur.subs, card.rarity) : cur.subs;
+      return { ...prev, [card.id]: { ...cur, si: (cur.si ?? 0) + 1, ...(subs ? { subs } : {}) } };
     });
     
     showToast(`${card.name} → ${SI_BONUSES[si + 1].label}`, RARITY_COLOR[card.rarity]);
@@ -231,7 +234,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
               <div style={{ color: '#445', fontSize: 11, marginBottom: 14, letterSpacing: 1 }}>
                 FUSE 1 DUPLICATE TO RAISE SUPERIMPOSITION (S1→S5). EACH LEVEL BOOSTS ATK.
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 14, alignContent: 'start' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(190px, 44vw), 1fr))', gap: 14, alignContent: 'start' }}>
                 {ownedCards.map(card => {
                   const entry     = collection[card.id] ?? { count: 0, si: 0 };
                   const count     = getCardCounts(card.id);
@@ -274,7 +277,14 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
                         </div>
                         {nextBonus && (
                           <div style={{ marginTop: 3, color: '#334' }}>
-                            → S{si + 2}: ATK {Math.round(card.stats.atk * nextBonus.atkMult)}
+                            → S{si + 2}: ATK {Math.round(card.stats.atk * nextBonus.atkMult)}{card.rarity <= 4 ? ' + a sub-stat upgrade' : ''}
+                          </div>
+                        )}
+                        {(entry.subs ?? []).length > 0 && (
+                          <div style={{ marginTop: 5, borderTop: '1px solid #1a2a40', paddingTop: 4 }}>
+                            {entry.subs.map((sb, i) => (
+                              <div key={i} style={{ color: '#88aaff' }}>{formatSub(sb)}{sb.ups ? <span style={{ color: '#f0c040' }}> {'▲'.repeat(sb.ups)}</span> : null}</div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -361,10 +371,10 @@ function SiPips({ si, color, glow = false }) {
 }
 
 // ─── Static styles ────────────────────────────────────────────────────────────
-const ROOT       = { width: '100%', height: '100vh', background: '#0d1220', display: 'flex', flexDirection: 'column', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none', overflow: 'hidden' };
+const ROOT       = { width: '100%', height: '100dvh', background: '#0d1220', display: 'flex', flexDirection: 'column', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none', overflow: 'hidden' };
 const TOP_BAR    = { display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', background: '#090e1a', borderBottom: '2px solid #ff8c00', flexShrink: 0 };
 const COIN_BADGE = { display: 'flex', alignItems: 'center', gap: 6, background: '#0f1420', border: '2px solid #cc8800', borderRadius: 20, padding: '4px 14px 4px 8px' };
-const GRID       = { flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14, alignContent: 'start' };
+const GRID       = { flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 44vw), 1fr))', gap: 12, alignContent: 'start' };
 const TOAST_BOX  = { position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', padding: '10px 28px', borderRadius: 8, background: '#090e1a', border: '2px solid', fontWeight: 700, fontSize: 15, zIndex: 999, pointerEvents: 'none', animation: 'cs-fadeUp 0.22s ease-out' };
 const TAB_BTN    = (active) => ({ flex: 1, padding: '12px 0', cursor: 'pointer', border: 'none', background: active ? '#141f35' : 'transparent', color: active ? '#ff8c00' : '#445', fontWeight: 700, fontSize: 15, letterSpacing: 1, borderBottom: active ? '3px solid #ff8c00' : '3px solid transparent', transition: 'all 0.15s' });
 const IMG_WRAP   = (color, size) => ({ width: size, height: size, borderRadius: 6, overflow: 'hidden', border: `2px solid ${color}`, background: '#0a1020', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 });

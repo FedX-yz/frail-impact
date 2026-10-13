@@ -715,7 +715,7 @@ zIndex: 10,
             {summaryBatch.length + (s5CoinsEarned > 0 ? 1 : 0)} reward{summaryBatch.length + (s5CoinsEarned > 0 ? 1 : 0) !== 1 ? 's' : ''}
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10, width:'100%', maxWidth:680 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(min(110px, 30%), 1fr))', gap:10, width:'100%', maxWidth:680 }}>
             {summaryBatch.map((c, i) => {
               const isHigh = isHighRarity(c);
               return (
@@ -842,7 +842,7 @@ zIndex: 10,
               <div key={tag} style={{ background:'rgba(240,192,64,0.07)', border:'1px solid rgba(240,192,64,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:8 }}>
                 <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{tag}: {a.name}</div>
                 <div style={{ color:'#aaa', fontSize:12 }}>{a.description}</div>
-                {a.cooldown && <div style={{ color:'#556', fontSize:11, marginTop:4 }}>CD: {a.cooldown}s</div>}
+                <div style={{ color:'#556', fontSize:11, marginTop:4 }}>{tag.includes('Ult') ? 'Unlocks at LV50 · charges from damage' : 'Unlocks at LV20 · always on'}</div>
               </div>
             ))}
 

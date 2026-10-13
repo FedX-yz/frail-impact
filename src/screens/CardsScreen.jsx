@@ -1,5 +1,8 @@
 import { useState, useMemo, memo, useCallback, useTransition, useRef } from 'react';
 import { playClose } from '../utils/sfx';
+import { CHARACTERS } from '../data/characters';
+import { setOfCard, formatSub } from '../combat/sets';
+import useIsMobile from '../hooks/useIsMobile';
 
 const RARITY_COLOR = { 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' };
 const RARITY_LABEL = { 6:'6★', 5:'5★', 4:'4★', 3:'3★' };
@@ -54,15 +57,15 @@ const CardTile = memo(({ card, isSelected, count, onSelect }) => {
          prev.count === next.count;
 });
 
-const FastVirtualGrid = memo(({ cards, counts, selected, onSelect }) => {
+const FastVirtualGrid = memo(({ cards, counts, selected, onSelect, cols = 5 }) => {
   const scrollRef = useRef(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
   const rafRef = useRef(null);
 
   const GAP = 10;
   const PADDING = 12;
-  const CARD_HEIGHT = 160;
-  const COLS = 5;
+  const CARD_HEIGHT = cols <= 3 ? 140 : 160;
+  const COLS = cols;
 
   const totalRows = Math.ceil(cards.length / COLS);
   const totalHeight = totalRows * CARD_HEIGHT + (totalRows - 1) * GAP;
@@ -84,7 +87,7 @@ const FastVirtualGrid = memo(({ cards, counts, selected, onSelect }) => {
       
       setVisibleRange({ start, end });
     });
-  }, [cards.length, totalRows]);
+  }, [cards.length, totalRows, COLS, CARD_HEIGHT]);
 
   const visibleCards = useMemo(() => {
     return cards.slice(visibleRange.start, visibleRange.end);
@@ -150,38 +153,30 @@ const FastVirtualGrid = memo(({ cards, counts, selected, onSelect }) => {
 }, (prev, next) => {
   return prev.cards === next.cards && 
          prev.selected?.id === next.selected?.id && 
-         prev.counts === next.counts;
+         prev.counts === next.counts &&
+         prev.cols === next.cols;
 });
 
-export default function CardsScreen({ navigate, collection }) {
+export default function CardsScreen({ navigate, collection, cardInventory = {} }) {
+  const { mobile } = useIsMobile();
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
   const [showArt, setShowArt] = useState(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
+  // Copies from the gacha AND the shop
   const counts = useMemo(() => {
     const c = {};
     collection.forEach(card => { c[card.id] = (c[card.id] || 0) + 1; });
+    Object.entries(cardInventory).forEach(([id, e]) => { if (e.count) c[id] = (c[id] || 0) + e.count; });
     return c;
-  }, [collection]);
+  }, [collection, cardInventory]);
 
-  const unique = useMemo(() => {
-    const seen = new Set();
-    return collection
-      .slice()
-      .sort((a, b) => b.rarity - a.rarity)
-      .filter(c => {
-        // Debug: check for rarity mismatches
-        const id = c.id;
-        if (seen.has(id)) return false;
-        seen.add(id);
-        // Force rarity to be a number
-        if (typeof c.rarity !== 'number') {
-          c.rarity = parseInt(c.rarity, 10);
-        }
-        return true;
-      });
-  }, [collection]);
+  // Current card definitions (not the copies saved at pull time)
+  const unique = useMemo(
+    () => CHARACTERS.filter(c => counts[c.id] > 0).sort((a, b) => b.rarity - a.rarity),
+    [counts],
+  );
 
   const display = useMemo(
     () => filter === 'all' ? unique : unique.filter(c => {
@@ -198,7 +193,7 @@ export default function CardsScreen({ navigate, collection }) {
   }, []);
 
   return (
-    <div style={{ width:'100%', height:'100vh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#eee' }}>
+    <div style={{ width:'100%', height:"100dvh", background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#eee' }}>
       <style>{`
         img { -webkit-user-drag:none; user-select:none; -webkit-touch-callout: none; }
         body { -webkit-font-smoothing: antialiased; }
@@ -208,7 +203,7 @@ export default function CardsScreen({ navigate, collection }) {
       <div style={{ display:'flex', alignItems:'center', padding:'10px 16px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0, gap:12 }}>
         <button onClick={() => { playClose(); navigate('main'); }} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
         <span style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2 }}>CODEX</span>
-        <span style={{ color:'#445', fontSize:12 }}>{collection.length} total · {unique.length} unique</span>
+        {!mobile && <span style={{ color:'#445', fontSize:12 }}>{Object.values(counts).reduce((a, b) => a + b, 0)} total · {unique.length} unique</span>}
         <div style={{ flex:1 }} />
         <button onClick={() => navigate('gacha')} style={{ background:'#1a1000', border:'2px solid #f0c040', color:'#f0c040', fontSize:13, padding:'6px 18px', borderRadius:6, cursor:'pointer', fontWeight:700 }}>
           ✨ PULL
@@ -239,16 +234,23 @@ export default function CardsScreen({ navigate, collection }) {
             counts={counts}
             selected={selected}
             onSelect={handleCardSelect}
+            cols={mobile ? 3 : 5}
           />
         </div>
 
-        {/* Detail panel */}
-        <div style={{ width:260, flexShrink:0, borderLeft:'1px solid #2a2a3a', padding:16, overflowY:'auto', background:'#141928' }}>
+        {/* Detail panel — side column on PC, bottom sheet on phones */}
+        {mobile && selected && <div onClick={() => setSelected(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40 }} />}
+        <div style={mobile
+          ? { display: selected ? 'block' : 'none', position:'fixed', left:0, right:0, bottom:0, maxHeight:'78dvh', zIndex:41, borderTop:'2px solid #ff8c00', borderRadius:'14px 14px 0 0', padding:16, overflowY:'auto', background:'#141928' }
+          : { width:260, flexShrink:0, borderLeft:'1px solid #2a2a3a', padding:16, overflowY:'auto', background:'#141928' }}>
+          {mobile && selected && (
+            <button onClick={() => setSelected(null)} style={{ float:'right', background:'none', border:'1px solid #445', color:'#aaa', borderRadius:6, padding:'2px 10px', fontSize:16 }}>×</button>
+          )}
           {selected ? (
             <>
               <div
                 onClick={() => { if (selected.cardArt) setShowArt(selected); }}
-                style={{ width:'100%', aspectRatio:'1', borderRadius:12, overflow:'hidden', background:selected.color, marginBottom:6, display:'flex', alignItems:'center', justifyContent:'center', border:`3px solid ${RARITY_COLOR[selected.rarity]}`, cursor: selected.cardArt ? 'zoom-in' : 'default' }}
+                style={{ width: mobile ? '55%' : '100%', margin: mobile ? '0 auto 6px' : undefined, aspectRatio:'1', borderRadius:12, overflow:'hidden', background:selected.color, marginBottom:6, display:'flex', alignItems:'center', justifyContent:'center', border:`3px solid ${RARITY_COLOR[selected.rarity]}`, cursor: selected.cardArt ? 'zoom-in' : 'default' }}
               >
                 <CardImage card={selected} size={56} />
               </div>
@@ -278,7 +280,7 @@ export default function CardsScreen({ navigate, collection }) {
                 <div key={tag} style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
                   <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{a.name} <span style={{ color:'#776', fontWeight:400, fontSize:11 }}>{tag}</span></div>
                   <div style={{ color:'#aaa', fontSize:12 }}>{a.description}</div>
-                  <div style={{ color:'#556', fontSize:11, marginTop:4 }}>CD: {a.cooldown}s</div>
+                  <div style={{ color:'#556', fontSize:11, marginTop:4 }}>{tag.startsWith('⚡') ? 'Charges from damage you deal · press E' : 'Always on once unlocked'}</div>
                 </div>
               ))}
 
@@ -289,7 +291,30 @@ export default function CardsScreen({ navigate, collection }) {
                 </div>
               )}
 
-              {!selected.skill && !selected.ult && selected.rarity < 5 && (
+              {(() => {
+                const set = setOfCard(selected.id);
+                const subs = cardInventory[selected.id]?.subs ?? [];
+                if (!set && !subs.length) return null;
+                return (
+                  <div style={{ background:'#0a1020', border:`1px solid ${set?.color ?? '#1a2a40'}66`, borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
+                    {set && <>
+                      <div style={{ color:set.color, fontWeight:700, marginBottom:3 }}>◆ Set: {set.name}</div>
+                      <div style={{ color:'#aaa', fontSize:12 }}>{set.desc}</div>
+                      <div style={{ color:'#667', fontSize:11, marginTop:3 }}>
+                        {set.members.map(id => CHARACTERS.find(c => c.id === id)?.name).join(' · ')}
+                      </div>
+                    </>}
+                    {subs.length > 0 && (
+                      <div style={{ marginTop: set ? 8 : 0 }}>
+                        <div style={{ color:'#88aaff', fontSize:11, marginBottom:2 }}>SUB-STATS</div>
+                        {subs.map((sb, i) => <div key={i} style={{ color:'#ddd', fontSize:12 }}>{formatSub(sb)}{sb.ups ? <span style={{ color:'#f0c040' }}> {'▲'.repeat(sb.ups)}</span> : null}</div>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {!selected.skill && !selected.ult && selected.rarity < 5 && !setOfCard(selected.id) && (
                 <div style={{ color:'#445', fontSize:12, textAlign:'center', marginTop:8 }}>no abilities — stat support only</div>
               )}
 
