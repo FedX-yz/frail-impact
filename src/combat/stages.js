@@ -31,9 +31,10 @@ export function makeEndlessStage(n) {
     bossCooldownMult: Math.max(0.6, 1 - (n - 1) * 0.05),
 
     hpScale: Math.pow(BAL.HP_GROWTH, n - 1),
-    dmgScale: 1 + (n - 1) * BAL.DMG_GROWTH,
+    dmgScale: Math.pow(BAL.DMG_GROWTH, n - 1),
     coinScale: Math.pow(BAL.COIN_GROWTH, n - 1),
+    gemScale: 1 + BAL.GEM_GROWTH * (n - 1),   // boss/treasure gems grow so later stages stay worth it
 
-    clearReward: { coins: 150 * n, gems: 1 },
+    clearReward: { coins: 150 * n, gems: Math.round(1 + BAL.GEM_GROWTH * 2 * (n - 1)) },
   };
 }

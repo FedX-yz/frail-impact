@@ -411,7 +411,7 @@ background: 'rgba(0,0,0,0.55)',
 zIndex: 10,
     }}>
       <button
-        onClick={() => { playClose(); navigate('main'); }}
+        onPointerDown={playClose} onClick={() => navigate('main')}
         style={{
           background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
           border: '1px solid rgba(255,255,255,0.18)',

@@ -20,16 +20,18 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   return dist(px, py, x1 + t * dx, y1 + t * dy);
 }
 
-export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage, callbacks = {} }) {
+export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeEndlessStage, callbacks = {} }) {
+  const firstStage = makeStage(stageNum);
   const s = {
     W: 0, H: 0, k: 1, time: 0,
     stats,
-    stageNum, stage: makeStage(stageNum),
-    phase: 'fight', phaseT: 0, kills: 0,
+    stageNum, stage: firstStage,
+    phase: 'fight', phaseT: 0, kills: Math.min(kills, firstStage.killTarget),
     banner: { text: `STAGE ${stageNum}`, sub: 'defeat enemies to summon the boss', t: 2 },
     enemies: [], attacks: [], shots: [], effects: [], floaters: [], weakPts: [],
     player: { hp: stats.maxHp, maxHp: stats.maxHp, pos: null, invuln: 0, hitT: 0 },
-    ult: { charge: 0, active: null },
+    ult: { charge: 0, active: null, cd: 0, cdMax: 0 },
+    dev: { god: false, timeScale: 1 },   // sandbox menu switches
     timeStop: 0, frenzy: 0, shake: 0,
     clickCount: 0,
     timers: { basic: 0.3, elite: 4, horde: 8, treasure: BAL.TREASURE_EVERY, auto: BAL.AUTO_INTERVAL, pulse: 0, weak: 0.7 },
@@ -78,7 +80,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     const speed = type.speedRange ? rand(...type.speedRange) : (type.speed ?? 0);
     const tierHp = type.tier === 'boss' ? 1 : speedHpMult(speed);
     const hpScale = type.tier === 'treasure' ? Math.sqrt(s.stage.hpScale) : s.stage.hpScale;
-    const hp = Math.max(1, Math.round(type.hp * hpScale * tierHp));
+    const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp));
     const p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * 0.62, y: s.H * 0.42 } : randomPoint());
     const e = {
       id: uid++, typeId, type, tier: type.tier, name: type.name, img: type.img,
@@ -117,7 +119,10 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
       for (let i = 1; i <= t.segments; i++) {
         parts.push(spawnEnemy(t.segmentType, { pos: { x: start.x + i * K(t.spacing) * 0.6, y: start.y }, role: 'seg', group, segIndex: i }));
       }
-      parts.forEach(p => { p.groupType = typeId; });
+      // chain = which worm a part belongs to; killing a middle part splits
+      // the chain in two, like Terraria's Eater of Worlds
+      const chain = uid++;
+      parts.forEach(p => { p.groupType = typeId; p.chain = chain; });
     } else if (t.kind === 'hydra') {
       const cx = s.W * 0.62, cy = s.H * 0.44;
       for (let i = 0; i < t.heads; i++) {
@@ -209,7 +214,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     } else {
       // follow the part in front of it
       const leader = s.enemies
-        .filter(o => o.group === e.group && o.segIndex < e.segIndex)
+        .filter(o => o.chain === e.chain && o.segIndex < e.segIndex)
         .reduce((a, b) => (!a || b.segIndex > a.segIndex ? b : a), null);
       if (!leader) return;
       const spacing = K(ENEMY_TYPES[e.groupType]?.spacing ?? 40);
@@ -252,7 +257,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
       id: uid++, owner: owner.id, kind,
       phase: 'wait', delay: opts.delay ?? 0, t: 0,
       tele: BAL.TELEGRAPH * s.stats.telegraphMult * (opts.teleMult ?? 1),
-      dmg: Math.round((ATTACK_DMG[opts.dmgKey ?? kind] ?? 10) * s.stage.dmgScale),
+      dmg: Math.round((ATTACK_DMG[opts.dmgKey ?? kind] ?? 10) * BAL.ENEMY_DMG_MULT * s.stage.dmgScale),
       opts, hitDone: false,
     };
     owner.busy++;
@@ -375,7 +380,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   // ── Player getting hit ──────────────────────────────────────────────────
   function hitPlayer(raw) {
     const pl = s.player;
-    if (pl.invuln > 0 || s.phase === 'defeat' || s.phase === 'clear') return;
+    if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return;
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction)));
     pl.hp = Math.max(0, pl.hp - dmg);
     pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; s.shake = 0.3;
@@ -461,7 +466,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     if (silent) return;
     const t = e.type;
     const coins = Math.round((t.coin ?? 0) * s.stage.coinScale * s.stats.coinMult);
-    const gems  = t.gems ?? 0;
+    const gems  = t.gems ? Math.round(t.gems * s.stage.gemScale) : 0;
     if (coins) floater(`+${fmt(coins)}`, e.x, e.y + K(14), '#f0c040', false, 'coin');
     if (gems)  floater(`+${gems}`, e.x, e.y + K(30), '#7aa2ff', false, 'gem');
     cb('onReward', { coins, gems, xp: t.xp ?? BAL.XP[e.tier] ?? 0, kill: e.tier !== 'treasure' && !e.group });
@@ -470,21 +475,16 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     if (e.group) {
       const left = s.enemies.filter(x => x.group === e.group).sort((a, b) => a.segIndex - b.segIndex);
       if (left.length) {
-        if (e.role === 'head' && e.type.kind === 'worm') {
-          // next segment grows a new head
-          const nh = left[0], ht = ENEMY_TYPES[nh.groupType];
-          nh.role = 'head'; nh.shape = null; nh.img = ht.img; nh.size = ht.size;
-          nh.angle = e.angle; nh.wiggle = e.wiggle;
-          floater('NEW HEAD!', nh.x, nh.y - K(40), '#ff4444', true);
-        }
+        if (e.move === 'worm') splitWorm(e);
         return;
       }
       const gt = ENEMY_TYPES[e.groupType], r = gt?.groupReward;
       if (r) {
         const c = Math.round(r.coin * s.stage.coinScale * s.stats.coinMult);
+        const g = Math.round((r.gems ?? 0) * s.stage.gemScale);
         floater(`+${fmt(c)}`, e.x, e.y + K(14), '#f0c040', true, 'coin');
-        if (r.gems) floater(`+${r.gems}`, e.x, e.y + K(34), '#7aa2ff', true, 'gem');
-        cb('onReward', { coins: c, gems: r.gems ?? 0, xp: r.xp ?? 0, kill: true });
+        if (g) floater(`+${g}`, e.x, e.y + K(34), '#7aa2ff', true, 'gem');
+        cb('onReward', { coins: c, gems: g, xp: r.xp ?? 0, kill: true });
       }
       if (e.tier === 'boss') stageClear();
       return;
@@ -494,7 +494,31 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     if (e.tier === 'boss') { stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
+      cb('onProgress', { stage: s.stageNum, kills: s.kills });
       if (s.kills >= s.stage.killTarget) startBossIntro();
+    }
+  }
+
+  // Worm part died. Head → the next part grows a head. Middle → everything
+  // behind it breaks off into a separate worm with its own head.
+  function splitWorm(dead) {
+    const behind = s.enemies.filter(x => x.chain === dead.chain && x.segIndex > dead.segIndex)
+      .sort((a, b) => a.segIndex - b.segIndex);
+    if (!behind.length) return;
+    const makeHead = (nh, angle) => {
+      const ht = ENEMY_TYPES[nh.groupType];
+      nh.role = 'head'; nh.shape = null; nh.img = ht.img; nh.size = ht.size;
+      nh.angle = angle; nh.wiggle = rand(0, 6);
+    };
+    if (dead.role === 'head') {
+      makeHead(behind[0], dead.angle);
+      floater('NEW HEAD!', behind[0].x, behind[0].y - K(40), '#ff4444', true);
+    } else {
+      const chain = uid++;
+      behind.forEach(x => { x.chain = chain; });
+      // the new worm peels off sideways
+      makeHead(behind[0], dead.angle + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2);
+      floater('SPLIT!', behind[0].x, behind[0].y - K(40), '#ff4444', true);
     }
   }
 
@@ -537,10 +561,11 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     } else if (sk.type === 'frost' && e.hp > 0 && Math.random() < sk.chance) {
       e.frozen = sk.dur; floater('❄ FROZEN', e.x, e.y - K(36), '#67e8f9');
     } else if (sk.type === 'lifesteal' && !auto) {
-      heal(Math.min(sk.max, sk.flat + dmg * sk.pct));
+      const mx = s.player.maxHp;
+      heal(Math.min(sk.maxPctHp * mx, sk.pctHp * mx + dmg * sk.pct));
     } else if (sk.type === 'devour' && e.hp > 0) {
       damageEnemy(e, e.hp * sk.pct, { color: '#ff3355', label: '👁' });
-      if (!auto) heal(sk.heal);
+      if (!auto) heal(sk.healPctHp * s.player.maxHp);
     }
   }
 
@@ -564,8 +589,8 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     // Gun skill: clicking empty space fires a homing shot
     const sk = s.stats.skill;
     if (sk?.type === 'gun') {
-      const target = nearestEnemy(x, y);
-      if (target) s.shots.push({ id: uid++, x, y, target: target.id, speed: K(900), mult: sk.pct });
+      const targets = [...s.enemies].sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
+      targets.forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult: sk.pct }));
     }
   }
 
@@ -588,8 +613,9 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   // ── Ult ─────────────────────────────────────────────────────────────────
   function activateUlt() {
     const u = s.stats.ult;
-    if (!u || s.ult.charge < 1 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
+    if (!u || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
     s.ult.charge = 0;
+    s.ult.cd = s.ult.cdMax = u.cooldown ?? 30;
     const base = s.stats.clickDmg;
     const all = [...s.enemies];
     const hitAll = (mult, color, label) => all.forEach(e => damageEnemy(e, base * mult, { color, label, charge: 0 }));
@@ -647,7 +673,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null;
     const r = s.stage.clearReward;
-    s.banner = { text: `STAGE ${s.stageNum} CLEAR!`, sub: `+${fmt(r.coins)} coins · +${r.gems} gem`, t: 3, good: true };
+    s.banner = { text: `STAGE ${s.stageNum} CLEAR!`, sub: `+${fmt(r.coins)} coins · +${r.gems} gem${r.gems === 1 ? '' : 's'}`, t: 3, good: true };
     cb('onReward', { coins: r.coins, gems: r.gems, xp: 0, kill: false });
   }
   function startDefeat() {
@@ -664,6 +690,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     s.timers.basic = 0.3; s.timers.elite = 4; s.timers.horde = 8;
     s.banner = { text: `STAGE ${n}`, sub: 'defeat enemies to summon the boss', t: 2 };
     for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
+    cb('onProgress', { stage: n, kills: 0 });
   }
 
   function updatePhase(dt) {
@@ -682,9 +709,10 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
   // ── Main tick ───────────────────────────────────────────────────────────
   function update(rawDt) {
     if (!s.W) return;
-    const dt = Math.min(rawDt, 0.05);
+    const dt = Math.min(rawDt, 0.05) * s.dev.timeScale;
     s.time += dt;
     const pl = s.player;
+    s.ult.cd = Math.max(0, s.ult.cd - dt);
 
     pl.invuln = Math.max(0, pl.invuln - dt);
     pl.hitT   = Math.max(0, pl.hitT - dt);
@@ -765,7 +793,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
       if (e.frozen > 0) { e.frozen -= dt; continue; }
       // worm head bites your cursor
       if (e.move === 'worm' && e.role === 'head' && P && dist(P.x, P.y, e.x, e.y) <= e.size * s.k * 0.45) {
-        hitPlayer(Math.round(ATTACK_DMG.bite * s.stage.dmgScale));
+        hitPlayer(Math.round(ATTACK_DMG.bite * BAL.ENEMY_DMG_MULT * s.stage.dmgScale));
       }
       if (e.life != null) {
         e.life -= dt;
@@ -807,7 +835,11 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     const first = !s.W;
     s.W = W; s.H = H;
     s.k = clamp(Math.min(W, H) / 560, 0.55, 1.35);
-    if (first) for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
+    if (first) {
+      for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
+      if (s.kills >= s.stage.killTarget) startBossIntro();
+      else if (s.kills > 0) s.banner = { text: `STAGE ${s.stageNum}`, sub: `${s.kills}/${s.stage.killTarget} kills — keep going`, t: 1.6 };
+    }
   }
 
   function setStats(st) {
@@ -815,7 +847,7 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
     s.stats = st;
     s.player.maxHp = st.maxHp;
     s.player.hp = Math.round(st.maxHp * ratio);
-    if (!st.ult) { s.ult.charge = 0; }
+    if (!st.ult) { s.ult.charge = 0; s.ult.cd = 0; }
   }
 
   // Big text in the middle of the arena (level-ups etc.)
@@ -828,7 +860,26 @@ export function createBattle({ stageNum = 1, stats, makeStage = makeEndlessStage
 
   const setReserved = (r) => { s.reserved = r; };
 
-  return { state: s, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved };
+  // ── Sandbox / dev menu ──────────────────────────────────────────────────
+  const dev = {
+    spawn: (typeId, n = 1) => {
+      const t = ENEMY_TYPES[typeId];
+      if (!t) return;
+      if (t.tier === 'boss') { s.phase = 'boss'; spawnBoss(typeId); return; }
+      if (typeId === 'swarmling') { spawnHorde(); return; }
+      for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : spawnEnemy(typeId, { armed: true });
+    },
+    summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; startBossIntro(); },
+    killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
+    clearEnemies: () => { s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; if (s.phase === 'boss') s.phase = 'fight'; },
+    fillUlt: () => { s.ult.charge = 1; s.ult.cd = 0; },
+    heal: () => { s.player.hp = s.player.maxHp; },
+    setGod: (on) => { s.dev.god = !!on; },
+    setTimeScale: (x) => { s.dev.timeScale = x; },
+    gotoStage: (n) => loadStage(Math.max(1, Math.round(n))),
+  };
+
+  return { state: s, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

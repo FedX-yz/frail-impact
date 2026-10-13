@@ -2,7 +2,9 @@ import { useState, useMemo, memo, useCallback, useTransition, useRef } from 'rea
 import { playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
-import { setOfCard, formatSub } from '../combat/sets';
+import { setOfCard, formatSub, CARD_SETS } from '../combat/sets';
+import { SKILLS, ULTS, describeKit, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
+import { cardBattleStats } from '../combat/stats';
 import useIsMobile from '../hooks/useIsMobile';
 
 const RARITY_COLOR = { 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' };
@@ -182,12 +184,17 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
   );
 
   const display = useMemo(
-    () => filter === 'all' ? unique : unique.filter(c => {
+    () => (filter === 'all' || filter === 'sets') ? unique : unique.filter(c => {
       const rarity = parseInt(String(c.rarity), 10);
       return rarity === parseInt(filter, 10);
     }),
     [filter, unique]
   );
+  // "Sets" view: one section per set (with all 3 members, owned or not), then the rest
+  const setGroups = useMemo(() => filter !== 'sets' ? null : [
+    ...CARD_SETS.map(set => ({ set, cards: set.members.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean) })),
+    { set: null, cards: unique.filter(c => !setOfCard(c.id)) },
+  ], [filter, unique]);
 
   const handleCardSelect = useCallback((card) => {
     startTransition(() => {
@@ -204,7 +211,7 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
 
       {/* Top bar */}
       <div style={{ display:'flex', alignItems:'center', padding:'10px 16px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0, gap:12 }}>
-        <button onClick={() => { playClose(); navigate('main'); }} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
+        <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
         <span style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2 }}>CODEX</span>
         {!mobile && <span style={{ color:'#445', fontSize:12 }}>{Object.values(counts).reduce((a, b) => a + b, 0)} total · {unique.length} unique</span>}
         <div style={{ flex:1 }} />
@@ -219,8 +226,8 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
         <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
           {/* Filter bar */}
-          <div style={{ display:'flex', gap:8, padding:'10px 14px', borderBottom:'1px solid #2a2a3a', flexShrink:0 }}>
-            {[['all','ALL'],['6','6★'],['5','5★'],['4','4★'],['3','3★']].map(([val, label]) => (
+          <div style={{ display:'flex', gap:8, padding:'10px 14px', borderBottom:'1px solid #2a2a3a', flexShrink:0, flexWrap:'wrap' }}>
+            {[['all','ALL'],['6','6★'],['5','5★'],['4','4★'],['3','3★'],['sets','◆ SETS']].map(([val, label]) => (
               <button key={val} onClick={() => setFilter(val)} style={{
                 background: filter===val ? '#ff8c0022' : 'none',
                 border: `1px solid ${filter===val ? '#ff8c00' : '#334'}`,
@@ -232,13 +239,35 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
             ))}
           </div>
 
-          <FastVirtualGrid
-            cards={display}
-            counts={counts}
-            selected={selected}
-            onSelect={handleCardSelect}
-            cols={mobile ? 3 : 5}
-          />
+          {setGroups ? (
+            <div style={{ flex:1, overflowY:'auto', padding:12 }}>
+              {setGroups.filter(g => g.cards.length).map(({ set, cards }) => (
+                <div key={set?.id ?? 'rest'} style={{ marginBottom:16 }}>
+                  <div style={{ display:'flex', alignItems:'baseline', gap:8, flexWrap:'wrap', marginBottom:8, paddingBottom:4, borderBottom:`1px solid ${set ? set.color + '55' : '#2a3050'}` }}>
+                    <span style={{ color: set?.color ?? '#889', fontWeight:800, fontSize:14 }}>{set ? `◆ ${set.name}` : 'No set'}</span>
+                    {set && <span style={{ color:'#667', fontSize:11 }}>{cards.filter(c => counts[c.id] > 0).length}/3 owned</span>}
+                    {set && <span style={{ color:'#889', fontSize:12 }}>{set.desc}</span>}
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:`repeat(${mobile ? 3 : 5}, 1fr)`, gap:10 }}>
+                    {cards.map(card => (
+                      <div key={card.id} style={{ opacity: counts[card.id] > 0 ? 1 : 0.35, filter: counts[card.id] > 0 ? 'none' : 'grayscale(1)' }}
+                        title={counts[card.id] > 0 ? '' : 'not owned yet'}>
+                        <CardTile card={card} isSelected={selected?.id === card.id} count={counts[card.id] ?? 0} onSelect={handleCardSelect} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <FastVirtualGrid
+              cards={display}
+              counts={counts}
+              selected={selected}
+              onSelect={handleCardSelect}
+              cols={mobile ? 3 : 5}
+            />
+          )}
         </div>
 
         {/* Detail panel — side column on PC, bottom sheet on phones */}
@@ -279,13 +308,31 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
                 </div>
               )}
 
-              {[['✦ Skill · LV20', selected.skill], ['⚡ Ult · LV50', selected.ult]].filter(([, a]) => a).map(([tag, a]) => (
-                <div key={tag} style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
-                  <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{a.name} <span style={{ color:'#776', fontWeight:400, fontSize:11 }}>{tag}</span></div>
-                  <div style={{ color:'#aaa', fontSize:12 }}>{a.description}</div>
-                  <div style={{ color:'#556', fontSize:11, marginTop:4 }}>{tag.startsWith('⚡') ? 'Charges from damage you deal · press E' : 'Always on once unlocked'}</div>
-                </div>
-              ))}
+              {(() => {
+                // Your copy of the card: level and superimposition change the numbers
+                const e = cardInventory[selected.id] ?? {};
+                const si = Math.min(4, e.si ?? 0);
+                const bs = cardBattleStats(selected, e);
+                const changed = bs.atk !== selected.stats?.atk;
+                return (
+                  <>
+                    {changed && counts[selected.id] > 0 && (
+                      <div style={{ color:'#889', fontSize:11, textAlign:'center', marginTop:-6, marginBottom:10 }}>
+                        Yours{selected.rarity >= 5 ? ` (LV${e.level ?? 1}` : ' ('}{si > 0 ? `${selected.rarity >= 5 ? ', ' : ''}S${si + 1}` : ''}): ATK {bs.atk} · HP {bs.hp} · DEF {bs.def}
+                      </div>
+                    )}
+                    {[['✦ Skill · LV20', selected.skill, SKILLS[selected.skill?.effect]], ['⚡ Ult · LV50', selected.ult, ULTS[selected.ult?.effect]]].filter(([, a]) => a).map(([tag, a, kit]) => (
+                      <div key={tag} style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
+                        <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{a.name} <span style={{ color:'#776', fontWeight:400, fontSize:11 }}>{tag}{si > 0 ? ` · S${si + 1}` : ''}</span></div>
+                        <div style={{ color:'#aaa', fontSize:12 }}>{kit ? describeKit(kit, si) : a.description}</div>
+                        {tag.startsWith('⚡') && <div style={{ color:'#889', fontSize:11, marginTop:4 }}>Cooldown {Math.round((a.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si))}s · fills from damage you deal · press E</div>}
+                        {!tag.startsWith('⚡') && <div style={{ color:'#556', fontSize:11, marginTop:4 }}>Always on once unlocked</div>}
+                        {kit && si < 4 && <div style={{ color:'#7c6a2a', fontSize:11, marginTop:3 }}>Next S{si + 2}: {describeSiStep(kit, si)}{tag.startsWith('⚡') ? `, cooldown −${Math.round(ULT_CD_PER_SI * 100)}%` : ''}</div>}
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
 
               {selected.passive && (
                 <div style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>

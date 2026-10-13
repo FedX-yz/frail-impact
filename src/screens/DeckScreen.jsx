@@ -3,7 +3,8 @@ import { playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { CARD_SETS, setOfCard, formatSub } from '../combat/sets';
-import { siMult as siMultFor } from '../combat/stats';
+import { cardBattleStats } from '../combat/stats';
+import { BAL } from '../combat/balance';
 import useIsMobile from '../hooks/useIsMobile';
 
 const rc     = (r) => ({ 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' }[r] || '#888');
@@ -12,9 +13,11 @@ const rLabel = (r) => ({ 6:'6★', 5:'5★', 4:'4★', 3:'3★' }[r] || '?');
 const SLOT_KEYS  = ['main', 'sup0', 'sup1', 'sup2', 'sup3'];
 const SLOT_LABEL = { main:'Main Card (5★/6★ only)', sup0:'Support 1', sup1:'Support 2', sup2:'Support 3', sup3:'Support 4' };
 
-export default function DeckScreen({ navigate, collection, deck, setDeck, cardInventory }) {
+export default function DeckScreen({ navigate, collection, deck, setDeck, cardInventory, stats }) {
   const [activeSlot,  setActiveSlot]  = useState(null);
   const [filter,      setFilter]      = useState('all');
+  const [sortBy,      setSortBy]      = useState(() => { try { return localStorage.getItem('frail_deck_sort') || 'rarity'; } catch { return 'rarity'; } });
+  const chooseSort = (v) => { setSortBy(v); try { localStorage.setItem('frail_deck_sort', v); } catch { /* ignore */ } };
   const { mobile } = useIsMobile();
   
   const supports = deck?.supports || [null, null, null, null];
@@ -87,8 +90,13 @@ const pool = CHARACTERS
   .filter(c => filter === 'all' || c.rarity === Number(filter))
   .sort((a, b) => b.rarity - a.rarity);
 
-  const totalAtkBonus = Math.round([deck?.main, ...supports].filter(Boolean)
-    .reduce((s, c) => s + (c.stats?.atk ?? 0) * siMultFor(cardInventory?.[c.id]?.si ?? 0), 0));
+  // Group the picker by set: one section per set you own cards from, then the rest
+  const groups = sortBy === 'set'
+    ? [
+        ...CARD_SETS.map(set => ({ set, cards: pool.filter(c => set.members.includes(c.id)) })).filter(g => g.cards.length),
+        { set: null, cards: pool.filter(c => !setOfCard(c.id)) },
+      ].filter(g => g.cards.length)
+    : [{ set: null, cards: pool }];
 
   // Set progress: how many members of each set are in the support slots
   const supportIds = new Set(supports.filter(Boolean).map(c => c.id));
@@ -111,7 +119,7 @@ const pool = CHARACTERS
 
       {/* Top bar */}
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 18px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
-      <button onClick={() => { playClose(); navigate('main'); }} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
+      <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
         <div style={{ fontSize:18, fontWeight:700, color:'#ff8c00', letterSpacing:1 }}>DECK</div>
         {!mobile && <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★ · 3 of a set in supports = set bonus</div>}
         <div style={{ flex:1 }} />
@@ -132,9 +140,9 @@ const pool = CHARACTERS
   const isMain   = slotKey === 'main';
   const accent   = isMain ? '#f0c040' : '#5588ff';
   const si       = card ? (cardInventory[card.id]?.si ?? 0) : 0;
-  const siMult   = siMultFor(si);
-  const boostedAtk = card ? Math.round(card.stats?.atk * siMult) : 0;
-  
+  const bs       = card ? cardBattleStats(card, cardInventory[card.id]) : null;
+  const lvl      = card ? (cardInventory[card.id]?.level ?? 1) : 1;
+
   return (
     <div key={slotKey} className="slot-card"
       onClick={() => setActiveSlot(isActive ? null : slotKey)}
@@ -162,11 +170,18 @@ const pool = CHARACTERS
             <div style={{ color:rc(card.rarity), fontSize:13, fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               {rLabel(card.rarity)} {card.name}
             </div>
-            {card.stats && (
-              <div style={{ color:'rgba(255,255,255,0.35)', fontSize:11, marginTop:1 }}>
-                ATK {boostedAtk}{si > 0 && <span style={{ color:'#f0c040', marginLeft:4 }}>+{Math.round((boostedAtk - card.stats.atk))} (S{si + 1})</span>} · HP {card.stats.hp}
+            {bs && (isMain ? (
+              <div style={{ color:'rgba(255,255,255,0.45)', fontSize:11, marginTop:1 }}>
+                {card.rarity >= 5 && <span style={{ color:'#4ade80' }}>LV{lvl} </span>}
+                {si > 0 && <span style={{ color:'#f0c040' }}>S{si + 1} </span>}
+                ATK {bs.atk} · HP {bs.hp} · DEF {bs.def}
               </div>
-            )}
+            ) : (
+              <div style={{ color:'rgba(255,255,255,0.45)', fontSize:11, marginTop:1 }}>
+                {si > 0 && <span style={{ color:'#f0c040' }}>S{si + 1} </span>}
+                gives +{Math.round(bs.atk * BAL.SUPPORT_ATK)} ATK · +{Math.round(bs.hp * BAL.SUPPORT_HP)} HP · +{Math.round(bs.def * BAL.SUPPORT_DEF)} DEF
+              </div>
+            ))}
             {!isMain && (cardInventory[card.id]?.subs?.length > 0) && (
               <div style={{ color:'#88aaff', fontSize:10, marginTop:1 }}>{cardInventory[card.id].subs.map(formatSub).join(' · ')}</div>
             )}
@@ -206,19 +221,30 @@ const pool = CHARACTERS
             </div>
           )}
 
-          {/* Bonuses */}
-          {totalAtkBonus > 0 && (
-            <div style={{ background:'rgba(0,0,0,0.3)', border:'1px solid #2a3050', borderRadius:8, padding:'10px 12px', marginTop:4 }}>
-              <div style={{ color:'#445', fontSize:10, letterSpacing:2, marginBottom:6 }}>BONUSES</div>
-              {[deck?.main, ...supports].filter(Boolean).map((c, i) => c.passive && (
-                <div key={i} style={{ marginBottom:5 }}>
-                  <div style={{ color:rc(c.rarity), fontSize:11, fontWeight:700 }}>{c.name}</div>
-                  <div style={{ color:'rgba(255,255,255,0.4)', fontSize:11 }}>{c.passive.description}</div>
+          {/* Battle stats: exactly what you get in a fight */}
+          {stats && (
+            <div style={{ background:'rgba(0,0,0,0.3)', border:'1px solid #2a3050', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ color:'#445', fontSize:10, letterSpacing:2, marginBottom:6 }}>BATTLE STATS</div>
+              <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', columnGap:10, rowGap:2, fontSize:12, fontVariantNumeric:'tabular-nums' }}>
+                <span style={{ color:'#889' }}>ATK</span><span><b style={{ color:'#f0c040' }}>{stats.atk}</b> <span style={{ color:'#556', fontSize:11 }}>= damage per click</span></span>
+                <span style={{ color:'#889' }}>HP</span><span><b style={{ color:'#4ade80' }}>{stats.maxHp}</b></span>
+                <span style={{ color:'#889' }}>DEF</span><span><b style={{ color:'#88aaff' }}>{stats.def}</b> <span style={{ color:'#556', fontSize:11 }}>−{Math.round(stats.defReduction * 100)}% damage taken</span></span>
+                <span style={{ color:'#889' }}>Auto</span><span>{Math.round(stats.autoDps)}/s</span>
+                <span style={{ color:'#889' }}>Crit</span><span>{Math.round(stats.critRate * 100)}% · +{Math.round(stats.critDmg * 100)}% DMG</span>
+                {stats.ult && <><span style={{ color:'#889' }}>Ult CD</span><span>{Math.round(stats.ult.cooldown)}s</span></>}
+              </div>
+              <div style={{ color:'#556', fontSize:10, marginTop:6, lineHeight:1.4 }}>
+                Main card's stats + {Math.round(BAL.SUPPORT_ATK * 100)}% of supports' ATK and {Math.round(BAL.SUPPORT_HP * 100)}% of their HP/DEF
+                {stats.trainLevel > 0 && <>, Train +{Math.round(stats.trainLevel * BAL.TRAIN_ATK * 100)}% ATK</>}
+                {stats.parts.atkPct - stats.trainLevel * BAL.TRAIN_ATK > 0.001 && <>, sub-stats/sets +{Math.round((stats.parts.atkPct - stats.trainLevel * BAL.TRAIN_ATK) * 100)}% ATK</>}
+                {stats.parts.dmgMult > 1.001 && <>, passives ×{stats.parts.dmgMult.toFixed(2)}</>}.
+              </div>
+              {[deck?.main, ...supports].filter(Boolean).filter(c => c.passive).map((c, i) => (
+                <div key={i} style={{ marginTop:5 }}>
+                  <span style={{ color:rc(c.rarity), fontSize:11, fontWeight:700 }}>{c.passive.name}</span>
+                  <span style={{ color:'rgba(255,255,255,0.4)', fontSize:11 }}> — {c.passive.description}</span>
                 </div>
               ))}
-              <div style={{ color:'#556', fontSize:11, borderTop:'1px solid #2a3050', paddingTop:6, marginTop:4 }}>
-                Total ATK: <span style={{ color:'#f0c040' }}>+{totalAtkBonus}</span>
-              </div>
             </div>
           )}
 
@@ -251,6 +277,9 @@ const pool = CHARACTERS
                 {f === 'all' ? 'All' : `${f}★`}
               </button>
             ))}
+            <span style={{ width:1, height:20, background:'#2a3050', margin:'0 2px' }} />
+            <button className={`filter-btn${sortBy === 'rarity' ? ' on' : ''}`} onClick={() => chooseSort('rarity')}>★ Rarity</button>
+            <button className={`filter-btn${sortBy === 'set' ? ' on' : ''}`} onClick={() => chooseSort('set')}>◆ Sets</button>
             {activeSlot === 'main' && (
               <div style={{ color:'#f0c040', fontSize:11, marginLeft:4 }}>⚠ showing 5★/6★ only</div>
             )}
@@ -267,8 +296,17 @@ const pool = CHARACTERS
                 {activeSlot === 'main' ? 'No 5★/6★ cards yet' : `No ${filter}★ cards`}
               </div>
             ) : (
+              groups.map(({ set, cards }) => (
+              <div key={set?.id ?? 'rest'} style={{ marginBottom: 14 }}>
+                {sortBy === 'set' && (
+                  <div style={{ display:'flex', alignItems:'baseline', gap:8, flexWrap:'wrap', margin:'2px 2px 8px', borderBottom:`1px solid ${set ? set.color + '55' : '#2a3050'}`, paddingBottom:4 }}>
+                    <span style={{ color: set?.color ?? '#889', fontWeight:800, fontSize:13 }}>{set ? `◆ ${set.name}` : 'No set'}</span>
+                    {set && <span style={{ color:'#667', fontSize:11 }}>{set.members.filter(m => cardCounts[m] > 0).length}/3 owned · {set.members.filter(m => supportIds.has(m)).length}/3 equipped</span>}
+                    {set && <span style={{ color:'#556', fontSize:11 }}>{set.desc}</span>}
+                  </div>
+                )}
               <div style={{ display:'grid', gridTemplateColumns:`repeat(auto-fill,minmax(${mobile ? 92 : 108}px,1fr))`, gap: mobile ? 6 : 10 }}>
-                {pool.map(card => {
+                {cards.map(card => {
   const equipped   = alreadyEquipped(card);
   const isSelected = activeSlot && getSlotCard(activeSlot)?.id === card.id;
   const cantEquip  = activeSlot === 'main' && card.rarity < 5;
@@ -331,6 +369,8 @@ const pool = CHARACTERS
   );
 })}
               </div>
+              </div>
+              ))
             )}
           </div>
         </div>

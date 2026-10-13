@@ -54,8 +54,27 @@ Keep full-quality originals in `public/`. The build (see `vite.config.js`) makes
 the small WebP copies, 320px thumbnails for grids, 720p videos and lighter MP3s
 for the website. Your originals are never changed.
 
+### How your stats work
+
+Your battle stats come straight from the deck (`src/combat/stats.js`), and the
+Deck screen's **Battle Stats** box shows the result:
+
+- **ATK** = main card ATK + 50% of each support's ATK. Every click deals ATK; auto-attack deals 10% of it per second.
+- **HP** = main card HP + 25% of each support's HP.
+- **DEF** = main card DEF + 25% of each support's DEF. Damage taken is cut by DEF ÷ (DEF + 300).
+- Main card level: +2% ATK and +1% HP/DEF per level. Superimposition: up to +60% (3★/4★) or +75% (5★/6★) stats, and 5★/6★ kits get stronger (`si` in `kits.js`).
+- Train: +10% ATK per level.
+
+### Developer sandbox
+
+Tap the **SETTINGS** title 5 times (or open the site with `?dev`) to turn on
+developer mode. A **DEV** button then appears on the battle screen with a sandbox:
+give gems/coins/cards, set levels and superimposition, god mode, game speed,
+spawn any enemy or boss, jump to a stage, force the next gacha pull to be a 5★.
+It changes your real save, so use Reset Save in Settings to start clean.
+
 ### Debugging
 
 Open the live site with `?debug` at the end of the URL (or run `npm run dev`) and
 the battle is available in the browser console as `window.__battle`, e.g.
-`__battle.state.ult.charge = 1` to fill the ult.
+`__battle.dev.fillUlt()` to make the ult ready.

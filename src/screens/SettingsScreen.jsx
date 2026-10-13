@@ -4,9 +4,15 @@ import { playClose } from '../utils/sfx';
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
 
-export default function SettingsScreen({ navigate }) {
+export default function SettingsScreen({ navigate, devMode, toggleDev }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [scare,        setScare]        = useState(false);
+  // Hidden switch: tap the SETTINGS title 5 times to turn developer mode on/off
+  const [taps, setTaps] = useState(0);
+  const tapTitle = () => {
+    const n = taps + 1;
+    if (n >= 5) { toggleDev?.(); setTaps(0); } else setTaps(n);
+  };
 
   const handleReset = () => {
     if (!confirmReset) { setConfirmReset(true); return; }
@@ -102,11 +108,11 @@ export default function SettingsScreen({ navigate }) {
           ← back
         </button>
 
-        <span style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2 }}>SETTINGS</span>
+        <span onClick={tapTitle} style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2, userSelect:'none' }}>SETTINGS</span>
 
         {/* REAL BACK BUTTON (Top Right) */}
         <button 
-          onClick={() => { playClose(); navigate('main'); }} 
+          onPointerDown={playClose} onClick={() => navigate('main')} 
           style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}
         >
           ← back
@@ -116,6 +122,13 @@ export default function SettingsScreen({ navigate }) {
       <div style={{ flex:1, overflowY:'auto', padding:24 }}>
         <div style={{ maxWidth:480, display:'flex', flexDirection:'column', gap:14 }}>
           
+          {devMode && (
+            <div style={{ background:'#1a1036', border:'1px solid #7c3aed', borderRadius:8, padding:'10px 14px', color:'#e9d5ff', fontSize:13 }}>
+              🛠 <b>Developer mode is on.</b> Open the sandbox with the DEV button on the battle screen.
+              <button onClick={toggleDev} style={{ marginLeft:8, background:'none', border:'1px solid #a78bfa', color:'#c4b5fd', borderRadius:6, padding:'3px 10px', fontSize:12, cursor:'pointer' }}>turn off</button>
+            </div>
+          )}
+
           {/* Save Section */}
           <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>SAVE DATA</div>
           <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16 }}>

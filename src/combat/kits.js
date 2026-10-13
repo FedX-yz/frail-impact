@@ -1,42 +1,102 @@
 // 5★/6★ kits, keyed by the `effect` id in characters.js.
 //
 // Skills (unlock at LV20) are always-on upgrades to clicking.
-// Ults (unlock at LV50) charge up from damage you deal; press E or tap the orb.
+// Ults (unlock at LV50) charge up from damage you deal and have a cooldown
+// (the `cooldown` in characters.js, in seconds). Press E or tap the orb.
 // `charge` scales how much damage the ult needs (1 = normal).
+//
+// Superimposition (S2–S5) makes each kit stronger — see `si` on each entry:
+// every S level adds the `si` values once (S5 = base + 4× si).
 
 export const SKILL_UNLOCK = 20;
 export const ULT_UNLOCK   = 50;
 
 export const SKILLS = {
   rock_shard:    { type: 'splash',    radius: 110, pct: 0.5,
-                   desc: 'Every click also sends rock shards into enemies near the target for 50% click DMG.' },
+                   si: { radius: 18, pct: 0.12 },
+                   desc: 'Every click also sends rock shards into enemies near the target for {pct} click DMG ({radius} range).' },
   quantum_burst: { type: 'pulse',     interval: 2.5, radius: 120, pct: 1.5,
-                   desc: 'Every 2.5s a quantum pulse at your cursor deals 150% click DMG around it.' },
-  swag_strike:   { type: 'gun',       pct: 1.0,
-                   desc: 'Click empty space to fire a homing shot at the nearest enemy for 100% click DMG — hit from afar.' },
+                   si: { interval: -0.25, radius: 20, pct: 0.3 },
+                   desc: 'Every {interval}s a quantum pulse at your cursor deals {pct} click DMG in a {radius} radius.' },
+  swag_strike:   { type: 'gun',       pct: 1.0, shots: 1,
+                   si: { pct: 0.2, shots: 0.5 },
+                   desc: 'Click empty space to fire {shots} homing shot(s) at the nearest enemies for {pct} click DMG each.' },
   frost_bolt:    { type: 'frost',     chance: 0.15, dur: 2, bonus: 0.3,
-                   desc: 'Clicks have a 15% chance to freeze an enemy for 2s. Frozen enemies take +30% DMG.' },
-  healing_tide:  { type: 'lifesteal', flat: 1, pct: 0.02, max: 6,
-                   desc: 'Clicks heal you for 1 HP + 2% of the damage dealt (up to 6 per click).' },
+                   si: { chance: 0.04, dur: 0.4, bonus: 0.08 },
+                   desc: 'Clicks have a {chance} chance to freeze an enemy for {dur}s. Frozen enemies take +{bonus} DMG.' },
+  healing_tide:  { type: 'lifesteal', pctHp: 0.003, pct: 0.02, maxPctHp: 0.012,
+                   si: { pct: 0.008, maxPctHp: 0.004 },
+                   desc: 'Clicks heal you for 0.3% max HP + {pct} of the damage dealt (up to {maxPctHp} max HP per click).' },
   reality_slice: { type: 'crit',      rate: 0.15, dmg: 1.0,
-                   desc: '+15% crit rate and +100% crit DMG.' },
-  devour:        { type: 'devour',    pct: 0.04, heal: 2,
-                   desc: "Clicks also bite off 4% of the target's current HP and heal you for 2 HP." },
+                   si: { rate: 0.04, dmg: 0.2 },
+                   desc: '+{rate} crit rate and +{dmg} crit DMG.' },
+  devour:        { type: 'devour',    pct: 0.04, healPctHp: 0.003,
+                   si: { pct: 0.01, healPctHp: 0.001 },
+                   desc: "Clicks also bite off {pct} of the target's current HP and heal you for {healPctHp} max HP." },
 };
 
 export const ULTS = {
   tectonic_wrath: { type: 'nuke',      mult: 10, charge: 1,
-                    desc: 'Rock spires hit every enemy for 1000% click DMG.' },
+                    si: { mult: 2 },
+                    desc: 'Rock spires hit every enemy for {mult} click DMG.' },
   black_hole:     { type: 'blackhole', mult: 7, stun: 3, charge: 1,
-                    desc: 'Pulls every enemy into the centre, stuns them for 3s and deals 700% click DMG.' },
+                    si: { mult: 1.5, stun: 0.5 },
+                    desc: 'Pulls every enemy into the centre, stuns them for {stun}s and deals {mult} click DMG.' },
   swag_mode:      { type: 'transform', dur: 10, clickMult: 2.5, autoClicks: 6, charge: 1,
-                    desc: 'SWAG MODE for 10s: 2.5× click DMG and 6 automatic clicks per second.' },
+                    si: { dur: 1.5, clickMult: 0.3 },
+                    desc: 'SWAG MODE for {dur}s: {clickMult}× click DMG and 6 automatic clicks per second.' },
   permafrost:     { type: 'timestop',  dur: 6, mult: 3, charge: 1,
-                    desc: 'Stops time for 6s — every attack is cancelled — and deals 300% click DMG to all enemies.' },
+                    si: { dur: 1, mult: 0.75 },
+                    desc: 'Stops time for {dur}s — every attack is cancelled — and deals {mult} click DMG to all enemies.' },
   tidal_surge:    { type: 'surge',     mult: 6, coins: 30, charge: 1,
-                    desc: 'Deals 600% click DMG to all enemies, fully heals you and drops a pile of coins.' },
+                    si: { mult: 1.25, coins: 10 },
+                    desc: 'Deals {mult} click DMG to all enemies, fully heals you and drops a pile of coins.' },
   reality_break:  { type: 'execute',   dur: 3, mult: 20, threshold: 0.2, charge: 1,
-                    desc: 'Stops time for 3s, hits the strongest enemy for 2000% click DMG and executes non-bosses under 20% HP.' },
+                    si: { mult: 4, threshold: 0.04 },
+                    desc: 'Stops time for {dur}s, hits the strongest enemy for {mult} click DMG and executes non-bosses under {threshold} HP.' },
   hox:            { type: 'hox',       bossPct: 0.25, charge: 1.6,
-                    desc: "Eats every non-boss enemy, bites 25% of the boss's max HP and fully heals you." },
+                    si: { bossPct: 0.04 },
+                    desc: "Eats every non-boss enemy, bites {bossPct} of the boss's max HP and fully heals you." },
 };
+
+// Each S level after S1 also cuts the ult cooldown by this much (S5 = −32%)
+export const ULT_CD_PER_SI = 0.08;
+
+// How a number is shown in descriptions
+const PCT_KEYS = new Set(['pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp']);
+const MULT_KEYS = new Set(['mult']);
+function showVal(key, v) {
+  if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
+  if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
+  if (key === 'shots') return String(Math.floor(v));
+  return String(+v.toFixed(2));
+}
+
+// The kit at a given superimposition (si = 0 for S1 … 4 for S5)
+export function scaleKit(kit, si = 0) {
+  if (!kit) return kit;
+  const out = { ...kit };
+  const n = Math.max(0, Math.min(4, si));
+  Object.entries(kit.si ?? {}).forEach(([k, step]) => { out[k] = kit[k] + step * n; });
+  if (out.shots) out.shots = Math.floor(out.shots);
+  return out;
+}
+
+// Description with this superimposition's numbers filled in
+export function describeKit(kit, si = 0) {
+  if (!kit) return '';
+  const k = scaleKit(kit, si);
+  return kit.desc.replace(/\{(\w+)\}/g, (_, key) => (key in k ? showVal(key, k[key]) : key));
+}
+
+// One line saying what the next superimposition improves, e.g. "range 110 → 128, DMG 50% → 62%"
+const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots', chance: 'chance', dur: 'duration', bonus: 'bonus',
+  rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
+  bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal' };
+export function describeSiStep(kit, si) {
+  if (!kit?.si || si >= 4) return '';
+  const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);
+  return Object.keys(kit.si)
+    .filter(k => showVal(k, a[k]) !== showVal(k, b[k]))
+    .map(k => `${LABELS[k] ?? k} ${showVal(k, a[k])} → ${showVal(k, b[k])}`).join(', ');
+}

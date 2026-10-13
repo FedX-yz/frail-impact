@@ -27,7 +27,7 @@ export const CHARACTERS = [
       name: 'Tectonic Wrath',
       description: 'Rock spires hit every enemy for 1000% click DMG.',
       effect: 'tectonic_wrath',
-      cooldown: 6,
+      cooldown: 25,
     },
     passive: {
       name: 'Stone Heart',
@@ -61,7 +61,7 @@ export const CHARACTERS = [
       name: 'Black Hole',
       description: 'Pulls every enemy into the centre, stuns them for 3s and deals 700% click DMG.',
       effect: 'black_hole',
-      cooldown: 8,
+      cooldown: 30,
     },
     passive: {
       name: 'Quantum Flux',
@@ -95,7 +95,7 @@ export const CHARACTERS = [
       name: 'Idk',
       description: 'SWAG MODE for 10s: 2.5× click DMG and 6 automatic clicks per second.',
       effect: 'swag_mode',
-      cooldown: 8,
+      cooldown: 35,
     },
     passive: {
       name: 'Sigma',
@@ -129,7 +129,7 @@ export const CHARACTERS = [
       name: 'Permafrost',
       description: 'Stops time for 6s — every attack is cancelled — and deals 300% click DMG to all enemies.',
       effect: 'permafrost',
-      cooldown: 5,
+      cooldown: 35,
     },
     passive: {
       name: 'Cold Aura',
@@ -163,13 +163,13 @@ export const CHARACTERS = [
       name: 'Tidal Surge',
       description: 'Deals 600% click DMG to all enemies, fully heals you and drops a pile of coins.',
       effect: 'tidal_surge',
-      cooldown: 7,
+      cooldown: 30,
     },
     passive: {
       name: 'Hydro Blessing',
-      description: 'Regenerate 3 HP per second.',
+      description: 'Regenerate 1.5% of max HP per second.',
       effect: 'hp_regen',
-      value: 3,
+      value: 0.015,
     },
   },
 
@@ -197,7 +197,7 @@ export const CHARACTERS = [
       name: 'Reality Break',
       description: 'Stops time for 3s, hits the strongest enemy for 2000% click DMG and executes non-bosses under 20% HP.',
       effect: 'reality_break',
-      cooldown: 7,
+      cooldown: 25,
     },
     passive: {
       name: 'Knightly Resolve',

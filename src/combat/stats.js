@@ -1,9 +1,26 @@
-import { BAL } from './balance';
-import { SKILLS, ULTS, SKILL_UNLOCK, ULT_UNLOCK } from './kits';
+import { BAL, trainCost } from './balance';
+import { SKILLS, ULTS, SKILL_UNLOCK, ULT_UNLOCK, ULT_CD_PER_SI, scaleKit } from './kits';
 import { CARD_SETS } from './sets';
 
-export const SI_MULT = [1, 1.12, 1.25, 1.40, 1.60];
-export const siMult = (si = 0) => SI_MULT[Math.min(Math.max(si, 0), SI_MULT.length - 1)];
+// Superimposition stat multipliers (ATK, HP and DEF) for S1…S5.
+// 5★/6★ grow faster, and their skill/ult also get stronger (kits.js).
+export const SI_MULT      = [1, 1.12, 1.25, 1.40, 1.60];
+export const SI_MULT_HIGH = [1, 1.15, 1.32, 1.50, 1.75];
+const clampSi = (si) => Math.min(Math.max(si ?? 0, 0), 4);
+export const siMult = (si = 0, rarity = 4) => (rarity >= 5 ? SI_MULT_HIGH : SI_MULT)[clampSi(si)];
+export const levelMult = (level = 1, per = BAL.LEVEL_ATK) => 1 + per * (Math.max(1, level) - 1);
+
+// A card's ATK/HP/DEF as they actually are in battle (level + superimposition)
+export function cardBattleStats(card, entry) {
+  if (!card?.stats) return { atk: 0, hp: 0, def: 0 };
+  const si = siMult(entry?.si, card.rarity);
+  const lv = card.rarity >= 5 ? (entry?.level ?? 1) : 1;   // only main cards (5★/6★) level up
+  return {
+    atk: Math.round(card.stats.atk * si * levelMult(lv, BAL.LEVEL_ATK)),
+    hp:  Math.round(card.stats.hp  * si * levelMult(lv, BAL.LEVEL_HP)),
+    def: Math.round(card.stats.def * si * levelMult(lv, BAL.LEVEL_HP)),
+  };
+}
 
 // Which sets are complete in this deck (supports only — main is always 5★/6★)
 export function activeSets(deck) {
@@ -12,25 +29,23 @@ export function activeSets(deck) {
 }
 
 // Everything the battle needs to know about the player, from the deck.
-export function computePlayerStats({ deck, cardInventory = {}, clickPower = 5, cps = 1, multiplier = 1 }) {
+export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, multiplier = 1 }) {
   const main     = deck?.main ?? null;
   const supports = (deck?.supports ?? []).filter(Boolean);
-  const cards    = [main, ...supports].filter(Boolean);
 
-  let atkSum = 0, hpSum = 0, defSum = 0;
-  let dmgMult = multiplier, highHpAtkBonus = 0, defBoost = 0, enemyDmgRed = 0, regenBonus = 0;
-  cards.forEach(c => {
-    const m = siMult(cardInventory[c.id]?.si);
-    atkSum += (c.stats?.atk ?? 0) * m;
-    hpSum  += c.stats?.hp ?? 0;
-    defSum += c.stats?.def ?? 0;
+  const mainS = main ? cardBattleStats(main, cardInventory[main.id]) : BAL.NO_MAIN;
+  const supS  = supports.map(c => cardBattleStats(c, cardInventory[c.id]));
+  const sum = key => supS.reduce((a, s) => a + s[key], 0);
+
+  let dmgMult = multiplier, highHpAtkBonus = 0, defBoost = 0, enemyDmgRed = 0, regenPct = 0;
+  [main, ...supports].filter(Boolean).forEach(c => {
     const p = c.passive;
     if (!p) return;
     if (p.effect === 'global_dmg_boost')     dmgMult       += p.value;
     if (p.effect === 'atk_boost_high_hp')    highHpAtkBonus += p.value;
     if (p.effect === 'party_def_boost')      defBoost      += p.value;
     if (p.effect === 'enemy_dmg_reduction')  enemyDmgRed   += p.value;
-    if (p.effect === 'hp_regen')             regenBonus    += p.value;
+    if (p.effect === 'hp_regen')             regenPct      += p.value;
   });
 
   // Sub-stats from 3★/4★ supports
@@ -40,31 +55,40 @@ export function computePlayerStats({ deck, cardInventory = {}, clickPower = 5, c
   // Set bonuses
   const sets = activeSets(deck);
   const has = id => sets.some(s => s.id === id);
-  const atkPct   = sub.atkPct + (has('endings') ? 0.20 : 0);
-  let critRate   = BAL.BASE_CRIT_RATE + sub.critRate + (has('mystery') ? 0.05 : 0);
-  let critDmg    = BAL.BASE_CRIT_DMG  + sub.critDmg  + (has('mystery') ? 0.50 : 0);
+  const atkPct = sub.atkPct + (has('endings') ? 0.20 : 0) + trainLevel * BAL.TRAIN_ATK;
+  const hpPct  = sub.hpPct + (has('oof') ? 0.25 : 0);
+  let critRate = BAL.BASE_CRIT_RATE + sub.critRate + (has('mystery') ? 0.05 : 0);
+  let critDmg  = BAL.BASE_CRIT_DMG  + sub.critDmg  + (has('mystery') ? 0.50 : 0);
 
-  // Main card level → skill / ult
+  // Team stats — the numbers shown in Deck and on the main screen
+  const baseAtk = mainS.atk + BAL.SUPPORT_ATK * sum('atk');
+  const atk = Math.round(baseAtk * (1 + atkPct) * dmgMult);
+  const maxHp = Math.round((mainS.hp + BAL.SUPPORT_HP * sum('hp')) * (1 + hpPct));
+  const def = Math.round((mainS.def + BAL.SUPPORT_DEF * sum('def')) * (1 + defBoost));
+  const defReduction = def / (def + BAL.DEF_K);
+
+  // Main card level + superimposition → skill / ult
   const entry = main ? cardInventory[main.id] : null;
   const level = entry?.level ?? 1;
-  const skill = main?.skill && level >= SKILL_UNLOCK ? { ...SKILLS[main.skill.effect], name: main.skill.name, effect: main.skill.effect } : null;
-  const ult   = main?.ult   && level >= ULT_UNLOCK   ? { ...ULTS[main.ult.effect],     name: main.ult.name,   effect: main.ult.effect }   : null;
+  const si = clampSi(entry?.si);
+  const skill = main?.skill && level >= SKILL_UNLOCK && SKILLS[main.skill.effect]
+    ? { ...scaleKit(SKILLS[main.skill.effect], si), name: main.skill.name, effect: main.skill.effect } : null;
+  const ult = main?.ult && level >= ULT_UNLOCK && ULTS[main.ult.effect]
+    ? { ...scaleKit(ULTS[main.ult.effect], si), name: main.ult.name, effect: main.ult.effect,
+        cooldown: (main.ult.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si) } : null;
   if (skill?.type === 'crit') { critRate += skill.rate; critDmg += skill.dmg; }
 
-  const def = defSum * (1 + defBoost);
   const dmgReduction = Math.min(BAL.MAX_DMG_REDUCTION,
-    def / (def + BAL.DEF_K) + sub.dmgRed + enemyDmgRed + (has('showdown') ? 0.15 : 0));
-
-  const base = (clickPower + atkSum * BAL.ATK_TO_CLICK) * (1 + atkPct) * dmgMult;
+    defReduction + sub.dmgRed + enemyDmgRed + (has('showdown') ? 0.15 : 0));
 
   return {
-    clickDmg: base,
-    autoDps:  (cps + atkSum * BAL.ATK_TO_AUTO) * (1 + atkPct) * dmgMult,
+    atk, maxHp, def, defReduction,
+    clickDmg: atk,
+    autoDps:  atk * BAL.AUTO_PCT,
     critRate: Math.min(1, critRate),
     critDmg,
     highHpAtkBonus,
-    maxHp:    Math.round((BAL.BASE_HP + hpSum * BAL.CARD_HP_TO_HP) * (1 + sub.hpPct + (has('oof') ? 0.25 : 0))),
-    regen:    (BAL.BASE_REGEN + regenBonus) * (has('oof') ? 2 : 1),
+    regen:    maxHp * (BAL.BASE_REGEN_PCT + regenPct) * (has('oof') ? 2 : 1),
     dmgReduction,
     coinMult:      1 + sub.coinPct + (has('meme') ? 0.25 : 0),
     ultChargeMult: 1 + sub.ultCharge + (has('broke') ? 0.35 : 0),
@@ -72,6 +96,9 @@ export function computePlayerStats({ deck, cardInventory = {}, clickPower = 5, c
     telegraphMult: has('showdown') ? 1.3 : 1,
     bossDmgMult:   has('endings') ? 1.3 : 1,
     labubuEvery:   has('labubu') ? 10 : 0,
-    sets, skill, ult, level,
+    trainLevel, trainCost: trainCost(trainLevel),
+    // where the numbers come from, for the Deck screen breakdown
+    parts: { main: main ? mainS : null, supports: supS, atkPct, hpPct, dmgMult, defBoost },
+    sets, skill, ult, level, si,
   };
 }

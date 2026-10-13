@@ -87,7 +87,8 @@ export default function BattleArena({ engine, mainCard, mobile }) {
   const bossParts = s.enemies.filter(e => e.tier === 'boss');
   const ult = s.stats.ult;
   const charge = s.ult.charge;
-  const ultReady = ult && charge >= 1 && !s.ult.active;
+  const ultCd = s.ult.cd > 0 ? Math.ceil(s.ult.cd) : 0;
+  const ultReady = ult && charge >= 1 && !ultCd && !s.ult.active;
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -185,7 +186,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
 
         {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
-          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady}
+          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd}
           onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} />
       </div>
 
@@ -335,7 +336,7 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{children}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, onUlt, hp, maxHp }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -360,16 +361,21 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
         <img src={`${BASE}ui/ul_statusult.png`} alt="" draggable={false} style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none',
           clipPath: `inset(${(1 - (ult ? charge : 0)) * 100}% 0 0 0)`,
-          filter: ultReady ? 'drop-shadow(0 0 10px #c084fc) brightness(1.2)' : 'none',
+          filter: ultReady ? 'drop-shadow(0 0 10px #c084fc) brightness(1.2)' : cd ? 'grayscale(0.85) brightness(0.7)' : 'none',
           animation: ultReady ? 'orbReady 0.9s ease-in-out infinite' : 'none',
         }} />
         <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         <div
           onPointerDown={e => { e.stopPropagation(); onUlt(); }}
-          title={ult ? `${ult.name} — ${ult.desc}` : 'Ult unlocks at LV50'}
+          title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : 'Ult unlocks at LV50'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
-          {!ult ? 'LV50' : ultReady ? (mobile ? 'TAP' : 'E') : `${Math.floor(charge * 100)}%`}
+          {!ult ? 'LV50' : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
+              <span>{cd}s</span>
+              <span style={{ fontSize: '0.6em', opacity: 0.8 }}>{Math.floor(charge * 100)}%</span>
+            </span>
+          ) : `${Math.floor(charge * 100)}%`}
         </div>
         <img src={`${BASE}ui/ui_statushp.png`} alt="" draggable={false} style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated', pointerEvents: 'none',

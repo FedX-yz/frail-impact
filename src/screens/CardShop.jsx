@@ -3,6 +3,8 @@ import { CHARACTERS } from '../data/characters';
 import { playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { upgradeSubs, formatSub } from '../combat/sets';
+import { siMult, SI_MULT, SI_MULT_HIGH } from '../combat/stats';
+import { SKILLS, ULTS, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -17,14 +19,10 @@ const RARITY_BG    = {
   3: 'linear-gradient(135deg,#001225,#001830)',
 };
 
-// S1–S5: each fusion costs 1 duplicate (need ≥2 copies, consumes 1)
-const SI_BONUSES = [
-  { atkMult: 1.00, label: 'S1 – Base'        },
-  { atkMult: 1.12, label: 'S2 +12% ATK'      },
-  { atkMult: 1.25, label: 'S3 +25% ATK'      },
-  { atkMult: 1.40, label: 'S4 +40% ATK'      },
-  { atkMult: 1.60, label: 'S5 +60% ATK ⚡MAX' },
-];
+// S1–S5: S(n) needs n copies in total. Each level boosts ATK/HP/DEF
+// (5★/6★ more), 3★/4★ also upgrade a sub-stat, 5★/6★ also upgrade their kit.
+const siLabel = (si, rarity) => si === 0 ? 'S1 – Base'
+  : `S${si + 1} +${Math.round((siMult(si, rarity) - 1) * 100)}% ATK/HP/DEF${si === 4 ? ' ⚡MAX' : ''}`;
 
 const SHOP_CARDS = CHARACTERS
   .filter(c => c.rarity !== 6)
@@ -103,7 +101,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
       return { ...prev, [card.id]: { ...cur, si: (cur.si ?? 0) + 1, ...(subs ? { subs } : {}) } };
     });
     
-    showToast(`${card.name} → ${SI_BONUSES[si + 1].label}`, RARITY_COLOR[card.rarity]);
+    showToast(`${card.name} → ${siLabel(si + 1, card.rarity)}`, RARITY_COLOR[card.rarity]);
   }, [collection, setCollection, showToast, gachaCollection]);
 
   // Memoized — only recomputes when collection changes, not on every render
@@ -123,7 +121,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
       <div style={TOP_BAR}>
         <button
           className="cs-back-btn"
-          onClick={() => { playClose(); navigate('main'); }}
+          onPointerDown={playClose} onClick={() => navigate('main')}
         >
           ← back
         </button>
@@ -229,7 +227,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
           ) : (
             <>
               <div style={{ color: '#445', fontSize: 11, marginBottom: 14, letterSpacing: 1 }}>
-                FUSE 1 DUPLICATE TO RAISE SUPERIMPOSITION (S1→S5). EACH LEVEL BOOSTS ATK.
+                FUSE DUPLICATES TO RAISE SUPERIMPOSITION (S1→S5). EACH LEVEL BOOSTS ATK/HP/DEF · 5★/6★ ALSO POWER UP THEIR SKILL &amp; ULT.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(190px, 44vw), 1fr))', gap: 14, alignContent: 'start' }}>
                 {ownedCards.map(card => {
@@ -238,8 +236,10 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
                   const { si } = entry;
                   const maxed     = si >= 4;
                   const canFuse   = !maxed && count >= si + 2;
-                  const bonus     = SI_BONUSES[si];
-                  const nextBonus = !maxed ? SI_BONUSES[si + 1] : null;
+                  const mult      = siMult(si, card.rarity);
+                  const nextMult  = !maxed ? siMult(si + 1, card.rarity) : null;
+                  const skillKit  = SKILLS[card.skill?.effect];
+                  const ultKit    = ULTS[card.ult?.effect];
 
                   return (
                     <div
@@ -267,14 +267,17 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
                       </div>
 
                       <div style={{ background: '#0a1020', border: '1px solid #1a2a40', borderRadius: 6, padding: '6px 10px', width: '100%', fontSize: 11, color: '#778' }}>
-                        <div style={{ color: RARITY_COLOR[card.rarity], fontWeight: 700, marginBottom: 2 }}>{bonus.label}</div>
+                        <div style={{ color: RARITY_COLOR[card.rarity], fontWeight: 700, marginBottom: 2 }}>{siLabel(si, card.rarity)}</div>
                         <div>
-                          ATK: <span style={{ color: '#f0c040' }}>{Math.round(card.stats.atk * bonus.atkMult)}</span>
-                          <span style={{ color: '#445' }}> (base {card.stats.atk})</span>
+                          ATK <span style={{ color: '#f0c040' }}>{Math.round(card.stats.atk * mult)}</span>
+                          {' · '}HP <span style={{ color: '#66ff88' }}>{Math.round(card.stats.hp * mult)}</span>
+                          {' · '}DEF <span style={{ color: '#88aaff' }}>{Math.round(card.stats.def * mult)}</span>
                         </div>
-                        {nextBonus && (
-                          <div style={{ marginTop: 3, color: '#334' }}>
-                            → S{si + 2}: ATK {Math.round(card.stats.atk * nextBonus.atkMult)}{card.rarity <= 4 ? ' + a sub-stat upgrade' : ''}
+                        {nextMult && (
+                          <div style={{ marginTop: 3, color: '#556' }}>
+                            → S{si + 2}: ATK {Math.round(card.stats.atk * nextMult)} · HP {Math.round(card.stats.hp * nextMult)}{card.rarity <= 4 ? ' + a sub-stat upgrade' : ''}
+                            {skillKit && <div style={{ color: '#4a8a5a' }}>✦ {card.skill.name}: {describeSiStep(skillKit, si)}</div>}
+                            {ultKit && <div style={{ color: '#8a5ab0' }}>⚡ {card.ult.name}: {describeSiStep(ultKit, si) || 'stronger'}, cooldown −{Math.round(ULT_CD_PER_SI * 100)}%</div>}
                           </div>
                         )}
                         {(entry.subs ?? []).length > 0 && (
@@ -303,10 +306,10 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
               {/* Reference table */}
               <div style={{ marginTop: 28, background: '#090e1a', border: '1px solid #1a2a40', borderRadius: 8, padding: '14px 18px' }}>
                 <div style={{ color: '#f0c040', fontWeight: 700, marginBottom: 10, fontSize: 13 }}>SUPERIMPOSITION REFERENCE</div>
-                {SI_BONUSES.map((b, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: i < 4 ? '1px solid #111a2a' : 'none' }}>
+                {SI_MULT.map((m, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '5px 0', borderBottom: i < 4 ? '1px solid #111a2a' : 'none' }}>
                     <span style={{ color: '#aa44ff', fontWeight: 700, fontSize: 12 }}>S{i + 1}</span>
-                    <span style={{ color: '#778', fontSize: 12 }}>{b.label}</span>
+                    <span style={{ color: '#778', fontSize: 12 }}>3★/4★ +{Math.round((m - 1) * 100)}% · 5★/6★ +{Math.round((SI_MULT_HIGH[i] - 1) * 100)}% stats{i > 0 ? ' + stronger kit' : ''}</span>
                     <span style={{ color: '#445', fontSize: 11 }}>{i === 0 ? '1 copy' : `${i + 1} copies total`}</span>
                   </div>
                 ))}

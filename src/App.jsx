@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import HomeScreen     from './screens/HomeScreen';
 import MainScreen     from './screens/MainScreen';
 import GachaScreen    from './screens/GachaScreen';
@@ -8,6 +8,18 @@ import SettingsScreen from './screens/SettingsScreen';
 import CardShop       from './screens/CardShop';
 import { CHARACTERS }  from './data/characters';
 import { rollSubs }    from './combat/sets';
+import { createBattle } from './combat/engine';
+import { computePlayerStats } from './combat/stats';
+import { SKILL_UNLOCK, ULT_UNLOCK } from './combat/kits';
+import { trainCost } from './combat/balance';
+
+const DEV_KEY = 'frail_dev';
+const devFromStorage = () => {
+  try {
+    if (location.search.includes('dev')) localStorage.setItem(DEV_KEY, '1');
+    return localStorage.getItem(DEV_KEY) === '1';
+  } catch { return false; }
+};
 
 const SAVE_KEY = 'rhg_v3';
 
@@ -71,14 +83,15 @@ export default function App() {
   const [collection,    setCollection]    = useState(s.collection    ?? []);
   const [killCount, setKillCount] = useState(s.killCount ?? 0);
   const [stage,     setStage]     = useState(s.stage ?? 1);
+  const [stageKills, setStageKills] = useState(s.stageKills ?? 0);
   // ── Shop inventory: { [cardId]: { count: number, si: number (0–4) } }  ──────
   // Kept separate from `collection` (the gacha array) so nothing breaks.
   const [cardInventory, setCardInventory] = useState(s.cardInventory ?? {}); // ← NEW
-  const [clickPower,    setClickPower]    = useState(s.clickPower    ?? 5);
-  const [cps,           setCps]           = useState(s.cps           ?? 1);
+  // Train level (+10% ATK each). Old saves stored +5 click power per Train.
+  const [trainLevel,    setTrainLevel]    = useState(s.trainLevel ?? Math.max(0, Math.round(((s.clickPower ?? 5) - 5) / 5)));
   const [multiplier]                      = useState(s.multiplier    ?? 1);
   const [totalEarned,   setTotalEarned]   = useState(s.totalEarned   ?? 0);
-  const [upgradeCost,   setUpgradeCost]   = useState(s.upgradeCost   ?? 100);
+  const [devMode,       setDevMode]       = useState(devFromStorage);
   const [pity4,         setPity4]         = useState(s.pity4         ?? 0);
   const [pity5,         setPity5]         = useState(s.pity5         ?? 0);
 
@@ -110,24 +123,76 @@ export default function App() {
   // Coins come from kills only (no idle income)
   useSave({
     pullCurrency, coins, collection, cardInventory,
-    clickPower, cps, multiplier, totalEarned, upgradeCost,
-    deck, pity4, pity5, killCount, stage,
+    trainLevel, multiplier, totalEarned,
+    deck, pity4, pity5, killCount, stage, stageKills,
   });
 
   const buyUpgrade = () => {
-    if (coins < upgradeCost) return;
-    setCoins(c => c - upgradeCost);
-    setCps(c => c + 5);
-    setClickPower(c => c + 5);
-    setUpgradeCost(c => Math.floor(c * 1.8));
+    const cost = trainCost(trainLevel);
+    if (coins < cost) return;
+    setCoins(c => c - cost);
+    setTrainLevel(l => l + 1);
   };
+
+  // ── Battle ────────────────────────────────────────────────────────────────
+  // Your stats, straight from the deck (also shown in Deck)
+  const stats = useMemo(
+    () => computePlayerStats({ deck, cardInventory, trainLevel, multiplier }),
+    [deck, cardInventory, trainLevel, multiplier],
+  );
+
+  // The battle lives here, not in the main screen, so opening a menu pauses
+  // it instead of throwing your stage progress away.
+  const battleHandlers = useRef({});
+  const [engine] = useState(() => createBattle({ stageNum: s.stage ?? 1, kills: s.stageKills ?? 0, stats, callbacks: battleHandlers }));
+  useEffect(() => { engine.setStats(stats); }, [engine, stats]);
+
+  const cardInvRef = useRef(cardInventory);
+  cardInvRef.current = cardInventory;
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+  battleHandlers.current = {
+    onReward: ({ coins: c = 0, gems = 0, xp = 0, kill }) => {
+      if (c) { setCoins(v => v + c); setTotalEarned(v => v + c); }
+      if (gems) setPullCurrency(v => v + gems);
+      if (kill) setKillCount(v => v + 1);
+      // XP goes to the main card (5★/6★)
+      const mc = deckRef.current?.main;
+      if (xp && mc && mc.rarity >= 5) {
+        const inv = cardInvRef.current;
+        const entry = inv[mc.id] ?? { si: 0, xp: 0, level: 1 };
+        let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
+        while (cur >= level * 100) {
+          cur -= level * 100; level++;
+          engine.announce(`${mc.name} LV${level}!`);
+          if (level === SKILL_UNLOCK) engine.announce('SKILL UNLOCKED!', '#4ade80');
+          if (level === ULT_UNLOCK)   engine.announce('ULT UNLOCKED!', '#c084fc');
+        }
+        const next = { ...inv, [mc.id]: { ...entry, xp: cur, level } };
+        cardInvRef.current = next;
+        setCardInventory(next);
+      }
+    },
+    onProgress: ({ stage: st, kills }) => { setStage(st); setStageKills(kills); },
+    onStageClear: (next) => setStage(next),
+  };
+
+  // Everything the sandbox menu can change
+  const devActions = {
+    setPullCurrency, setCoins, setCollection, setCardInventory, setDeck, setTrainLevel, setPity4, setPity5,
+    disable: () => { try { localStorage.removeItem(DEV_KEY); } catch { /* ignore */ } setDevMode(false); },
+  };
+  const toggleDev = () => setDevMode(on => {
+    try { if (on) localStorage.removeItem(DEV_KEY); else localStorage.setItem(DEV_KEY, '1'); } catch { /* ignore */ }
+    return !on;
+  });
 
   const navigate = (sc) => setScreen(sc);
   const common   = { navigate, pullCurrency, setPullCurrency, coins, setCoins, collection, setCollection };
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
   if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} />;
-  if (screen === 'settings') return <SettingsScreen navigate={navigate} />;
+  if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} />;
 
   if (screen === 'gacha' || screen === 'gamble') return (
     <GachaScreen {...common}
@@ -145,7 +210,8 @@ export default function App() {
       collection={collection} 
       deck={deck} 
       setDeck={setDeck}
-      cardInventory={cardInventory}  // ← ADD THIS
+      cardInventory={cardInventory}
+      stats={stats}
     />
   );
 
@@ -163,16 +229,12 @@ export default function App() {
 
   if (screen === 'main') return (
     <MainScreen {...common}
-      clickPower={clickPower} cps={cps} multiplier={multiplier}
-      totalEarned={totalEarned} setTotalEarned={setTotalEarned}
-      upgradeCost={upgradeCost} buyUpgrade={buyUpgrade}
+      engine={engine} stats={stats}
+      trainLevel={trainLevel} buyUpgrade={buyUpgrade}
       deck={deck}
       cardInventory={cardInventory}
-      killCount={killCount}
-      setKillCount={setKillCount}
-      setCardInventory={setCardInventory}
-      stage={stage}
-      setStage={setStage}
+      devMode={devMode} devActions={devActions}
+      pity4={pity4} pity5={pity5}
     />
   );
 
