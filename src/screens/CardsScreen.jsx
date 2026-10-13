@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useCallback, useTransition, useRef } from 'react';
+import { useState, useMemo, memo, useCallback, useTransition } from 'react';
 import { playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
@@ -62,105 +62,22 @@ const CardTile = memo(({ card, isSelected, count, onSelect }) => {
          prev.count === next.count;
 });
 
-const FastVirtualGrid = memo(({ cards, counts, selected, onSelect, cols = 5 }) => {
-  const scrollRef = useRef(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
-  const rafRef = useRef(null);
-
-  const GAP = 10;
-  const PADDING = 12;
-  const CARD_HEIGHT = cols <= 3 ? 140 : 160;
-  const COLS = cols;
-
-  const totalRows = Math.ceil(cards.length / COLS);
-  const totalHeight = totalRows * CARD_HEIGHT + (totalRows - 1) * GAP;
-
-  const handleScroll = useCallback((e) => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-    }
-
-    rafRef.current = requestAnimationFrame(() => {
-      const scrollTop = e.currentTarget.scrollTop;
-      const containerHeight = e.currentTarget.clientHeight;
-      
-      const startRow = Math.max(0, Math.floor((scrollTop - 200) / (CARD_HEIGHT + GAP)));
-      const endRow = Math.min(totalRows, Math.ceil((scrollTop + containerHeight + 200) / (CARD_HEIGHT + GAP)));
-      
-      const start = startRow * COLS;
-      const end = Math.min(endRow * COLS, cards.length);
-      
-      setVisibleRange({ start, end });
-    });
-  }, [cards.length, totalRows, COLS, CARD_HEIGHT]);
-
-  const visibleCards = useMemo(() => {
-    return cards.slice(visibleRange.start, visibleRange.end);
-  }, [cards, visibleRange]);
-
-  const offsetY = Math.floor(visibleRange.start / COLS) * (CARD_HEIGHT + GAP);
-
-  return (
-    <div
-      ref={scrollRef}
-      onScroll={handleScroll}
-      style={{
-        flex: 1,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        padding: PADDING,
-        background: '#1a2035',
-        position: 'relative',
-        willChange: 'transform',
-        backfaceVisibility: 'hidden',
-      }}
-    >
-      <style>{`
-        div::-webkit-scrollbar { width: 8px; }
-        div::-webkit-scrollbar-track { background: transparent; }
-        div::-webkit-scrollbar-thumb { background: #334; border-radius: 4px; }
-        div::-webkit-scrollbar-thumb:hover { background: #556; }
-      `}</style>
-
-      {cards.length === 0 ? (
-        <div style={{ color: '#445', textAlign: 'center', fontSize: 14, marginTop: 40 }}>
-          no cards yet — go pull!
-        </div>
-      ) : (
-        <div style={{ position: 'relative', height: totalHeight }}>
-          <div
-            style={{
-              position: 'absolute',
-              top: offsetY,
-              left: 0,
-              right: 0,
-              display: 'grid',
-              gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-              gap: GAP,
-              width: '100%',
-              willChange: 'transform',
-            }}
-          >
-            {visibleCards.map((card) => (
-              <CardTile
-                key={card.id}
-                card={card}
-                isSelected={selected?.id === card.id}
-                count={counts[card.id]}
-                onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}, (prev, next) => {
-  return prev.cards === next.cards && 
-         prev.selected?.id === next.selected?.id && 
-         prev.counts === next.counts &&
-         prev.cols === next.cols;
-});
+// Plain grid. (It used to be "virtualized" with a fixed 160px row height, but
+// tiles are much taller on wide screens, so the last rows could never be
+// scrolled into view. A few dozen cards with lazy thumbnails don't need it.)
+const FastVirtualGrid = memo(({ cards, counts, selected, onSelect, cols = 5 }) => (
+  <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 12, background: '#1a2035' }}>
+    {cards.length === 0 ? (
+      <div style={{ color: '#445', textAlign: 'center', fontSize: 14, marginTop: 40 }}>no cards yet — go pull!</div>
+    ) : (
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 10 }}>
+        {cards.map(card => (
+          <CardTile key={card.id} card={card} isSelected={selected?.id === card.id} count={counts[card.id]} onSelect={onSelect} />
+        ))}
+      </div>
+    )}
+  </div>
+));
 
 export default function CardsScreen({ navigate, collection, cardInventory = {} }) {
   const { mobile } = useIsMobile();

@@ -237,7 +237,7 @@ export default function GachaScreen({
       setS5CoinsEarned(0);
     }
 
-    setCollection(prev => [...prev, ...collectionResults]);
+    setCollection(prev => [...prev, ...collectionResults.map(c => ({ id: c.id }))]);
 
     batchRef.current = results;
     setBatch(results);

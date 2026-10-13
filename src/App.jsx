@@ -16,7 +16,7 @@ import { trainCost } from './combat/balance';
 const DEV_KEY = 'frail_dev';
 const devFromStorage = () => {
   try {
-    if (location.search.includes('dev')) localStorage.setItem(DEV_KEY, '1');
+    if (new URLSearchParams(location.search).has('dev')) localStorage.setItem(DEV_KEY, '1');
     return localStorage.getItem(DEV_KEY) === '1';
   } catch { return false; }
 };
@@ -80,7 +80,9 @@ export default function App() {
   const [screen,        setScreen]        = useState('main');
   const [pullCurrency,  setPullCurrency]  = useState(s.pullCurrency  ?? 10);
   const [coins,         setCoins]         = useState(s.coins         ?? 0);
-  const [collection,    setCollection]    = useState(s.collection    ?? []);
+  // Pull history: only the card id is needed (old saves stored the whole card
+  // every pull, ~600 bytes each, which could overflow the browser's save limit)
+  const [collection,    setCollection]    = useState(() => (s.collection ?? []).filter(c => c?.id != null).map(c => ({ id: c.id })));
   const [killCount, setKillCount] = useState(s.killCount ?? 0);
   const [stage,     setStage]     = useState(s.stage ?? 1);
   const [stageKills, setStageKills] = useState(s.stageKills ?? 0);
@@ -159,18 +161,22 @@ export default function App() {
       // XP goes to the main card (5★/6★)
       const mc = deckRef.current?.main;
       if (xp && mc && mc.rarity >= 5) {
-        const inv = cardInvRef.current;
-        const entry = inv[mc.id] ?? { si: 0, xp: 0, level: 1 };
-        let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
-        while (cur >= level * 100) {
-          cur -= level * 100; level++;
-          engine.announce(`${mc.name} LV${level}!`);
-          if (level === SKILL_UNLOCK) engine.announce('SKILL UNLOCKED!', '#4ade80');
-          if (level === ULT_UNLOCK)   engine.announce('ULT UNLOCKED!', '#c084fc');
+        const addXp = (entry = { si: 0, xp: 0, level: 1 }) => {
+          let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
+          while (cur >= level * 100) { cur -= level * 100; level++; }
+          return { ...entry, xp: cur, level };
+        };
+        // announce level-ups
+        const before = cardInvRef.current[mc.id];
+        const after = addXp(before);
+        for (let lv = (before?.level ?? 1) + 1; lv <= after.level; lv++) {
+          engine.announce(`${mc.name} LV${lv}!`);
+          if (lv === SKILL_UNLOCK) engine.announce('SKILL UNLOCKED!', '#4ade80');
+          if (lv === ULT_UNLOCK)   engine.announce('ULT UNLOCKED!', '#c084fc');
         }
-        const next = { ...inv, [mc.id]: { ...entry, xp: cur, level } };
-        cardInvRef.current = next;
-        setCardInventory(next);
+        cardInvRef.current = { ...cardInvRef.current, [mc.id]: after };
+        // functional update: never overwrites a fusion/sub-stat change made at the same moment
+        setCardInventory(prev => ({ ...prev, [mc.id]: addXp(prev[mc.id]) }));
       }
     },
     onProgress: ({ stage: st, kills }) => { setStage(st); setStageKills(kills); },
@@ -180,12 +186,15 @@ export default function App() {
   // Everything the sandbox menu can change
   const devActions = {
     setPullCurrency, setCoins, setCollection, setCardInventory, setDeck, setTrainLevel, setPity4, setPity5,
-    disable: () => { try { localStorage.removeItem(DEV_KEY); } catch { /* ignore */ } setDevMode(false); },
+    disable: () => { try { localStorage.removeItem(DEV_KEY); } catch { /* ignore */ } resetDevBattle(); setDevMode(false); },
   };
-  const toggleDev = () => setDevMode(on => {
-    try { if (on) localStorage.removeItem(DEV_KEY); else localStorage.setItem(DEV_KEY, '1'); } catch { /* ignore */ }
-    return !on;
-  });
+  // turning developer mode off also switches off god mode and game speed
+  const resetDevBattle = () => { engine.dev.setGod(false); engine.dev.setTimeScale(1); };
+  const toggleDev = () => {
+    try { if (devMode) localStorage.removeItem(DEV_KEY); else localStorage.setItem(DEV_KEY, '1'); } catch { /* ignore */ }
+    if (devMode) resetDevBattle();
+    setDevMode(!devMode);
+  };
 
   const navigate = (sc) => setScreen(sc);
   const common   = { navigate, pullCurrency, setPullCurrency, coins, setCoins, collection, setCollection };

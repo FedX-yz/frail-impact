@@ -235,7 +235,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.move === 'still' || e.busy > 0) return;
     if (e.move === 'hop') {            // treasure: skittish hops near its anchor
       e.hopT -= dt;
-      if (e.hopT <= 0) {
+      // (target is also cleared by window resizes and Black Hole)
+      if (e.hopT <= 0 || !e.target) {
         e.hopT = rand(0.6, 1.1);
         const anchor = s.enemies.find(a => a.id === e.anchor);
         const p = anchor ? randomPoint(anchor, K(160)) : randomPoint({ x: e.x, y: e.y }, K(140));
@@ -244,6 +245,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     } else if (e.move !== 'swarm' && (!e.target || dist(e.x, e.y, e.target.x, e.target.y) < 4)) {
       e.target = randomPoint({ x: e.x, y: e.y }, K(220));
     }
+    if (!e.target) return;
     const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1);
     const dx = e.target.x - e.x, dy = e.target.y - e.y, d = Math.hypot(dx, dy) || 1;
     const step = Math.min(d, spd * dt);
@@ -639,7 +641,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       case 'surge': {
         hitAll(u.mult, '#3B82F6', '💧');
         heal(s.player.maxHp);
-        const coins = Math.round(base * u.coins * s.stats.coinMult);
+        const coins = Math.round(u.coins * 15 * s.stage.coinScale * s.stats.coinMult);
         floater(`+${fmt(coins)}`, s.W / 2, s.H * 0.3, '#f0c040', true, 'coin');
         cb('onReward', { coins, gems: 0, xp: 0, kill: false });
         break;
@@ -871,7 +873,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     },
     summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; startBossIntro(); },
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
-    clearEnemies: () => { s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; if (s.phase === 'boss') s.phase = 'fight'; },
+    clearEnemies: () => {
+      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null;
+      // boss removed → back to the fight, one kill short of summoning it again
+      if (s.phase === 'boss' || s.phase === 'bossIntro') { s.phase = 'fight'; s.kills = Math.min(s.kills, s.stage.killTarget - 1); }
+    },
     fillUlt: () => { s.ult.charge = 1; s.ult.cd = 0; },
     heal: () => { s.player.hp = s.player.maxHp; },
     setGod: (on) => { s.dev.god = !!on; },

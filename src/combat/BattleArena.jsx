@@ -27,7 +27,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
   // Debug handle for the browser console (window.__battle): always in dev,
   // and on the live site when you open it with ?debug at the end of the URL
   useEffect(() => {
-    if (import.meta.env.DEV || location.search.includes('debug')) window.__battle = engine;
+    if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__battle = engine;
   }, [engine]);
 
   // Arena size → engine
@@ -51,8 +51,11 @@ export default function BattleArena({ engine, mainCard, mobile }) {
   // Game loop
   useEffect(() => {
     let raf, last = performance.now();
+    let reported = false;
     const loop = (now) => {
-      engine.update((now - last) / 1000);
+      // One bad frame must never freeze the whole battle
+      try { engine.update((now - last) / 1000); }
+      catch (err) { if (!reported) { console.error('battle update failed:', err); reported = true; } }
       last = now;
       setFrame(f => (f + 1) % 1e9);
       raf = requestAnimationFrame(loop);
@@ -63,7 +66,12 @@ export default function BattleArena({ engine, mainCard, mobile }) {
 
   // E = ult
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'e' || e.key === 'E') engine.activateUlt(); };
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.repeat) return;   // holding E doesn't spam it
+      if (e.key === 'e' || e.key === 'E') engine.activateUlt();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [engine]);

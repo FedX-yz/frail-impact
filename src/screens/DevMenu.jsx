@@ -70,7 +70,12 @@ export default function DevMenu({ engine, actions, state, mobile, onClose }) {
           <Row>
             <button className="dv" onClick={() => { giveCard(card.id, 1); say(`+1 ${card.name}`); }}>Give 1</button>
             <button className="dv" onClick={() => { giveCard(card.id, 5); say(`+5 ${card.name}`); }}>Give 5</button>
-            {card.rarity >= 5 && <button className="dv" onClick={() => { giveCard(card.id, deck?.main ? 0 : 1); setDeck(d => ({ ...d, main: card })); say(`${card.name} is your main`); }}>Equip as main</button>}
+            {card.rarity >= 5 && <button className="dv" onClick={() => {
+              const owned = (entry.count ?? 0) > 0 || state.collection.some(c => c.id === card.id);
+              if (!owned) giveCard(card.id, 1);
+              setDeck(d => ({ ...d, main: card, supports: (d.supports ?? []).map(sp => (sp?.id === card.id ? null : sp)) }));
+              say(`${card.name} is your main`);
+            }}>Equip as main</button>}
           </Row>
           {card.rarity >= 5 && (
             <Row>
