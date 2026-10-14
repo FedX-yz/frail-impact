@@ -92,7 +92,7 @@ export const ENEMY_TYPES = {
   },
   wormSeg: {
     name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm',
-    img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2,
+    img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2.55,
     hp: 75, coin: 10, xp: 40,
   },
   // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN
