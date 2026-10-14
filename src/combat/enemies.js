@@ -86,14 +86,14 @@ export const ENEMY_TYPES = {
     name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm',
     img: `${BASE}enemies/worm_head.png`, size: 74, facing: 90, drawScale: 1.75,
     hp: 120, coin: 0, xp: 40,
-    segments: 10, segmentType: 'wormSeg', spacing: 40,
+    segments: 14, segmentType: 'wormSeg', spacing: 40,
     wormSpeed: 165, turnRate: 2.4,
     groupReward: { coin: 400, gems: 10, xp: 1000 },
   },
   wormSeg: {
     name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm',
     img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2.55,
-    hp: 75, coin: 10, xp: 40,
+    hp: 54, coin: 7, xp: 28,   // 14 parts: same total HP/rewards as the old 10 × 75
   },
   // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN
   // for 5s. Get all three down at the same time or the downed ones regrow
