@@ -10,6 +10,13 @@
 //   (worm heads don't telegraph — they hurt on contact)
 //
 // Boss patterns (see engine.js): slamRing, crossSlash, barrage, rain
+//
+// Art options:
+//   facing:    which way the picture points, in degrees (0 = right, 90 = down,
+//              -90 = up). Set it and the sprite turns to face where it moves.
+//   drawScale: draw the picture bigger/smaller than the hitbox (`size`)
+//   poses:     extra pictures for attacks — warn (one picture, or two that
+//              flicker) while it winds up, attack while it strikes/dashes
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -32,6 +39,10 @@ export const ENEMY_TYPES = {
   rusher: {
     name: 'Rusher', tier: 'elite',
     img: `${BASE}enemies/niglet.png`, size: 80,
+    poses: {
+      warn:   [`${BASE}enemies/rusher_warn1.png`, `${BASE}enemies/rusher_warn2.png`],   // flickers before attacking
+      attack: `${BASE}enemies/rusher_attack.png`,                                       // while dashing / shooting
+    },
     hp: 95, coin: 55, speed: 0.55,
     attacks: ['dash', 'shot'],
     cooldown: [3.5, 5],
@@ -40,7 +51,7 @@ export const ENEMY_TYPES = {
   // Some of them poke (small red circles), so a swarm next to you is dangerous.
   swarmling: {
     name: 'Swarmling', tier: 'basic', horde: true,
-    img: `${BASE}enemies/xiaoenemy.png`, size: 42,
+    img: `${BASE}enemies/bat.gif`, size: 46,
     hp: 9, coin: 4, speedRange: [0.8, 1],
     attacks: [], armedAttacks: ['poke'],
     cooldown: [3.5, 5.5],
@@ -70,15 +81,15 @@ export const ENEMY_TYPES = {
   // cursor. Kill the head and the next segment becomes the new head.
   worm: {
     name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm',
-    img: `${BASE}enemies/hoxboss.jpg`, size: 74,
+    img: `${BASE}enemies/worm_head.png`, size: 74, facing: 90, drawScale: 1.75,
     hp: 120, coin: 0, xp: 40,
     segments: 10, segmentType: 'wormSeg', spacing: 40,
     wormSpeed: 165, turnRate: 2.4,
     groupReward: { coin: 400, gems: 10, xp: 1000 },
   },
   wormSeg: {
-    name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm', shape: 'segment',
-    img: null, size: 54,
+    name: 'EATER OF FRAILS', tier: 'boss', kind: 'worm',
+    img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2,
     hp: 75, coin: 10, xp: 40,
   },
   // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN

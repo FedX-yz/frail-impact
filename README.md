@@ -49,6 +49,10 @@ files and finish in seconds.
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. Cards without one use their card art.
 - **A new enemy:** add it to `ENEMY_TYPES` in `src/combat/enemies.js`, then list it in
   `stages.js` (`basics`, `elites` or `boss`).
+- **Enemy art:** put the picture in `public/enemies/` and set `img`. Optional: `facing`
+  (the sprite turns toward where it moves — the worm uses this), `drawScale` (draw it
+  bigger than its hitbox) and `poses` (pictures for winding up and attacking — the
+  Rusher's skulls). See the top of `enemies.js`.
 
 ### Combat extras
 

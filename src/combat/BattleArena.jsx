@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
-import { AFFIXES } from './enemies';
+import { AFFIXES, ENEMY_TYPES } from './enemies';
 import { getSettings } from '../utils/settings';
 
 const BASE = import.meta.env.BASE_URL;
@@ -13,6 +13,12 @@ const STATUS_PORTRAITS = {
   99: `${BASE}ui/ui_statushox.png`,
 };
 const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
+
+// Load attack-pose pictures up front so the first wind-up doesn't show a blank
+Object.values(ENEMY_TYPES).forEach(t => {
+  if (!t.poses) return;
+  [t.poses.warn, t.poses.attack].flat().filter(Boolean).forEach(src => { const im = new Image(); im.src = src; });
+});
 
 // Draws the engine every animation frame and feeds it mouse/touch input.
 // `mobile` makes the status frame a bit bigger so it's easy to tap on a phone.
@@ -96,6 +102,14 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const shakeX = shakeOn && s.shake > 0 ? (Math.random() - 0.5) * 22 * s.shake : 0;
   const shakeY = shakeOn && s.shake > 0 ? (Math.random() - 0.5) * 22 * s.shake : 0;
   const bossParts = s.enemies.filter(e => e.tier === 'boss');
+  // worm parts nearer the head draw on top of the ones behind them
+  const hasWorm = s.enemies.some(e => e.move === 'worm');
+  const drawList = hasWorm
+    ? [...s.enemies.filter(e => e.move !== 'worm'), ...s.enemies.filter(e => e.move === 'worm').sort((a, b) => b.segIndex - a.segIndex)]
+    : s.enemies;
+  // who is winding up an attack right now (for enemies with attack poses)
+  const windingUp = new Set(s.attacks.filter(a => a.phase === 'tele' && a.owner != null).map(a => a.owner));
+  const poseOf = (e) => (!e.type.poses ? null : e.dashing || e.attackT > 0 ? 'attack' : e.flashRed || windingUp.has(e.id) ? 'warn' : null);
   const ult = s.stats.ult;
   const charge = s.ult.charge;
   const ultCd = s.ult.cd > 0 ? Math.ceil(s.ult.cd) : 0;
@@ -110,6 +124,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       if (!el) continue;
       const half = e.size * s.k / 2;
       el.style.transform = `translate3d(${e.x - half}px, ${e.y - half}px, 0)`;
+      // art with a `facing` turns toward where it's going (worm parts)
+      if (e.facing != null) el.style.setProperty('--rot', `${Math.round(e.angle * 57.2958 - e.facing)}deg`);
     }
   });
 
@@ -146,7 +162,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           </svg>
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
-          {s.enemies.map(e => {
+          {drawList.map(e => {
             const isWormHead = e.move === 'worm' && e.role === 'head';
             return (
               <EnemySprite key={e.id} id={e.id} register={register}
@@ -156,7 +172,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 flashRed={e.flashRed} hurt={e.hurt > 0} dashing={!!e.dashing} paused={s.timeStop > 0}
                 hpPct={Math.max(0, Math.round(e.hp / e.maxHp * 200) / 2)}
                 shieldR={e.shield ? e.shieldCfg.radius * k : 0}
-                affix={e.affix}
+                affix={e.affix} pose={poseOf(e)} poses={e.type.poses} drawScale={e.drawScale} turns={e.facing != null}
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
                 weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
             );
@@ -310,12 +326,12 @@ const StageBarView = memo(function StageBarView({ label, ratio, color, boss }) {
 // One enemy. Only re-renders when how it LOOKS changes; its position is set
 // directly on the DOM node by BattleArena every frame.
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = 'grayscale(1) brightness(0.5)';
   else if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
-  else if (flashRed) filter = 'none';
+  else if (flashRed || pose) filter = 'none';
   else if (hurt) filter = `${tint ?? ''} brightness(2.2)`;
   const showBar = tier !== 'boss' || role === 'hydra' || (grouped && role !== 'head');
   return (
@@ -336,13 +352,22 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       {ax && <div className="affix-aura" style={{ '--ac': ax.color }} />}
       {ax && <div className="affix-tag" style={{ color: ax.color, fontSize: 10 * Math.max(0.85, k) }}>{ax.name}</div>}
       <div className={`squash${hurt ? ' hit' : ''}`}>
+      <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})` }}>
       {shape === 'segment' ? (
         <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
+      ) : pose ? (
+        // attack poses: the warn pictures flicker, the attack picture holds
+        [pose === 'warn' ? poses.warn : poses.attack].flat().map((src, i, all) => (
+          <img key={src} src={src} alt="" draggable={false}
+            className={`enemy-img pose ${pose}${all.length > 1 ? ` flick${i}` : ''}`}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : undefined }} />
+        ))
       ) : (
         <img src={img} alt="" draggable={false} decoding="async"
-          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}`}
-          style={{ width: '100%', height: '100%', objectFit: isWormHead ? 'cover' : 'contain', filter, animationPlayState: frozen || down || paused ? 'paused' : 'running' }} />
+          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}`}
+          style={{ width: '100%', height: '100%', objectFit: isWormHead && !turns ? 'cover' : 'contain', filter: turns && filter === 'none' ? undefined : filter, animationPlayState: frozen || down || paused ? 'paused' : 'running' }} />
       )}
+      </div>
       </div>
       {down > 0 && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#facc15', fontWeight: 900, fontSize: 13 * Math.max(0.8, k), textShadow: '0 1px 4px #000' }}>DOWN {down.toFixed(1)}s</div>}
       {shieldR > 0 && (
@@ -464,7 +489,16 @@ const ARENA_CSS = `
   .worm-seg { width:100%; height:100%; border-radius:50%;
               background: radial-gradient(circle at 35% 30%, #c2410c, #7f1d1d 55%, #2a0a0a);
               border: 2px solid #451a03; box-shadow: inset 0 -4px 8px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.6); }
-  .enemy-img.worm-head { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
+  .enemy-img.worm-head:not(.turns) { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
+  .enemy-img.turns { animation:none; image-rendering:auto; }
+  .enemy-img.worm-head.turns { filter: drop-shadow(0 0 10px rgba(255,40,120,0.75)); }
+  .enemy-img.pose { animation:none; image-rendering:auto; }
+  .enemy-img.pose.warn { filter: drop-shadow(0 0 10px rgba(255,40,40,0.9)); }
+  .enemy-img.pose.attack { filter: drop-shadow(0 0 14px rgba(255,90,0,0.95)); transform: scale(1.12); }
+  .enemy-img.flick0 { animation: flickA 0.16s steps(1) infinite; }
+  .enemy-img.flick1 { animation: flickB 0.16s steps(1) infinite; }
+  @keyframes flickA { 0% { opacity:1 } 50% { opacity:0 } }
+  @keyframes flickB { 0% { opacity:0 } 50% { opacity:1 } }
   .squash { width:100%; height:100%; transition: transform 70ms ease-out; }
   .squash.hit { transform: scale(0.86, 0.9); }
   .affix-aura { position:absolute; inset:-14%; border-radius:50%; pointer-events:none;

@@ -106,6 +106,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       size: type.size, x: p.x, y: p.y,
       hp, maxHp: hp, speed: affix === 'swift' ? Math.max(0.6, speed * 1.6) : speed,
       affix, cdMult: affix === 'swift' ? 0.7 : 1, lastHit: -9, puddleT: 1.5,
+      facing: type.facing ?? null, drawScale: type.drawScale ?? 1, attackT: 0,   // art: turn to face movement, attack pose timer
       // linked bosses (worm parts, hydra heads)
       group: opts.group ?? null, role: opts.role ?? null, segIndex: opts.segIndex ?? 0,
       angle: opts.angle ?? Math.PI, wiggle: Math.random() * 6, down: 0,
@@ -240,6 +241,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const spacing = K(ENEMY_TYPES[e.groupType]?.spacing ?? 40);
       const dx = e.x - leader.x, dy = e.y - leader.y, d = Math.hypot(dx, dy) || 1;
       if (d > spacing) { e.x = leader.x + dx / d * spacing; e.y = leader.y + dy / d * spacing; }
+      e.angle = Math.atan2(-dy, -dx);   // body parts face the part in front of them
     }
   }
 
@@ -318,7 +320,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function startEnemyAttack(e) {
     const t = e.type;
     if (t.bossPatterns) { startBossPattern(e, pick(t.bossPatterns)); return; }
-    const pool = e.armed ? t.armedAttacks : t.attacks;
+    // armed basics use their armed list; everything else (incl. sandbox-spawned elites) its normal one
+    const pool = e.armed && t.armedAttacks?.length ? t.armedAttacks : t.attacks;
     if (!pool?.length) return;
     const kind = pick(pool);
     queueAttack(e, kind);
@@ -368,6 +371,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         a.t += dt;
         if (a.t >= a.tele) {
           a.t = 0;
+          if (owner) owner.attackT = 0.45;   // attack pose (enemies with `poses`)
           if (a.kind === 'circle' || a.kind === 'poke') {
             a.phase = 'strike';
             if (a.opts.boom) { sfx('boom'); shake(0.25); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#f97316', n: 14 }); }
@@ -567,6 +571,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const makeHead = (nh, angle) => {
       const ht = ENEMY_TYPES[nh.groupType];
       nh.role = 'head'; nh.shape = null; nh.img = ht.img; nh.size = ht.size;
+      nh.facing = ht.facing ?? null; nh.drawScale = ht.drawScale ?? 1;
       nh.angle = angle; nh.wiggle = rand(0, 6);
     };
     if (dead.role === 'head') {
@@ -810,7 +815,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (expired) { s.floaters = s.floaters.filter(f => f.t < 1.1); s.floaterVer++; }
     s.effects.forEach(f => { f.t += dt; });
     s.effects = s.effects.filter(f => f.t < 0.5);
-    s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); });
+    s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); if (e.attackT > 0) e.attackT -= dt; });
 
     if (s.phase !== 'defeat' && pl.hp > 0 && !M('noRegen', false)) heal(s.stats.regen * dt);
 
