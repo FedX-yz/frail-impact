@@ -38,10 +38,10 @@ export const ENEMY_TYPES = {
   },
   rusher: {
     name: 'Rusher', tier: 'elite',
-    img: `${BASE}enemies/niglet.png`, size: 80,
+    img: `${BASE}enemies/rusher_idle.png`, size: 80,                                     // red skull
     poses: {
-      warn:   [`${BASE}enemies/rusher_warn1.png`, `${BASE}enemies/rusher_warn2.png`],   // flickers before attacking
-      attack: `${BASE}enemies/rusher_attack.png`,                                       // while dashing / shooting
+      warn:   [`${BASE}enemies/rusher_warn.png`, `${BASE}enemies/rusher_idle.png`],     // flickers yellow/red before attacking
+      attack: `${BASE}enemies/rusher_attack.png`,                                       // screaming, while dashing / shooting
     },
     hp: 95, coin: 55, speed: 0.55,
     attacks: ['dash', 'shot'],

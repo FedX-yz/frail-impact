@@ -364,7 +364,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         ))
       ) : (
         <img src={img} alt="" draggable={false} decoding="async"
-          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}`}
+          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}${poses ? ' smooth' : ''}`}
           style={{ width: '100%', height: '100%', objectFit: isWormHead && !turns ? 'cover' : 'contain', filter: turns && filter === 'none' ? undefined : filter, animationPlayState: frozen || down || paused ? 'paused' : 'running' }} />
       )}
       </div>
@@ -491,6 +491,7 @@ const ARENA_CSS = `
               border: 2px solid #451a03; box-shadow: inset 0 -4px 8px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.6); }
   .enemy-img.worm-head:not(.turns) { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
   .enemy-img.turns { animation:none; image-rendering:auto; }
+  .enemy-img.smooth { image-rendering:auto; }
   .enemy-img.worm-head.turns { filter: drop-shadow(0 0 10px rgba(255,40,120,0.75)); }
   .enemy-img.pose { animation:none; image-rendering:auto; }
   .enemy-img.pose.warn { filter: drop-shadow(0 0 10px rgba(255,40,40,0.9)); }
