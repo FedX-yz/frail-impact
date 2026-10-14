@@ -6,6 +6,8 @@ import DeckScreen     from './screens/DeckScreen';
 import CardsScreen    from './screens/CardsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CardShop       from './screens/CardShop';
+import TowerScreen    from './screens/TowerScreen';
+import { normalizeStory } from './story/story';
 import { CHARACTERS }  from './data/characters';
 import { rollSubs }    from './combat/sets';
 import { createBattle } from './combat/engine';
@@ -96,6 +98,8 @@ export default function App() {
   const [devMode,       setDevMode]       = useState(devFromStorage);
   const [pity4,         setPity4]         = useState(s.pity4         ?? 0);
   const [pity5,         setPity5]         = useState(s.pity5         ?? 0);
+  // Story mode (Tower): cleared nodes, choice flags, where you are on the map
+  const [story,         setStory]         = useState(() => normalizeStory(s.story));
 
   const defaultDeck = { main: null, supports: [null, null, null, null] };
   const [deck, setDeck] = useState(() => {
@@ -126,7 +130,7 @@ export default function App() {
   useSave({
     pullCurrency, coins, collection, cardInventory,
     trainLevel, multiplier, totalEarned,
-    deck, pity4, pity5, killCount, stage, stageKills,
+    deck, pity4, pity5, killCount, stage, stageKills, story,
   });
 
   const buyUpgrade = () => {
@@ -153,32 +157,35 @@ export default function App() {
   cardInvRef.current = cardInventory;
   const deckRef = useRef(deck);
   deckRef.current = deck;
-  battleHandlers.current = {
-    onReward: ({ coins: c = 0, gems = 0, xp = 0, kill }) => {
-      if (c) { setCoins(v => v + c); setTotalEarned(v => v + c); }
-      if (gems) setPullCurrency(v => v + gems);
-      if (kill) setKillCount(v => v + 1);
-      // XP goes to the main card (5★/6★)
-      const mc = deckRef.current?.main;
-      if (xp && mc && mc.rarity >= 5) {
-        const addXp = (entry = { si: 0, xp: 0, level: 1 }) => {
-          let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
-          while (cur >= level * 100) { cur -= level * 100; level++; }
-          return { ...entry, xp: cur, level };
-        };
-        // announce level-ups
-        const before = cardInvRef.current[mc.id];
-        const after = addXp(before);
-        for (let lv = (before?.level ?? 1) + 1; lv <= after.level; lv++) {
-          engine.announce(`${mc.name} LV${lv}!`);
-          if (lv === SKILL_UNLOCK) engine.announce('SKILL UNLOCKED!', '#4ade80');
-          if (lv === ULT_UNLOCK)   engine.announce('ULT UNLOCKED!', '#c084fc');
-        }
-        cardInvRef.current = { ...cardInvRef.current, [mc.id]: after };
-        // functional update: never overwrites a fusion/sub-stat change made at the same moment
-        setCardInventory(prev => ({ ...prev, [mc.id]: addXp(prev[mc.id]) }));
+  // Coins, gems and XP from any battle. `eng` is the battle that earned them
+  // (the endless one or a story level), so level-ups are announced there.
+  const giveRewards = ({ coins: c = 0, gems = 0, xp = 0, kill } = {}, eng = engine) => {
+    if (c) { setCoins(v => v + c); setTotalEarned(v => v + c); }
+    if (gems) setPullCurrency(v => v + gems);
+    if (kill) setKillCount(v => v + 1);
+    // XP goes to the main card (5★/6★)
+    const mc = deckRef.current?.main;
+    if (xp && mc && mc.rarity >= 5) {
+      const addXp = (entry = { si: 0, xp: 0, level: 1 }) => {
+        let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
+        while (cur >= level * 100) { cur -= level * 100; level++; }
+        return { ...entry, xp: cur, level };
+      };
+      // announce level-ups
+      const before = cardInvRef.current[mc.id];
+      const after = addXp(before);
+      for (let lv = (before?.level ?? 1) + 1; lv <= after.level; lv++) {
+        eng?.announce(`${mc.name} LV${lv}!`);
+        if (lv === SKILL_UNLOCK) eng?.announce('SKILL UNLOCKED!', '#4ade80');
+        if (lv === ULT_UNLOCK)   eng?.announce('ULT UNLOCKED!', '#c084fc');
       }
-    },
+      cardInvRef.current = { ...cardInvRef.current, [mc.id]: after };
+      // functional update: never overwrites a fusion/sub-stat change made at the same moment
+      setCardInventory(prev => ({ ...prev, [mc.id]: addXp(prev[mc.id]) }));
+    }
+  };
+  battleHandlers.current = {
+    onReward: (r) => giveRewards(r, engine),
     onProgress: ({ stage: st, kills }) => { setStage(st); setStageKills(kills); },
     onStageClear: (next) => setStage(next),
   };
@@ -198,6 +205,11 @@ export default function App() {
 
   const navigate = (sc) => setScreen(sc);
   const common   = { navigate, pullCurrency, setPullCurrency, coins, setCoins, collection, setCollection };
+
+  if (screen === 'tower') return (
+    <TowerScreen navigate={navigate} story={story} setStory={setStory} stats={stats} deck={deck}
+      devMode={devMode} onReward={giveRewards} coins={coins} pullCurrency={pullCurrency} />
+  );
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
   if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} />;

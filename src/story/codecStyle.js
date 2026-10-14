@@ -1,0 +1,47 @@
+import { useEffect, useState } from 'react';
+
+// Codec look from the mockup: green panel, yellow frame, bold mono text
+export const CODEC = {
+  green: '#1d6b4c', greenDark: '#124a35', yellow: '#f2ea5c', text: '#f6ef6a',
+  font: "'Courier New', Courier, monospace",
+};
+
+// Typewriter: how many characters of `text` are showing. `instant` shows all.
+export function useTypewriter(text, cps = 42, instant = false) {
+  // remembers which text the count belongs to, so a new line never flashes
+  // the first letters of itself at the old line's length
+  const [st, setSt] = useState({ text, n: 0 });
+  const shown = instant ? text.length : st.text === text ? st.n : 0;
+  useEffect(() => {
+    if (instant || !text) return;
+    const started = performance.now();
+    const id = setInterval(() => {
+      const n = Math.min(text.length, Math.floor((performance.now() - started) / 1000 * cps));
+      setSt(prev => (prev.text === text && prev.n >= n ? prev : { text, n }));
+      if (n >= text.length) clearInterval(id);
+    }, 30);
+    return () => clearInterval(id);
+  }, [text, cps, instant]);
+  return [shown, () => setSt({ text, n: text.length })];
+}
+
+export const STORY_CSS = `
+  .codec-pop { animation: codecIn 0.22s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes codecIn { from { transform: translateX(-24px) scale(0.96); opacity: 0; } to { transform: none; opacity: 1; } }
+  .codec-next, .vn-next { animation: blinkNext 0.9s steps(2) infinite; }
+  @keyframes blinkNext { 50% { opacity: 0; } }
+  .vn-bg { animation: vnFade 0.5s ease-out; }
+  @keyframes vnFade { from { opacity: 0; } to { opacity: 1; } }
+  .vn-actor { transition: filter 0.2s, transform 0.25s, left 0.35s; animation: vnIn 0.3s ease-out; }
+  @keyframes vnIn { from { opacity: 0; transform: translateX(-50%) translateY(18px); } to { opacity: 1; } }
+  .vn-shake { animation: vnShake 0.45s; }
+  @keyframes vnShake { 10%,50%,90% { transform: translate(-6px, 2px); } 30%,70% { transform: translate(6px, -2px); } }
+  .vn-btn { font-family: ${CODEC.font}; font-weight: 900; font-size: 12px; letter-spacing: 1px; color: ${CODEC.yellow};
+            background: rgba(10,30,22,0.82); border: 2px solid ${CODEC.yellow}88; border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+  .vn-btn.on { background: ${CODEC.yellow}; color: #123; }
+  .vn-choice { font-family: ${CODEC.font}; font-weight: 800; font-size: 17px; color: ${CODEC.text}; text-align: left;
+               background: linear-gradient(${CODEC.green}, ${CODEC.greenDark}); border: 3px solid ${CODEC.yellow}; border-radius: 0;
+               padding: 12px 18px; cursor: pointer; width: min(560px, 90vw); box-shadow: 0 4px 0 #0b2e20; transition: transform 0.1s; }
+  .vn-choice:hover, .vn-choice:focus-visible { transform: translateX(6px); outline: none; background: ${CODEC.yellow}; color: #123; }
+  @media (prefers-reduced-motion: reduce) { .codec-pop, .vn-actor, .vn-bg, .vn-shake { animation: none !important; } }
+`;

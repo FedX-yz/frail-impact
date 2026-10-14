@@ -16,7 +16,7 @@ const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
 
 // Draws the engine every animation frame and feeds it mouse/touch input.
 // `mobile` makes the status frame a bit bigger so it's easy to tap on a phone.
-export default function BattleArena({ engine, mainCard, mobile }) {
+export default function BattleArena({ engine, mainCard, mobile, children, comboTop = 40 }) {
   const ref = useRef(null);
   const frameRef = useRef(null);
   // enemy id → DOM node; positions are written straight to these every frame
@@ -124,7 +124,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
         style={{
           flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden',
           border: '2px solid #cc8800', borderRadius: 6,
-          backgroundImage: `url(${BATTLE_BG})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#0f1625',
+          backgroundImage: `url(${s.stage.bg ?? BATTLE_BG})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#0f1625',
           touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
         }}
       >
@@ -183,7 +183,7 @@ export default function BattleArena({ engine, mainCard, mobile }) {
 
         <StageBarView {...stageBarProps(s, bossParts)} />
 
-        <ComboMeter n={s.combo.n} left={s.combo.n ? Math.max(0, 1 - s.combo.t / BAL.COMBO_WINDOW) : 0} k={k} />
+        <ComboMeter n={s.combo.n} left={s.combo.n ? Math.max(0, 1 - s.combo.t / BAL.COMBO_WINDOW) : 0} k={k} top={comboTop} />
 
         {/* Status chips */}
         <div style={{ position: 'absolute', top: 44, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, zIndex: 13, pointerEvents: 'none' }}>
@@ -209,6 +209,9 @@ export default function BattleArena({ engine, mainCard, mobile }) {
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
           hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd}
           onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} />
+
+        {/* Extra layers from the screen using the arena (story mode: codec popups) */}
+        {children}
       </div>
 
       <style>{ARENA_CSS}</style>
@@ -278,15 +281,16 @@ function EffectShape({ f, k }) {
 
 function stageBarProps(s, bossParts) {
   let label, ratio, color;
+  const name = s.stage.label ?? `STAGE ${s.stageNum}`;
   const boss = bossParts.length > 0 && s.bossInfo;
   if (boss) {
     label = s.bossInfo.name;
     ratio = bossParts.reduce((a, e) => a + Math.max(0, e.hp), 0) / s.bossInfo.maxHp;
     color = '#ff4400';
   }
-  else if (s.phase === 'fight') { label = `STAGE ${s.stageNum} · ${s.kills}/${s.stage.killTarget} kills`; ratio = s.kills / s.stage.killTarget; color = '#ff8c00'; }
-  else if (s.phase === 'bossIntro') { label = `STAGE ${s.stageNum} · BOSS`; ratio = 1; color = '#ff4400'; }
-  else { label = `STAGE ${s.stageNum}`; ratio = 1; color = '#4ade80'; }
+  else if (s.phase === 'fight') { label = `${name} · ${s.kills}/${s.stage.killTarget} kills`; ratio = s.kills / s.stage.killTarget; color = '#ff8c00'; }
+  else if (s.phase === 'bossIntro') { label = `${name} · BOSS`; ratio = 1; color = '#ff4400'; }
+  else { label = name; ratio = 1; color = '#4ade80'; }
   return { label, ratio: Math.round(Math.max(0, Math.min(1, ratio)) * 400) / 400, color, boss: !!boss };
 }
 
@@ -377,12 +381,12 @@ const FloaterLayer = memo(function FloaterLayer({ floaters, k }) {
 }, (a, b) => a.ver === b.ver && a.k === b.k);
 
 // Combo: number + bonus, with a bar that drains until it runs out
-const ComboMeter = memo(function ComboMeter({ n, left, k }) {
+const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
   if (n < 2) return null;
   const pct = Math.round(Math.min(n, BAL.COMBO_MAX) * BAL.COMBO_PER * 100);
   const hot = n >= BAL.COMBO_MAX ? '#f43f5e' : n >= 25 ? '#fb923c' : '#facc15';
   return (
-    <div style={{ position: 'absolute', left: 12, top: 40, zIndex: 13, pointerEvents: 'none', textAlign: 'left' }}>
+    <div style={{ position: 'absolute', left: 12, top, zIndex: 13, pointerEvents: 'none', textAlign: 'left', transition: 'top 0.2s' }}>
       <div key={n} className="combo-num" style={{ color: hot, fontSize: 30 * Math.max(0.75, k), fontWeight: 900, lineHeight: 1, textShadow: `0 0 12px ${hot}, 0 2px 4px #000` }}>
         {n}<span style={{ fontSize: '0.45em', marginLeft: 4, letterSpacing: 1 }}>COMBO</span>
       </div>

@@ -36,6 +36,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     combo: { n: 0, t: 0, best: 0 },      // landed hits in a row (see BAL.COMBO_*)
     hazards: [],                         // poison puddles from Toxic elites
     hitStop: 0,                          // tiny freeze on big kills (game feel)
+    paused: false,                       // story mode pause menu
+    over: null,                          // story battles: 'won' / 'lost' once it has ended
     timeStop: 0, frenzy: 0, shake: 0,
     clickCount: 0,
     timers: { basic: 0.3, elite: 4, horde: 8, treasure: BAL.TREASURE_EVERY, auto: BAL.AUTO_INTERVAL, pulse: 0, weak: 0.7 },
@@ -47,6 +49,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const cb = (name, ...args) => callbacks.current?.[name]?.(...args);
   // Current stage modifier value (stages.js → MODIFIERS), or the default
   const M = (key, dflt = 1) => s.stage.mod?.[key] ?? dflt;
+  // What the stage is called on banners: "STAGE 4", or a story level's own name
+  const stageLabel = () => s.stage.label ?? `STAGE ${s.stageNum}`;
+  // Kill target reached: boss, or (story levels without a boss) straight to the win
+  const targetReached = () => { if (s.stage.boss) startBossIntro(); else stageClear(); };
 
   // ── Geometry helpers ────────────────────────────────────────────────────
   const K = v => v * s.k;
@@ -200,7 +206,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       T.elite -= dt;
       if (T.elite <= 0) {
         T.elite = st.eliteEvery / M('eliteRate');
-        if (countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) spawnEnemy(pick(st.elites));
+        if (st.elites.length && countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) spawnEnemy(pick(st.elites));
       }
     }
   }
@@ -548,7 +554,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });
-      if (s.kills >= s.stage.killTarget) startBossIntro();
+      if (s.kills >= s.stage.killTarget) targetReached();
     }
   }
 
@@ -628,6 +634,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function pointerDown(x, y) {
+    if (s.paused) return;
     s.player.pos = { x, y };
     if (s.phase === 'defeat' || s.phase === 'clear') return;
     // boss weak points first
@@ -674,7 +681,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Ult ─────────────────────────────────────────────────────────────────
   function activateUlt() {
     const u = s.stats.ult;
-    if (!u || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
+    if (!u || s.paused || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
     s.ult.charge = 0;
     s.ult.cd = s.ult.cdMax = u.cooldown ?? 30;
     const base = s.stats.clickDmg;
@@ -728,9 +735,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Phases ──────────────────────────────────────────────────────────────
   function stageBanner() {
     const m = s.stage.mod;
+    const sub = s.stage.sub ?? (s.stage.boss ? 'defeat enemies to summon the boss' : `defeat ${s.stage.killTarget} enemies`);
     return m
-      ? { text: `STAGE ${s.stageNum}`, sub: `${m.name} — ${m.desc}`, subColor: m.color, t: 3.2 }
-      : { text: `STAGE ${s.stageNum}`, sub: 'defeat enemies to summon the boss', t: 2 };
+      ? { text: stageLabel(), sub: `${m.name} — ${m.desc}`, subColor: m.color, t: 3.2 }
+      : { text: stageLabel(), sub, t: 2 };
   }
 
   function startBossIntro() {
@@ -742,19 +750,20 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = [];
     const r = s.stage.clearReward;
-    const coins = Math.round(r.coins * M('coin')), gems = Math.round(r.gems * M('gem'));
-    s.banner = { text: `STAGE ${s.stageNum} CLEAR!`, sub: `+${fmt(coins)} coins · +${gems} gem${gems === 1 ? '' : 's'}`, t: 3, good: true };
-    cb('onReward', { coins, gems, xp: 0, kill: false });
+    const coins = Math.round((r?.coins ?? 0) * M('coin')), gems = Math.round((r?.gems ?? 0) * M('gem'));
+    s.banner = { text: s.stage.story ? 'VICTORY!' : `${stageLabel()} CLEAR!`, t: 3, good: true,
+      sub: coins || gems ? `+${fmt(coins)} coins · +${gems} gem${gems === 1 ? '' : 's'}` : null };
+    if (coins || gems) cb('onReward', { coins, gems, xp: 0, kill: false });
   }
   function startDefeat() {
     s.phase = 'defeat'; s.phaseT = 2.6;
     s.attacks = []; s.shots = []; s.hazards = []; s.combo.n = 0;
-    s.banner = { text: 'DEFEATED', sub: `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
+    s.banner = { text: 'DEFEATED', sub: s.stage.story ? null : `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
     cb('onDefeat', s.stageNum);
   }
   function loadStage(n) {
     s.stageNum = n; s.stage = makeStage(n);
-    s.phase = 'fight'; s.kills = 0; s.bossInfo = null;
+    s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = [];
     s.player.hp = s.player.maxHp; s.player.invuln = 1;
     s.timers.basic = 0.3; s.timers.elite = 4; s.timers.horde = 8;
@@ -769,16 +778,21 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (s.phaseT <= 0) { s.phase = 'boss'; spawnBoss(s.stage.boss); }
     } else if (s.phase === 'clear') {
       s.phaseT -= dt;
-      if (s.phaseT <= 0) { const next = s.stageNum + 1; cb('onStageClear', next); loadStage(next); }
+      if (s.phaseT > 0) return;
+      // story levels end here and hand control back to the level screen
+      if (s.stage.story) { if (!s.over) { s.over = 'won'; cb('onStoryEnd', 'won'); } return; }
+      const next = s.stageNum + 1; cb('onStageClear', next); loadStage(next);
     } else if (s.phase === 'defeat') {
       s.phaseT -= dt;
-      if (s.phaseT <= 0) loadStage(s.stageNum);
+      if (s.phaseT > 0) return;
+      if (s.stage.story) { if (!s.over) { s.over = 'lost'; cb('onStoryEnd', 'lost'); } return; }
+      loadStage(s.stageNum);
     }
   }
 
   // ── Main tick ───────────────────────────────────────────────────────────
   function update(rawDt) {
-    if (!s.W) return;
+    if (!s.W || s.paused) return;
     // hit-stop: freeze the action for a few frames on big kills
     if (s.hitStop > 0) { s.hitStop -= Math.min(rawDt, 0.05); return; }
     const dt = Math.min(rawDt, 0.05) * s.dev.timeScale;
@@ -934,8 +948,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.k = clamp(Math.min(W, H) / 560, 0.55, 1.35);
     if (first) {
       for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
-      if (s.kills >= s.stage.killTarget) startBossIntro();
-      else if (s.kills > 0) s.banner = { text: `STAGE ${s.stageNum}`, sub: `${s.kills}/${s.stage.killTarget} kills — keep going`, t: 1.6 };
+      if (s.kills >= s.stage.killTarget) targetReached();
+      else if (s.kills > 0) s.banner = { text: stageLabel(), sub: `${s.kills}/${s.stage.killTarget} kills — keep going`, t: 1.6 };
       else s.banner = stageBanner();
     }
   }
@@ -967,6 +981,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (typeId === 'swarmling') { spawnHorde(); return; }
       for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : spawnEnemy(typeId, { armed: true });
     },
+    // story: skip straight to winning this level
+    win: () => { s.enemies = []; s.attacks = []; stageClear(); s.phaseT = 0.6; },
     summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; startBossIntro(); },
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
     clearEnemies: () => {
@@ -976,6 +992,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     },
     fillUlt: () => { s.ult.charge = 1; s.ult.cd = 0; },
     heal: () => { s.player.hp = s.player.maxHp; },
+    hurt: (raw) => { s.player.invuln = 0; hitPlayer(raw); },   // take a hit (testing)
     setGod: (on) => { s.dev.god = !!on; },
     setTimeScale: (x) => { s.dev.timeScale = x; },
     gotoStage: (n) => loadStage(Math.max(1, Math.round(n))),
@@ -985,7 +1002,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     setModifier: (id) => { s.stage = { ...s.stage, mod: MODIFIERS[id] ? { id, ...MODIFIERS[id] } : null }; s.banner = stageBanner(); },
   };
 
-  return { state: s, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };
+  const setPaused = (p) => { s.paused = !!p; };
+  const restart = () => loadStage(s.stageNum);
+
+  return { state: s, setPaused, restart, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

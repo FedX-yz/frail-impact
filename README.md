@@ -35,6 +35,8 @@ files and finish in seconds.
 | `src/combat/sets.js` | 3★/4★ card sets and relic sub-stats |
 | `src/data/characters.js` | Every card: art, stats, skill/ult/passive |
 | `src/data/banners.js` | Gacha banners and their featured cards |
+| `src/story/` | Story mode (Tower): chapters/map, cast, cutscene scripts, cutscene player, codec |
+| `src/screens/TowerScreen.jsx` | The Tower map |
 | `src/utils/sfx.js` | Menu sounds and combat sounds |
 | `src/utils/settings.js` | Volume, combat sounds and screen shake (Settings screen) |
 
@@ -47,8 +49,6 @@ files and finish in seconds.
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. Cards without one use their card art.
 - **A new enemy:** add it to `ENEMY_TYPES` in `src/combat/enemies.js`, then list it in
   `stages.js` (`basics`, `elites` or `boss`).
-- **Story mode / Tower:** a stage is just a config object (see `makeEndlessStage`), so
-  hand-made stages can be passed to `createBattle({ makeStage })`.
 
 ### Combat extras
 
@@ -60,6 +60,57 @@ files and finish in seconds.
 - **Elite affixes:** from stage 4, elites can roll Volatile, Toxic, Shielded, Swift,
   Regenerating or Splitter (20% chance, rising to 50%). They give 1.5× rewards.
   See `AFFIXES` in `enemies.js`.
+
+### Story mode (Tower)
+
+The Tower button opens a map of levels, chapter by chapter, like a Mario world map.
+A level plays an **intro cutscene** → a **battle** (with **codec** lines popping up
+during the fight) → an **outro cutscene** → results. Any of the three can be left
+out. First clears pay gems/coins; replays only give kill rewards. Progress, choices
+and flags are saved with the rest of the game.
+
+Everything is written in three files — no other code needs touching:
+
+| File | What goes in it |
+| --- | --- |
+| `src/story/chapters.js` | Chapters, map nodes (position, what unlocks them), each level's battle settings, codec lines, rewards |
+| `src/story/scenes.js` | Cutscene scripts |
+| `src/story/cast.js` | Who can talk: name, colour, codec portrait, cutscene sprite |
+
+A cutscene is a list of steps:
+
+```js
+'c1-briefing': [
+  { bg: 'story/bg/rooftop.png' },          // background
+  { show: 'handler', at: 'right' },         // left / center / right
+  ['handler', 'Can you hear me?'],          // someone talks
+  'The city was quiet.',                    // narration
+  { choice: [
+    { text: 'Help him', set: { helped: true } },
+    { text: 'Walk away', set: { helped: false }, goto: 'left' },
+  ] },
+  ['handler', 'Thanks.'],
+  { end: true },
+  { label: 'left' },
+  ['handler', 'Fine. Remember this.'],
+],
+```
+
+Flags set by choices are saved, and can change later scenes (`{ if: 'helped', goto: ... }`),
+codec lines (`if: 'helped'`) and even which map nodes exist (`if:` on a node) — that's
+where "your choices have consequences" plugs in. The full list of steps and options is
+at the top of `scenes.js` and `chapters.js`.
+
+**Art:** put story art in `public/story/` (`bg/` backgrounds, `cast/` portraits and
+sprites, `maps/` chapter maps) and write the path in the story files, e.g.
+`portrait: 'story/cast/handler.png'`. Anything left as `null` gets a placeholder, so the
+story can be written before the art is ready. Map node positions are percentages, so a
+map picture of any size works (16:9 looks best).
+
+**Checking your work:** in developer mode the Tower shows a 🛠 panel: unlock every node,
+reset story progress, see the current flags, and a list of typos it found (a speaker
+missing from cast.js, a `goto` with no matching label, an unknown enemy…). In battle a
+🛠 WIN button skips the fight.
 
 ### Sounds
 

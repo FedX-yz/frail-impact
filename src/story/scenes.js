@@ -1,0 +1,102 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Cutscene scripts (visual-novel style). A level plays its `intro` scene
+// before the battle and its `outro` scene after it (see chapters.js).
+//
+// A scene is a list of steps, played top to bottom:
+//
+//   ['astrec', 'Hello.']              someone talks (id from cast.js)
+//   'The city was quiet.'             narration (no name box)
+//   { bg: 'story/bg/city.png' }       change the background (null = plain dark)
+//   { show: 'astrec', at: 'left' }    bring a character in: left / center / right
+//                                       optional mood: 'angry' (cast.js → moods)
+//   { hide: 'astrec' }                take them out     { hide: 'all' } clears everyone
+//   { choice: [                       the player picks one
+//       { text: 'Fight', set: { brave: true } },
+//       { text: 'Run',   set: { brave: false }, goto: 'ran' },
+//     ] }
+//   { label: 'ran' }                  a spot to jump to
+//   { goto: 'ran' }                   jump
+//   { if: 'brave', goto: 'x' }        jump only if the flag is set ('!brave' = not set)
+//   { set: { metHox: true } }         set flags without a choice
+//   { end: true }                     stop the scene here
+//   { shake: true }   { wait: 0.8 }   { sfx: 'ui_warp' }  (a file in public/sounds/)
+//
+// Flags are saved with the story and can also hide/show map nodes and codec
+// lines (`if:` in chapters.js) — that's where "consequences" will hook in.
+//
+// Everything below is SAMPLE content to show the format. Replace it freely.
+// ─────────────────────────────────────────────────────────────────────────────
+export const SCENES = {
+  'c1-briefing': [
+    { bg: 'backgrounds/bg2.png' },
+    'Somewhere above the city, a signal comes through.',
+    { show: 'handler', at: 'right' },
+    ['handler', 'Can you hear me? Good. This is your handler.'],
+    ['handler', 'Something big is waking up under the city. Small ones first, then the big one.'],
+    { show: 'astrec', at: 'left' },
+    ['astrec', 'And you want me to... click on them?'],
+    ['handler', 'Very fast. Very hard. Mind the red circles.'],
+    { choice: [
+      { text: '"Let\'s go."',          set: { eager: true } },
+      { text: '"What\'s in it for me?"', set: { eager: false }, goto: 'pay' },
+    ] },
+    ['handler', 'That\'s the spirit. Head to the outskirts.'],
+    { end: true },
+    { label: 'pay' },
+    ['handler', 'Gems. Shiny ones. You like gems.'],
+    ['astrec', '...Fine.'],
+  ],
+
+  'c1-outskirts-in': [
+    { bg: 'backgrounds/bg1.png' },
+    { show: 'astrec', at: 'left' },
+    ['astrec', 'Quiet out here.'],
+    { show: 'handler', at: 'right' },
+    ['handler', 'Not for long. Contacts incoming.'],
+  ],
+  'c1-outskirts-out': [
+    { show: 'handler', at: 'right' },
+    { if: 'eager', goto: 'eager' },
+    ['handler', 'Done. Your gems are on the way, as promised.'],
+    { end: true },
+    { label: 'eager' },
+    ['handler', 'Clean work. Keep that energy.'],
+  ],
+
+  'c1-street-in': [
+    { bg: 'backgrounds/bg1.png' },
+    { show: 'bio', at: 'center' },
+    ['bio', 'You\'re the new one? Try to keep up.'],
+  ],
+
+  'c1-rooftops-in': [
+    { bg: 'backgrounds/bg2.png' },
+    { show: 'stephen', at: 'right' },
+    ['stephen', 'Shortcut over the roofs. Everything up here hits twice as hard.'],
+    ['stephen', 'So do you, though.'],
+  ],
+
+  'c1-sewers-in': [
+    { bg: 'backgrounds/bg1.png' },
+    { show: 'handler', at: 'right' },
+    ['handler', 'The tunnels are full of the nasty ones. Watch for the glowing auras.'],
+  ],
+
+  'c1-hall-in': [
+    { bg: 'backgrounds/bg2.png' },
+    { show: 'handler', at: 'right' },
+    ['handler', 'This is it. The thing under City Hall.'],
+    { shake: true },
+    'The ground shakes.',
+    { show: 'astrec', at: 'left' },
+    ['astrec', 'erm what the sigma'],
+  ],
+  'c1-hall-out': [
+    { show: 'astrec', at: 'left' },
+    { show: 'handler', at: 'right' },
+    ['handler', 'It\'s down. For now.'],
+    ['handler', 'That was only the first one. More are waking up.'],
+    { hide: 'all' },
+    'To be continued...',
+  ],
+};
