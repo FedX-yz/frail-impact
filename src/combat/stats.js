@@ -1,5 +1,5 @@
 import { BAL, trainCost } from './balance';
-import { SKILLS, ULTS, SKILL_UNLOCK, ULT_UNLOCK, ULT_CD_PER_SI, scaleKit } from './kits';
+import { SKILLS, ULTS, SKILL_UNLOCK, ULT_UNLOCK, ULT_CD_PER_SI, scaleKit, weakKit } from './kits';
 import { CARD_SETS } from './sets';
 
 // Superimposition stat multipliers (ATK, HP and DEF) for S1…S5.
@@ -71,8 +71,10 @@ export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, m
   const entry = main ? cardInventory[main.id] : null;
   const level = entry?.level ?? 1;
   const si = clampSi(entry?.si);
-  const skill = main?.skill && level >= SKILL_UNLOCK && SKILLS[main.skill.effect]
-    ? { ...scaleKit(SKILLS[main.skill.effect], si), name: main.skill.name, effect: main.skill.effect } : null;
+  // skill works from LV1 (weaker), full strength at LV20
+  const skillKit = SKILLS[main?.skill?.effect];
+  const skill = main?.skill && skillKit
+    ? { ...scaleKit(level >= SKILL_UNLOCK ? skillKit : weakKit(skillKit), si), name: main.skill.name, effect: main.skill.effect } : null;
   const ult = main?.ult && level >= ULT_UNLOCK && ULTS[main.ult.effect]
     ? { ...scaleKit(ULTS[main.ult.effect], si), name: main.ult.name, effect: main.ult.effect,
         cooldown: (main.ult.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si) } : null;

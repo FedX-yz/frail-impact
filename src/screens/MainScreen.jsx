@@ -100,7 +100,7 @@ export default function MainScreen({
     <div style={{ fontSize: 11, color: '#778', lineHeight: 1.45, minWidth: 0, whiteSpace: mobile && portrait ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
       {mainCard.skill && (
         <div style={{ color: stats.skill ? '#4ade80' : '#556' }} title={mainCard.skill.description}>
-          ✦ {mainCard.skill.name} {!stats.skill && <span style={{ color: '#f87171' }}>LV{SKILL_UNLOCK}</span>}
+          ✦ {mainCard.skill.name} {stats.skill?.weak && <span style={{ color: '#fbbf24' }} title={`Weaker until LV${SKILL_UNLOCK}`}>½ until LV{SKILL_UNLOCK}</span>}
         </div>
       )}
       {mainCard.ult && (
@@ -152,7 +152,7 @@ export default function MainScreen({
           )}
           <div style={{ lineHeight: 1.2 }}>{statLine(10)}</div>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>
-            {mainCard.skill && <div style={{ color: stats.skill ? '#4ade80' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>✦ {mainCard.skill.name}{!stats.skill && <span style={{ color: '#f87171' }}> · LV{SKILL_UNLOCK}</span>}</div>}
+            {mainCard.skill && <div style={{ color: stats.skill ? '#4ade80' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>✦ {mainCard.skill.name}{stats.skill?.weak && <span style={{ color: '#fbbf24' }}> · ½ to LV{SKILL_UNLOCK}</span>}</div>}
             {mainCard.ult && <div style={{ color: stats.ult ? '#c084fc' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>⚡ {mainCard.ult.name}{!stats.ult && <span style={{ color: '#f87171' }}> · LV{ULT_UNLOCK}</span>}</div>}
             {stats.sets.map(set => <div key={set.id} style={{ color: set.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>◆ {set.name}</div>)}
           </div>

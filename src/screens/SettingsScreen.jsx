@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { playClose } from '../utils/sfx';
+import { playClose, sfx, playPress } from '../utils/sfx';
+import { getSettings, setSetting } from '../utils/settings';
 
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
@@ -7,6 +8,8 @@ const BASE = import.meta.env.BASE_URL;
 export default function SettingsScreen({ navigate, devMode, toggleDev }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [scare,        setScare]        = useState(false);
+  const [prefs,        setPrefs]        = useState(getSettings);
+  const change = (key, value) => { setSetting(key, value); setPrefs(getSettings()); };
   // Hidden switch: tap the SETTINGS title 5 times to turn developer mode on/off
   const [taps, setTaps] = useState(0);
   const tapTitle = () => {
@@ -129,6 +132,22 @@ export default function SettingsScreen({ navigate, devMode, toggleDev }) {
             </div>
           )}
 
+          {/* Sound & feel */}
+          <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>SOUND &amp; FEEL</div>
+          <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16, display:'flex', flexDirection:'column', gap:14 }}>
+            <label style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <span style={{ width:110, fontWeight:700 }}>Volume</span>
+              <input id="set-volume" type="range" min={0} max={1} step={0.05} value={prefs.volume}
+                onChange={e => change('volume', Number(e.target.value))}
+                onPointerUp={() => playPress()}
+                style={{ flex:1, accentColor:'#ff8c00' }} />
+              <span style={{ width:40, textAlign:'right', color:'#889', fontVariantNumeric:'tabular-nums' }}>{Math.round(prefs.volume * 100)}%</span>
+            </label>
+            <Toggle label="Combat sounds" sub="Hits, crits, kills, explosions" on={prefs.combatSfx}
+              onChange={v => { change('combatSfx', v); if (v) setTimeout(() => sfx('crit'), 30); }} />
+            <Toggle label="Screen shake" sub="When you get hit, crit or kill something big" on={prefs.shake} onChange={v => change('shake', v)} />
+          </div>
+
           {/* Save Section */}
           <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>SAVE DATA</div>
           <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16 }}>
@@ -154,5 +173,19 @@ export default function SettingsScreen({ navigate, devMode, toggleDev }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function Toggle({ label, sub, on, onChange }) {
+  return (
+    <button onClick={() => onChange(!on)} style={{ display:'flex', alignItems:'center', gap:12, background:'none', border:'none', padding:0, color:'inherit', textAlign:'left', cursor:'pointer', width:'100%' }}>
+      <span style={{ flex:1 }}>
+        <span style={{ display:'block', fontWeight:700 }}>{label}</span>
+        <span style={{ display:'block', color:'#778', fontSize:12 }}>{sub}</span>
+      </span>
+      <span style={{ width:44, height:24, borderRadius:12, background: on ? '#ff8c00' : '#2a2a3a', position:'relative', transition:'background 0.15s', flexShrink:0 }}>
+        <span style={{ position:'absolute', top:3, left: on ? 23 : 3, width:18, height:18, borderRadius:9, background:'#fff', transition:'left 0.15s' }} />
+      </span>
+    </button>
   );
 }

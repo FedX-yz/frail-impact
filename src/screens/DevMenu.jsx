@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CHARACTERS } from '../data/characters';
-import { ENEMY_TYPES } from '../combat/enemies';
+import { ENEMY_TYPES, AFFIXES } from '../combat/enemies';
+import { MODIFIERS } from '../combat/stages';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sandbox / developer menu. Turn it on in Settings (tap the SETTINGS title
@@ -19,6 +20,7 @@ export default function DevMenu({ engine, actions, state, mobile, onClose }) {
   const [god, setGod] = useState(engine.state.dev.god);
   const [speed, setSpeed] = useState(engine.state.dev.timeScale);
   const [toast, setToast] = useState('');
+  const [modId, setModId] = useState(engine.state.stage.mod?.id ?? '');
   const say = (t) => { setToast(t); setTimeout(() => setToast(x => (x === t ? '' : x)), 1600); };
 
   const card = CHARACTERS.find(c => c.id === Number(cardId));
@@ -131,6 +133,20 @@ export default function DevMenu({ engine, actions, state, mobile, onClose }) {
               );
             })}
           </div>
+          <div className="lbl" style={{ marginTop: 2 }}>Elite with affix</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5 }}>
+            {Object.entries(AFFIXES).map(([id, a]) => (
+              <button key={id} className="dv" onClick={() => engine.dev.spawnAffix(id)} style={{ borderColor: a.color, color: a.color }}>{a.name}</button>
+            ))}
+          </div>
+          <Row>
+            <span className="lbl">Stage modifier</span>
+            <select className="dv-in" style={{ width: 'auto', flex: 1 }} value={modId}
+              onChange={e => { setModId(e.target.value); engine.dev.setModifier(e.target.value || null); }}>
+              <option value="">None</option>
+              {Object.entries(MODIFIERS).map(([id, m]) => <option key={id} value={id}>{m.name}</option>)}
+            </select>
+          </Row>
         </Section>
 
         <Section title="Gacha">

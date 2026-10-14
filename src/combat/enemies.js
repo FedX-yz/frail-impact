@@ -101,9 +101,23 @@ export const ENEMY_TYPES = {
   },
 };
 
+// ── Elite affixes ───────────────────────────────────────────────────────────
+// From stage 4 some elites spawn with one of these (chance in balance.js).
+// Affixed elites get +30% HP (Swift: −30%) and give +50% coins and XP.
+export const AFFIXES = {
+  volatile:  { name: 'Volatile',     color: '#f97316', desc: 'Explodes a moment after it dies — get out of the red circle.' },
+  toxic:     { name: 'Toxic',        color: '#84cc16', desc: 'Leaves poison puddles that hurt while your cursor is in them.' },
+  shielded:  { name: 'Shielded',     color: '#38bdf8', desc: 'Has its own shield bubble.' },
+  swift:     { name: 'Swift',        color: '#e879f9', desc: 'Much faster and attacks more often, but has less HP.' },
+  regen:     { name: 'Regenerating', color: '#4ade80', desc: 'Heals quickly when you stop hitting it.' },
+  splitter:  { name: 'Splitter',     color: '#facc15', desc: 'Splits into swarmlings when it dies.' },
+};
+
 // Base damage of each attack at stage 1 (before DEF / damage reduction)
 export const ATTACK_DMG = {
   poke: 6, circle: 14, slash: 16, shot: 10, dash: 20,
   slam: 28, ring: 14, cross: 18, barrage: 10, rain: 14,
   bite: 14,   // worm head touching your cursor
+  blast: 24,  // Volatile elite explosion
+  poison: 5,  // Toxic puddle, per tick
 };

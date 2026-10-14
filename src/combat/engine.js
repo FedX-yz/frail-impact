@@ -4,8 +4,9 @@
 // are design px × state.k so the same fight works on a phone and a PC.
 // ─────────────────────────────────────────────────────────────────────────────
 import { BAL, speedHpMult } from './balance';
-import { ENEMY_TYPES, ATTACK_DMG } from './enemies';
-import { makeEndlessStage } from './stages';
+import { ENEMY_TYPES, ATTACK_DMG, AFFIXES } from './enemies';
+import { makeEndlessStage, MODIFIERS } from './stages';
+import { sfx } from '../utils/sfx';
 
 let uid = 1;
 const rand  = (a, b) => a + Math.random() * (b - a);
@@ -27,11 +28,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     stats,
     stageNum, stage: firstStage,
     phase: 'fight', phaseT: 0, kills: Math.min(kills, firstStage.killTarget),
-    banner: { text: `STAGE ${stageNum}`, sub: 'defeat enemies to summon the boss', t: 2 },
+    banner: null,
     enemies: [], attacks: [], shots: [], effects: [], floaters: [], weakPts: [],
     player: { hp: stats.maxHp, maxHp: stats.maxHp, pos: null, invuln: 0, hitT: 0 },
     ult: { charge: 0, active: null, cd: 0, cdMax: 0 },
     dev: { god: false, timeScale: 1 },   // sandbox menu switches
+    combo: { n: 0, t: 0, best: 0 },      // landed hits in a row (see BAL.COMBO_*)
+    hazards: [],                         // poison puddles from Toxic elites
+    hitStop: 0,                          // tiny freeze on big kills (game feel)
     timeStop: 0, frenzy: 0, shake: 0,
     clickCount: 0,
     timers: { basic: 0.3, elite: 4, horde: 8, treasure: BAL.TREASURE_EVERY, auto: BAL.AUTO_INTERVAL, pulse: 0, weak: 0.7 },
@@ -41,6 +45,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   };
 
   const cb = (name, ...args) => callbacks.current?.[name]?.(...args);
+  // Current stage modifier value (stages.js → MODIFIERS), or the default
+  const M = (key, dflt = 1) => s.stage.mod?.[key] ?? dflt;
 
   // ── Geometry helpers ────────────────────────────────────────────────────
   const K = v => v * s.k;
@@ -67,12 +73,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const aimPoint = () => s.player.pos ?? { x: s.W * 0.5, y: s.H * 0.5 };
 
   // ── Floaters & effects ──────────────────────────────────────────────────
-  function floater(text, x, y, color = '#fff', big = false, icon = null) {
-    s.floaters.push({ id: uid++, text, x, y, color, big, icon, t: 0 });
+  function floater(text, x, y, color = '#fff', big = false, icon = null, kind = null) {
+    s.floaters.push({ id: uid++, text, x, y, color, big, icon, kind, t: 0 });
     if (s.floaters.length > 60) s.floaters.shift();
     s.floaterVer++;   // lets the renderer skip the floater layer when nothing changed
   }
-  const effect = (e) => s.effects.push({ id: uid++, t: 0, ...e });
+  const effect = (e) => { s.effects.push({ id: uid++, t: 0, ...e }); if (s.effects.length > 60) s.effects.shift(); };
+  const shake = (amt) => { s.shake = Math.max(s.shake, amt); };
 
   // ── Spawning ────────────────────────────────────────────────────────────
   function spawnEnemy(typeId, opts = {}) {
@@ -80,22 +87,29 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const speed = type.speedRange ? rand(...type.speedRange) : (type.speed ?? 0);
     const tierHp = type.tier === 'boss' ? 1 : speedHpMult(speed);
     const hpScale = type.tier === 'treasure' ? Math.sqrt(s.stage.hpScale) : s.stage.hpScale;
-    const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp));
+    // Elites can roll an affix (stage 4+)
+    const affix = opts.affix !== undefined ? opts.affix
+      : type.tier === 'elite' && Math.random() < s.stage.affixChance + M('affixAdd', 0) ? pick(Object.keys(AFFIXES)) : null;
+    const affixHp = affix === 'swift' ? 0.7 : affix ? 1.3 : 1;
+    const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp * M('enemyHp') * affixHp));
     const p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * 0.62, y: s.H * 0.42 } : randomPoint());
+    const shieldCfg = type.shield ?? (affix === 'shielded' ? { pct: 0.5, radius: type.size * 0.9, regen: 6 } : null);
     const e = {
       id: uid++, typeId, type, tier: type.tier, name: type.name, img: type.img,
       shape: type.shape ?? null, tint: opts.tint ?? type.tint ?? null,
       size: type.size, x: p.x, y: p.y,
-      hp, maxHp: hp, speed,
+      hp, maxHp: hp, speed: affix === 'swift' ? Math.max(0.6, speed * 1.6) : speed,
+      affix, cdMult: affix === 'swift' ? 0.7 : 1, lastHit: -9, puddleT: 1.5,
       // linked bosses (worm parts, hydra heads)
       group: opts.group ?? null, role: opts.role ?? null, segIndex: opts.segIndex ?? 0,
       angle: opts.angle ?? Math.PI, wiggle: Math.random() * 6, down: 0,
-      shield: type.shield ? { hp: Math.round(hp * type.shield.pct), max: Math.round(hp * type.shield.pct), regenT: 0 } : null,
+      shieldCfg,
+      shield: shieldCfg ? { hp: Math.round(hp * shieldCfg.pct), max: Math.round(hp * shieldCfg.pct), regenT: 0 } : null,
       // movement: still enemies stay put, others wander between random points
-      move: type.kind === 'worm' ? 'worm' : type.horde ? 'swarm' : speed < 0.12 ? 'still' : type.tier === 'treasure' ? 'hop' : 'wander',
+      move: type.kind === 'worm' ? 'worm' : type.horde ? 'swarm' : (affix === 'swift' ? 1 : speed) < 0.12 ? 'still' : type.tier === 'treasure' ? 'hop' : 'wander',
       target: null, hopT: 0,
       armed: opts.armed ?? false,
-      cd: rand(...(type.cooldown ?? [4, 6])) * (type.tier === 'boss' ? 0.5 : 1),
+      cd: rand(...(type.cooldown ?? [4, 6])) * (type.tier === 'boss' ? 0.5 : 1) * M('enemyCd'),
       busy: 0,          // >0 while it has attacks queued / telegraphing
       flashRed: false,  // body-projectile telegraph
       dashing: null,
@@ -143,7 +157,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     // burst in from one side of the arena
     const side = Math.random() < 0.5 ? 0.12 : 0.88;
     const center = { x: s.W * side, y: rand(s.H * 0.3, s.H * 0.75) };
-    for (let i = 0; i < st.hordeSize; i++) {
+    for (let i = 0; i < st.hordeSize + M('hordeExtra', 0); i++) {
       const pos = { x: clamp(center.x + rand(-K(50), K(50)), s.W * 0.05, s.W * 0.95), y: clamp(center.y + rand(-K(60), K(60)), s.H * 0.15, s.H * 0.9) };
       const e = spawnEnemy('swarmling', { pos, armed: Math.random() < st.hordeArmedChance });
       e.swarmOff = { a: rand(0, Math.PI * 2), d: K(rand(70, 130)) };
@@ -171,22 +185,22 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       }
       T.treasure -= dt;
       if (T.treasure <= 0) {
-        T.treasure = BAL.TREASURE_EVERY;
-        if (!countTier('treasure') && Math.random() < Math.min(1, BAL.TREASURE_CHANCE * s.stats.treasureMult)) spawnTreasure();
+        T.treasure = BAL.TREASURE_EVERY / Math.sqrt(M('treasure'));
+        if (!countTier('treasure') && Math.random() < Math.min(1, BAL.TREASURE_CHANCE * s.stats.treasureMult * M('treasure'))) spawnTreasure();
       }
     }
     if (s.phase === 'fight' && st.hordeEvery) {
       T.horde -= dt;
       if (T.horde <= 0) {
-        T.horde = st.hordeEvery;
+        T.horde = st.hordeEvery / M('hordeRate');
         if (s.enemies.filter(e => e.type.horde).length < 4) spawnHorde();
       }
     }
     if (s.phase === 'fight') {
       T.elite -= dt;
       if (T.elite <= 0) {
-        T.elite = st.eliteEvery;
-        if (countTier('elite') < st.eliteCap) spawnEnemy(pick(st.elites));
+        T.elite = st.eliteEvery / M('eliteRate');
+        if (countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) spawnEnemy(pick(st.elites));
       }
     }
   }
@@ -208,7 +222,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         let d2 = Math.atan2(Math.sin(back - e.angle), Math.cos(back - e.angle));
         e.angle += clamp(d2, -6 * dt, 6 * dt);
       }
-      const spd = K(headT.wormSpeed) * (1 + (s.stageNum - 1) * 0.03);
+      const spd = K(headT.wormSpeed) * (1 + (s.stageNum - 1) * 0.03) * M('enemySpeed');
       e.x += Math.cos(e.angle) * spd * dt;
       e.y += Math.sin(e.angle) * spd * dt;
     } else {
@@ -246,7 +260,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       e.target = randomPoint({ x: e.x, y: e.y }, K(220));
     }
     if (!e.target) return;
-    const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1);
+    const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1) * (e.tier === 'treasure' ? 1 : M('enemySpeed'));
     const dx = e.target.x - e.x, dy = e.target.y - e.y, d = Math.hypot(dx, dy) || 1;
     const step = Math.min(d, spd * dt);
     e.x += dx / d * step; e.y += dy / d * step;
@@ -254,15 +268,16 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // ── Enemy attacks ───────────────────────────────────────────────────────
   // An attack: wait (delay) → tele (red, ~1s) → strike (white) / fly → done
+  const enemyDmg = (key) => Math.round((ATTACK_DMG[key] ?? 10) * BAL.ENEMY_DMG_MULT * s.stage.dmgScale * M('enemyDmg'));
   function queueAttack(owner, kind, opts = {}) {
     const a = {
-      id: uid++, owner: owner.id, kind,
+      id: uid++, owner: owner ? owner.id : null, free: !owner, kind,
       phase: 'wait', delay: opts.delay ?? 0, t: 0,
-      tele: BAL.TELEGRAPH * s.stats.telegraphMult * (opts.teleMult ?? 1),
-      dmg: Math.round((ATTACK_DMG[opts.dmgKey ?? kind] ?? 10) * BAL.ENEMY_DMG_MULT * s.stage.dmgScale),
+      tele: BAL.TELEGRAPH * s.stats.telegraphMult * (opts.teleMult ?? 1) * M('tele'),
+      dmg: enemyDmg(opts.dmgKey ?? kind),
       opts, hitDone: false,
     };
-    owner.busy++;
+    if (owner) owner.busy++;
     s.attacks.push(a);
     return a;
   }
@@ -326,16 +341,17 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!owner) return;
     owner.busy = Math.max(0, owner.busy - 1);
     if (a.kind === 'dash') { owner.flashRed = false; owner.dashing = null; owner.target = null; }
-    if (owner.busy === 0) owner.cd = rand(...(owner.type.cooldown ?? [4, 6])) * (owner.tier === 'boss' ? s.stage.bossCooldownMult : 1);
+    if (owner.busy === 0) owner.cd = rand(...(owner.type.cooldown ?? [4, 6])) * (owner.tier === 'boss' ? s.stage.bossCooldownMult : 1) * M('enemyCd') * (owner.cdMult ?? 1);
   }
 
   function updateAttacks(dt) {
     const P = s.player.pos;
     for (const a of s.attacks) {
       if (a.phase === 'done') continue;
-      const owner = s.enemies.find(e => e.id === a.owner);
+      const owner = a.free ? null : s.enemies.find(e => e.id === a.owner);
       // Owner died or got frozen mid-telegraph → attack fizzles
-      if (!owner || (owner.frozen > 0 && (a.phase === 'wait' || a.phase === 'tele'))) {
+      // (free attacks, like a Volatile explosion, have no owner and always go off)
+      if (!a.free && (!owner || (owner.frozen > 0 && (a.phase === 'wait' || a.phase === 'tele')))) {
         if (owner) finishAttack(a); else a.phase = 'done';
         continue;
       }
@@ -348,6 +364,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           a.t = 0;
           if (a.kind === 'circle' || a.kind === 'poke') {
             a.phase = 'strike';
+            if (a.opts.boom) { sfx('boom'); shake(0.25); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#f97316', n: 14 }); }
             if (P && dist(P.x, P.y, a.cx, a.cy) <= a.r) hitPlayer(a.dmg);
           } else if (a.kind === 'slash') {
             a.phase = 'strike';
@@ -385,9 +402,12 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return;
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction)));
     pl.hp = Math.max(0, pl.hp - dmg);
-    pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; s.shake = 0.3;
+    pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; shake(0.3);
     const p = pl.pos ?? { x: s.W / 2, y: s.H / 2 };
     floater(`-${dmg} HP`, p.x, p.y - K(24), '#ff4444', true);
+    sfx('hurt');
+    if (s.combo.n >= 5) floater(`COMBO LOST (${s.combo.n})`, p.x, p.y - K(48), '#94a3b8');
+    s.combo.n = 0;
     cb('onPlayerHit', dmg);
     if (pl.hp <= 0) startDefeat();
   }
@@ -415,23 +435,34 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (st.highHpAtkBonus && s.player.hp > s.player.maxHp / 2) dmg *= 1 + st.highHpAtkBonus;
     if (s.frenzy > 0) dmg *= 2;
     if (s.ult.active?.type === 'transform') dmg *= s.ult.active.clickMult;
+    dmg *= 1 + Math.min(s.combo.n, BAL.COMBO_MAX) * BAL.COMBO_PER;
     if (crit) dmg *= critMult;
     return { dmg, crit };
   }
 
+  // A hit you landed yourself: builds the combo
+  function comboHit() {
+    const c = s.combo;
+    c.n++; c.t = 0; c.best = Math.max(c.best, c.n);
+    const m = BAL.COMBO_MILESTONES.indexOf(c.n);
+    if (m >= 0) { announce(`COMBO ${c.n}!  +${Math.round(Math.min(c.n, BAL.COMBO_MAX) * BAL.COMBO_PER * 100)}% DMG`, ['#facc15', '#fb923c', '#f43f5e'][m]); sfx('combo', m); }
+  }
+
   function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false } = {}) {
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
-    let dmg = rawDmg;
+    let dmg = rawDmg * M('playerDmg');
+    e.lastHit = s.time;
     const sk = s.stats.skill;
     if (e.frozen > 0 && sk?.type === 'frost') dmg *= 1 + sk.bonus;
     if (e.tier === 'boss') dmg *= s.stats.bossDmgMult;
     dmg = Math.max(1, Math.round(dmg));
 
     // A shield bubble (its own or a nearby Shield Bonk's) soaks the hit
-    const sh = s.enemies.find(o => o.shield?.hp > 0 && dist(o.x, o.y, e.x, e.y) <= K(o.type.shield.radius));
+    const sh = s.enemies.find(o => o.shield?.hp > 0 && dist(o.x, o.y, e.x, e.y) <= K(o.shieldCfg.radius));
     if (sh) {
       sh.shield.hp = Math.max(0, sh.shield.hp - dmg);
-      sh.shield.regenT = sh.type.shield.regen; sh.hurt = 0.08;
+      sh.shield.regenT = sh.shieldCfg.regen; sh.hurt = 0.08;
+      if (!quiet) sfx('shield');
       if (!quiet) floater(`🛡-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, '#7dd3fc');
       if (sh.shield.hp === 0) floater('SHIELD BROKEN!', sh.x, sh.y - K(60), '#7dd3fc', true);
       chargeUlt(dmg, charge);
@@ -439,7 +470,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
 
     e.hp -= dmg; e.hurt = 0.12;
-    if (!quiet) floater(`${crit ? 'CRIT ' : ''}${label}-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, color ?? (crit ? '#ff4444' : '#ffd84a'), crit);
+    if (!quiet) floater(`${crit ? 'CRIT ' : ''}${label}-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, color ?? (crit ? '#ff4444' : '#ffd84a'), crit, null, crit ? 'crit' : null);
     chargeUlt(dmg, charge);
     if (e.hp <= 0) {
       if (e.role === 'hydra') headDown(e);
@@ -467,11 +498,31 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 });
     if (silent) return;
     const t = e.type;
-    const coins = Math.round((t.coin ?? 0) * s.stage.coinScale * s.stats.coinMult);
-    const gems  = t.gems ? Math.round(t.gems * s.stage.gemScale) : 0;
+    // juice: shards, sound, a tiny freeze on big kills
+    const big = e.tier === 'elite' || e.tier === 'boss';
+    effect({ kind: 'shards', x: e.x, y: e.y, r: e.size * s.k * (big ? 1.1 : 0.8), n: big ? 12 : 7,
+      color: e.affix ? AFFIXES[e.affix].color : e.tier === 'elite' ? '#c084fc' : e.tier === 'treasure' ? '#fbbf24' : e.tier === 'boss' ? '#ff6a3d' : '#ffd84a' });
+    sfx(big ? 'bigKill' : 'kill');
+    if (e.tier === 'elite') { s.hitStop = Math.max(s.hitStop, 0.05); shake(0.12); }
+    const reward = e.affix ? BAL.AFFIX_REWARD : 1;
+    const coins = Math.round((t.coin ?? 0) * s.stage.coinScale * s.stats.coinMult * M('coin') * reward);
+    const gems  = t.gems ? Math.round(t.gems * s.stage.gemScale * M('gem')) : 0;
     if (coins) floater(`+${fmt(coins)}`, e.x, e.y + K(14), '#f0c040', false, 'coin');
     if (gems)  floater(`+${gems}`, e.x, e.y + K(30), '#7aa2ff', false, 'gem');
-    cb('onReward', { coins, gems, xp: t.xp ?? BAL.XP[e.tier] ?? 0, kill: e.tier !== 'treasure' && !e.group });
+    cb('onReward', { coins, gems, xp: Math.round((t.xp ?? BAL.XP[e.tier] ?? 0) * M('xp') * reward), kill: e.tier !== 'treasure' && !e.group });
+    if (M('killHeal', 0) && e.tier !== 'treasure') heal(s.player.maxHp * M('killHeal', 0));
+
+    // affix death effects
+    if (e.affix === 'volatile') {
+      queueAttack(null, 'circle', { center: { x: e.x, y: e.y }, r: K(115), dmgKey: 'blast', boom: true });
+      floater('💥 VOLATILE!', e.x, e.y - K(40), '#f97316', true);
+    } else if (e.affix === 'splitter') {
+      for (let i = 0; i < 3; i++) {
+        const sw = spawnEnemy('swarmling', { pos: { x: e.x + rand(-K(30), K(30)), y: e.y + rand(-K(30), K(30)) }, armed: Math.random() < s.stage.hordeArmedChance });
+        sw.swarmOff = { a: rand(0, Math.PI * 2), d: K(rand(70, 130)) };
+      }
+      floater('SPLIT!', e.x, e.y - K(40), '#facc15', true);
+    }
 
     // Linked boss parts: the boss only dies when every part is gone
     if (e.group) {
@@ -482,18 +533,18 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       }
       const gt = ENEMY_TYPES[e.groupType], r = gt?.groupReward;
       if (r) {
-        const c = Math.round(r.coin * s.stage.coinScale * s.stats.coinMult);
-        const g = Math.round((r.gems ?? 0) * s.stage.gemScale);
+        const c = Math.round(r.coin * s.stage.coinScale * s.stats.coinMult * M('coin'));
+        const g = Math.round((r.gems ?? 0) * s.stage.gemScale * M('gem'));
         floater(`+${fmt(c)}`, e.x, e.y + K(14), '#f0c040', true, 'coin');
         if (g) floater(`+${g}`, e.x, e.y + K(34), '#7aa2ff', true, 'gem');
         cb('onReward', { coins: c, gems: g, xp: r.xp ?? 0, kill: true });
       }
-      if (e.tier === 'boss') stageClear();
+      if (e.tier === 'boss') { s.hitStop = 0.28; shake(0.6); stageClear(); }
       return;
     }
 
     if (e.tier === 'treasure') treasurePowerUp(e);
-    if (e.tier === 'boss') { stageClear(); return; }
+    if (e.tier === 'boss') { s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });
@@ -554,7 +605,12 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function clickEnemy(e, mult = 1, auto = false) {
     const sk = s.stats.skill;
     const { dmg, crit } = rollClick(mult);
-    damageEnemy(e, dmg, { crit });
+    const dealt = damageEnemy(e, dmg, { crit });
+    if (!auto && dealt > 0) {
+      comboHit();
+      sfx(crit ? 'crit' : 'hit');
+      if (crit) shake(0.08);
+    }
     if (!sk) return;
     if (sk.type === 'splash') {
       effect({ kind: 'burst', x: e.x, y: e.y, r: K(sk.radius), color: '#F59E0B' });
@@ -582,12 +638,15 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (dist(x, y, wx, wy) <= K(22)) {
         s.weakPts = s.weakPts.filter(w => w !== wp);
         const { dmg } = rollClick(wp.mult);
-        damageEnemy(boss, dmg, { crit: true, color: '#ffff44', label: '⚡WEAK ' });
+        effect({ kind: 'ripple', x, y });
+        if (damageEnemy(boss, dmg, { crit: true, color: '#ffff44', label: '⚡WEAK ' }) > 0) { comboHit(); sfx('crit'); shake(0.12); }
         return;
       }
     }
     const e = enemyAt(x, y);
+    effect({ kind: 'ripple', x, y, miss: !e });
     if (e) { clickEnemy(e); return; }
+    if (!s.stats.skill || s.stats.skill.type !== 'gun') sfx('miss');
     // Gun skill: clicking empty space fires a homing shot
     const sk = s.stats.skill;
     if (sk?.type === 'gun') {
@@ -603,7 +662,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const dx = t.x - sh.x, dy = t.y - sh.y, d = Math.hypot(dx, dy) || 1;
       if (d <= t.size * s.k * 0.4) {
         const { dmg, crit } = rollClick(sh.mult);
-        damageEnemy(t, dmg, { crit, color: '#c084fc', label: '💃' });
+        if (damageEnemy(t, dmg, { crit, color: '#c084fc', label: '💃' }) > 0) { comboHit(); sfx(crit ? 'crit' : 'hit'); }
         sh.dead = true; continue;
       }
       const step = Math.min(d, sh.speed * dt);
@@ -622,6 +681,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const all = [...s.enemies];
     const hitAll = (mult, color, label) => all.forEach(e => damageEnemy(e, base * mult, { color, label, charge: 0 }));
     effect({ kind: 'ult', color: '#ffffff', t: 0 });
+    sfx('ult'); shake(0.35);
     cb('onUlt', u);
 
     switch (u.type) {
@@ -666,6 +726,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── Phases ──────────────────────────────────────────────────────────────
+  function stageBanner() {
+    const m = s.stage.mod;
+    return m
+      ? { text: `STAGE ${s.stageNum}`, sub: `${m.name} — ${m.desc}`, subColor: m.color, t: 3.2 }
+      : { text: `STAGE ${s.stageNum}`, sub: 'defeat enemies to summon the boss', t: 2 };
+  }
+
   function startBossIntro() {
     s.phase = 'bossIntro'; s.phaseT = 2.4;
     s.banner = { text: '⚠ BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true };
@@ -673,24 +740,25 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function stageClear() {
     s.phase = 'clear'; s.phaseT = 3;
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null;
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = [];
     const r = s.stage.clearReward;
-    s.banner = { text: `STAGE ${s.stageNum} CLEAR!`, sub: `+${fmt(r.coins)} coins · +${r.gems} gem${r.gems === 1 ? '' : 's'}`, t: 3, good: true };
-    cb('onReward', { coins: r.coins, gems: r.gems, xp: 0, kill: false });
+    const coins = Math.round(r.coins * M('coin')), gems = Math.round(r.gems * M('gem'));
+    s.banner = { text: `STAGE ${s.stageNum} CLEAR!`, sub: `+${fmt(coins)} coins · +${gems} gem${gems === 1 ? '' : 's'}`, t: 3, good: true };
+    cb('onReward', { coins, gems, xp: 0, kill: false });
   }
   function startDefeat() {
     s.phase = 'defeat'; s.phaseT = 2.6;
-    s.attacks = []; s.shots = [];
+    s.attacks = []; s.shots = []; s.hazards = []; s.combo.n = 0;
     s.banner = { text: 'DEFEATED', sub: `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
     cb('onDefeat', s.stageNum);
   }
   function loadStage(n) {
     s.stageNum = n; s.stage = makeStage(n);
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null;
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = [];
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = [];
     s.player.hp = s.player.maxHp; s.player.invuln = 1;
     s.timers.basic = 0.3; s.timers.elite = 4; s.timers.horde = 8;
-    s.banner = { text: `STAGE ${n}`, sub: 'defeat enemies to summon the boss', t: 2 };
+    s.banner = stageBanner();
     for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
     cb('onProgress', { stage: n, kills: 0 });
   }
@@ -711,6 +779,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Main tick ───────────────────────────────────────────────────────────
   function update(rawDt) {
     if (!s.W) return;
+    // hit-stop: freeze the action for a few frames on big kills
+    if (s.hitStop > 0) { s.hitStop -= Math.min(rawDt, 0.05); return; }
     const dt = Math.min(rawDt, 0.05) * s.dev.timeScale;
     s.time += dt;
     const pl = s.player;
@@ -728,7 +798,23 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.effects = s.effects.filter(f => f.t < 0.5);
     s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); });
 
-    if (s.phase !== 'defeat' && pl.hp > 0) heal(s.stats.regen * dt);
+    if (s.phase !== 'defeat' && pl.hp > 0 && !M('noRegen', false)) heal(s.stats.regen * dt);
+
+    // combo runs out if you stop landing hits
+    if (s.combo.n > 0) {
+      s.combo.t += dt;
+      if (s.combo.t > BAL.COMBO_WINDOW) s.combo.n = 0;
+    }
+
+    // poison puddles (Toxic elites): grow in, then hurt while your cursor is inside
+    if (s.hazards.length) {
+      const P0 = pl.pos;
+      s.hazards.forEach(h => {
+        h.t += dt;
+        if (P0 && h.t > h.grow && h.t < h.life && dist(P0.x, P0.y, h.x, h.y) <= h.r) hitPlayer(enemyDmg('poison'));
+      });
+      s.hazards = s.hazards.filter(h => h.t < h.life);
+    }
 
     // Transformation ult
     const act = s.ult.active;
@@ -793,9 +879,18 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         continue;
       }
       if (e.frozen > 0) { e.frozen -= dt; continue; }
+      // affixes that act every frame
+      if (e.affix === 'regen' && e.hp < e.maxHp && s.time - e.lastHit > 1.5) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.06 * dt);
+      if (e.affix === 'toxic' && s.phase !== 'clear') {
+        e.puddleT -= dt;
+        if (e.puddleT <= 0) {
+          e.puddleT = rand(1.4, 2);
+          if (s.hazards.length < 14) s.hazards.push({ id: uid++, x: e.x, y: e.y, r: K(48), t: 0, grow: 0.6, life: 4.5 });
+        }
+      }
       // worm head bites your cursor
       if (e.move === 'worm' && e.role === 'head' && P && dist(P.x, P.y, e.x, e.y) <= e.size * s.k * 0.45) {
-        hitPlayer(Math.round(ATTACK_DMG.bite * BAL.ENEMY_DMG_MULT * s.stage.dmgScale));
+        hitPlayer(enemyDmg('bite'));
       }
       if (e.life != null) {
         e.life -= dt;
@@ -841,6 +936,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       for (let i = 0; i < 3; i++) spawnEnemy(pick(s.stage.basics));
       if (s.kills >= s.stage.killTarget) startBossIntro();
       else if (s.kills > 0) s.banner = { text: `STAGE ${s.stageNum}`, sub: `${s.kills}/${s.stage.killTarget} kills — keep going`, t: 1.6 };
+      else s.banner = stageBanner();
     }
   }
 
@@ -874,7 +970,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; startBossIntro(); },
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
     clearEnemies: () => {
-      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null;
+      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = [];
       // boss removed → back to the fight, one kill short of summoning it again
       if (s.phase === 'boss' || s.phase === 'bossIntro') { s.phase = 'fight'; s.kills = Math.min(s.kills, s.stage.killTarget - 1); }
     },
@@ -883,6 +979,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     setGod: (on) => { s.dev.god = !!on; },
     setTimeScale: (x) => { s.dev.timeScale = x; },
     gotoStage: (n) => loadStage(Math.max(1, Math.round(n))),
+    // an elite with a chosen affix (random elite type)
+    spawnAffix: (affix) => { if (AFFIXES[affix]) spawnEnemy(pick(['bonk', 'rusher', 'shielder']), { armed: true, affix }); },
+    // swap this stage's modifier (null = none) until the stage changes
+    setModifier: (id) => { s.stage = { ...s.stage, mod: MODIFIERS[id] ? { id, ...MODIFIERS[id] } : null }; s.banner = stageBanner(); },
   };
 
   return { state: s, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };

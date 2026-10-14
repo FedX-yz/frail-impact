@@ -44,7 +44,25 @@ export const BAL = {
   HP_GROWTH:        1.28,
   COIN_GROWTH:      1.20,
   DMG_GROWTH:       1.10,  // enemy damage ×1.10 per stage (stage 10 ≈ 2.4×)
-  GEM_GROWTH:       0.25,  // gem rewards +25% per stage (stage 5 = 2×, stage 9 = 3×)
+  GEM_GROWTH:       0.15,  // gem rewards +15% per stage (stage 5 = 1.6×, stage 11 = 2.5×)
+
+  // Combo: every hit you land adds a stack (+1% DMG each, up to +50%).
+  // Stacks reset if you don't land a hit for COMBO_WINDOW seconds, or if you get hit.
+  COMBO_PER:        0.01,
+  COMBO_MAX:        50,
+  COMBO_WINDOW:     2.5,
+  COMBO_MILESTONES: [10, 25, 50],
+
+  // Elite affixes (enemies.js → AFFIXES): chance an elite gets one
+  AFFIX_FROM_STAGE: 4,
+  AFFIX_CHANCE:     0.2,   // at AFFIX_FROM_STAGE, +AFFIX_CHANCE_GROWTH per stage after
+  AFFIX_CHANCE_GROWTH: 0.03,
+  AFFIX_CHANCE_MAX: 0.5,
+  AFFIX_REWARD:     1.5,   // affixed elites give +50% coins and XP
+
+  // Stage modifiers (stages.js → MODIFIERS)
+  MODIFIER_FROM_STAGE: 3,
+  MODIFIER_CHANCE:  0.65,  // share of stages that get one
 
   // Treasure
   TREASURE_EVERY:   12,    // seconds between treasure rolls

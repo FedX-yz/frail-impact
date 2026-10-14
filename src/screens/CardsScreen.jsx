@@ -3,7 +3,7 @@ import { playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { setOfCard, formatSub, CARD_SETS } from '../combat/sets';
-import { SKILLS, ULTS, describeKit, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
+import { SKILLS, ULTS, describeKit, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK } from '../combat/kits';
 import { cardBattleStats } from '../combat/stats';
 import useIsMobile from '../hooks/useIsMobile';
 
@@ -238,12 +238,16 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
                         Yours{selected.rarity >= 5 ? ` (LV${e.level ?? 1}` : ' ('}{si > 0 ? `${selected.rarity >= 5 ? ', ' : ''}S${si + 1}` : ''}): ATK {bs.atk} · HP {bs.hp} · DEF {bs.def}
                       </div>
                     )}
-                    {[['✦ Skill · LV20', selected.skill, SKILLS[selected.skill?.effect]], ['⚡ Ult · LV50', selected.ult, ULTS[selected.ult?.effect]]].filter(([, a]) => a).map(([tag, a, kit]) => (
+                    {[['✦ Skill', selected.skill, SKILLS[selected.skill?.effect]], ['⚡ Ult · LV50', selected.ult, ULTS[selected.ult?.effect]]].filter(([, a]) => a).map(([tag, a, kit]) => (
                       <div key={tag} style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
                         <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{a.name} <span style={{ color:'#776', fontWeight:400, fontSize:11 }}>{tag}{si > 0 ? ` · S${si + 1}` : ''}</span></div>
                         <div style={{ color:'#aaa', fontSize:12 }}>{kit ? describeKit(kit, si) : a.description}</div>
                         {tag.startsWith('⚡') && <div style={{ color:'#889', fontSize:11, marginTop:4 }}>Cooldown {Math.round((a.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si))}s · fills from damage you deal · press E</div>}
-                        {!tag.startsWith('⚡') && <div style={{ color:'#556', fontSize:11, marginTop:4 }}>Always on once unlocked</div>}
+                        {!tag.startsWith('⚡') && kit?.lv1 && (
+                          <div style={{ color:'#8a7a3a', fontSize:11, marginTop:4 }}>
+                            Always on. Before LV{SKILL_UNLOCK} (weaker): {describeKit(weakKit(kit), si)}
+                          </div>
+                        )}
                         {kit && si < 4 && <div style={{ color:'#7c6a2a', fontSize:11, marginTop:3 }}>Next S{si + 2}: {describeSiStep(kit, si)}{tag.startsWith('⚡') ? `, cooldown −${Math.round(ULT_CD_PER_SI * 100)}%` : ''}</div>}
                       </div>
                     ))}

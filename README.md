@@ -29,12 +29,14 @@ files and finish in seconds.
 | `src/combat/engine.js` | The battle itself: spawning, movement, attacks, damage, ults (plain JS) |
 | `src/combat/BattleArena.jsx` | Draws the battle and turns mouse/touch into input |
 | `src/combat/balance.js` | **Every combat number** (damage, HP, scaling, ult charge…) |
-| `src/combat/stages.js` | What each stage spawns, kill targets and which boss shows up |
-| `src/combat/enemies.js` | Enemy roster: basics, elites, horde, shields, bosses (worm, hydra), treasure |
-| `src/combat/kits.js` | 5★/6★ skills (LV20) and ults (LV50), keyed by `effect` in characters.js |
+| `src/combat/stages.js` | What each stage spawns, kill targets, which boss shows up, stage modifiers |
+| `src/combat/enemies.js` | Enemy roster: basics, elites, horde, shields, bosses (worm, hydra), treasure; elite affixes |
+| `src/combat/kits.js` | 5★/6★ skills (weaker from LV1, full at LV20) and ults (LV50), keyed by `effect` in characters.js |
 | `src/combat/sets.js` | 3★/4★ card sets and relic sub-stats |
 | `src/data/characters.js` | Every card: art, stats, skill/ult/passive |
 | `src/data/banners.js` | Gacha banners and their featured cards |
+| `src/utils/sfx.js` | Menu sounds and combat sounds |
+| `src/utils/settings.js` | Volume, combat sounds and screen shake (Settings screen) |
 
 ### Adding things
 
@@ -47,6 +49,23 @@ files and finish in seconds.
   `stages.js` (`basics`, `elites` or `boss`).
 - **Story mode / Tower:** a stage is just a config object (see `makeEndlessStage`), so
   hand-made stages can be passed to `createBattle({ makeStage })`.
+
+### Combat extras
+
+- **Combo:** every hit adds +1% damage (up to +50%). It drains if you stop hitting for
+  2.5 s and resets when you get hit. Numbers: `COMBO_*` in `balance.js`.
+- **Stage modifiers:** from stage 3, most stages get a twist (Haste, Glass Cannon,
+  Swarm, Bloodlust…) shown on the stage banner. Same stage number = same modifier.
+  Add or change them in `MODIFIERS` in `stages.js`.
+- **Elite affixes:** from stage 4, elites can roll Volatile, Toxic, Shielded, Swift,
+  Regenerating or Splitter (20% chance, rising to 50%). They give 1.5× rewards.
+  See `AFFIXES` in `enemies.js`.
+
+### Sounds
+
+Combat sounds (hit, crit, kill, hurt, explosion…) are generated in code as
+placeholders. To use a real sound, put the file in `public/sounds/` and write its
+name in `SFX_FILES` at the bottom of `src/utils/sfx.js`, e.g. `crit: 'crit.mp3'`.
 
 ### Art files
 
@@ -70,7 +89,7 @@ Deck screen's **Battle Stats** box shows the result:
 Tap the **SETTINGS** title 5 times (or open the site with `?dev`) to turn on
 developer mode. A **DEV** button then appears on the battle screen with a sandbox:
 give gems/coins/cards, set levels and superimposition, god mode, game speed,
-spawn any enemy or boss, jump to a stage, force the next gacha pull to be a 5★.
+spawn any enemy or boss, spawn an elite with a chosen affix, set the stage modifier, jump to a stage, force the next gacha pull to be a 5★.
 It changes your real save, so use Reset Save in Settings to start clean.
 
 ### Debugging
