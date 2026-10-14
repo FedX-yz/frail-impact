@@ -17,6 +17,8 @@
 //   drawScale: draw the picture bigger/smaller than the hitbox (`size`)
 //   poses:     extra pictures for attacks — warn (one picture, or two that
 //              flicker) while it winds up, attack while it strikes/dashes
+//   poseFacing: which way the pose pictures look (180 = left, 0 = right); they
+//              then turn toward the attack (flipped instead of upside down)
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -43,6 +45,7 @@ export const ENEMY_TYPES = {
       warn:   [`${BASE}enemies/rusher_warn.png`, `${BASE}enemies/rusher_idle.png`],     // flickers yellow/red before attacking
       attack: `${BASE}enemies/rusher_attack.png`,                                       // screaming, while dashing / shooting
     },
+    poseFacing: 180,   // the skulls look left; they turn/flip to face where they attack
     hp: 95, coin: 55, speed: 0.55,
     attacks: ['dash', 'shot'],
     cooldown: [3.5, 5],

@@ -306,10 +306,12 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     } else if (a.kind === 'shot') {
       const ang = Math.atan2(P.y - owner.y, P.x - owner.x) + (o.spread ?? 0);
       a.sx = owner.x; a.sy = owner.y; a.ux = Math.cos(ang); a.uy = Math.sin(ang);
+      owner.aim = ang;   // attack poses turn toward this
       a.x = a.sx; a.y = a.sy; a.r = K(12); a.speed = K(520);
     } else if (a.kind === 'dash') {
       const ang = Math.atan2(P.y - owner.y, P.x - owner.x);
       const d = dist(owner.x, owner.y, P.x, P.y) + K(110);
+      owner.aim = ang;
       a.fx = owner.x; a.fy = owner.y;
       a.tx = clamp(owner.x + Math.cos(ang) * d, s.W * 0.04, s.W * 0.96);
       a.ty = clamp(owner.y + Math.sin(ang) * d, s.H * 0.06, s.H * 0.96);

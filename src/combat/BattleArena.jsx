@@ -126,6 +126,15 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       el.style.transform = `translate3d(${e.x - half}px, ${e.y - half}px, 0)`;
       // art with a `facing` turns toward where it's going (worm parts)
       if (e.facing != null) el.style.setProperty('--rot', `${Math.round(e.angle * 57.2958 - e.facing)}deg`);
+      // attack poses face the attack: mirrored when aiming the other way, then tilted
+      if (e.type.poses && e.aim != null && e.type.poseFacing != null) {
+        const deg = e.aim * 57.2958;
+        const aimLeft = Math.cos(e.aim) < 0, artLeft = Math.cos(e.type.poseFacing / 57.2958) < 0;
+        let rot = aimLeft ? deg - 180 : deg;
+        rot = ((rot + 540) % 360) - 180;
+        el.style.setProperty('--aim-rot', `${Math.round(rot)}deg`);
+        el.style.setProperty('--aim-flip', aimLeft === artLeft ? '1' : '-1');
+      }
     }
   });
 
@@ -356,12 +365,13 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       {shape === 'segment' ? (
         <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
       ) : pose ? (
-        // attack poses: the warn pictures flicker, the attack picture holds
-        [pose === 'warn' ? poses.warn : poses.attack].flat().map((src, i, all) => (
+        // attack poses: the warn pictures flicker, the attack picture holds;
+        // the wrapper turns them toward the attack (--aim-rot / --aim-flip)
+        <div className="pose-aim">{[pose === 'warn' ? poses.warn : poses.attack].flat().map((src, i, all) => (
           <img key={src} src={src} alt="" draggable={false}
             className={`enemy-img pose ${pose}${all.length > 1 ? ` flick${i}` : ''}`}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : undefined }} />
-        ))
+        ))}</div>
       ) : (
         <img src={img} alt="" draggable={false} decoding="async"
           className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}${poses ? ' smooth' : ''}`}
@@ -492,6 +502,7 @@ const ARENA_CSS = `
   .enemy-img.worm-head:not(.turns) { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
   .enemy-img.turns { animation:none; image-rendering:auto; }
   .enemy-img.smooth { image-rendering:auto; }
+  .pose-aim { position:absolute; inset:0; transform: rotate(var(--aim-rot, 0deg)) scaleX(var(--aim-flip, 1)); transition: transform 0.08s ease-out; }
   .enemy-img.worm-head.turns { filter: drop-shadow(0 0 10px rgba(255,40,120,0.75)); }
   .enemy-img.pose { animation:none; image-rendering:auto; }
   .enemy-img.pose.warn { filter: drop-shadow(0 0 10px rgba(255,40,40,0.9)); }
