@@ -447,6 +447,7 @@ export const CHARACTERS = [
     sprite:          `${BASE}sprites/boiyoujustgotoofed.png`,   // cut out (no background)
     portraitFocus:   [37, 17, 2.8],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/boiyoujustgotoofed.mp3`, drop: 7.56 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     eyecatch('boiyoujustgotoofed'),
     stats: { hp: 1500, atk: 145, def: 85 },

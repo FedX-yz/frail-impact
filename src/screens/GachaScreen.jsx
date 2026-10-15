@@ -3,6 +3,7 @@ import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
 import { playClose, preloadSound, playMusic, stopMusic, musicElapsed } from '../utils/sfx';
 import { thumb } from '../utils/assets';
+import { getSettings } from '../utils/settings';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -173,7 +174,6 @@ export default function GachaScreen({
   };
 
   const summonRef = useRef(null);
-  const revealRef = useRef(null);
   const audioRef  = useRef(null);
   const batchRef  = useRef([]);
   const phaseRef  = useRef('idle');
@@ -195,7 +195,9 @@ export default function GachaScreen({
     audioRef.current.currentTime = 0;
   };
   const playAudio = src => {
-    if (!src || !audioRef.current) return;
+    const vol = getSettings().volume;   // Settings → Volume (0 = silent)
+    if (!src || !audioRef.current || vol <= 0) return;
+    audioRef.current.volume = Math.min(1, vol);
     audioRef.current.src = src;
     audioRef.current.load();
     audioRef.current.play().catch(() => {});
@@ -211,7 +213,9 @@ export default function GachaScreen({
     if (!v || !src) { onFail?.(); return; }
     setVidPlaying(false);
     clearTimeout(vidTimer.current);
-    v.muted = false;
+    const vol = getSettings().volume;   // Settings → Volume (iPhones ignore .volume, so 0 also mutes)
+    v.volume = Math.min(1, Math.max(0, vol));
+    v.muted = vol <= 0;
     v.src = src;
     v.load();
     v.play().catch(() => {
@@ -252,14 +256,14 @@ export default function GachaScreen({
     videoDropRef.current = null;
     // video won't play: the build-up instead (if it has music), or straight to the card
     if (!src) { setPhase(pm ? 'buildup' : 'reveal-queue'); return; }
-    playVideo(revealRef, src, () => setPhase(pm ? 'buildup' : 'reveal-queue'));
+    playVideo(summonRef, src, () => setPhase(pm ? 'buildup' : 'reveal-queue'));
     if (!pm) return;
-    const lead = Math.max(0.5, Math.min(pm.lead ?? 2, pm.drop, 2));
+    const lead = Math.max(0.5, Math.min(pm.lead ?? 2, pm.drop, 3));   // 2 s under the eyecatch unless the card asks for more (Astrec: 3)
     let raf = 0, done = false, started = false, h = null;
     const reveal = () => {
       if (done) return;
       done = true; cancelAnimationFrame(raf); clearTimeout(vidTimer.current);
-      revealRef.current?.pause();
+      summonRef.current?.pause();
       setFlash(true); setPhase('reveal-queue');
     };
     const toDrop = () => { if (!done) { playMusic(pm.src, { offset: pm.drop }); reveal(); } };
@@ -268,7 +272,7 @@ export default function GachaScreen({
       ended: () => (h ? reveal() : toDrop()),         // video over: the drop is now
     };
     const tick = () => {
-      const v = revealRef.current;
+      const v = summonRef.current;
       if (!started && v && isFinite(v.duration) && v.duration > 0 && v.currentTime >= v.duration - lead) {
         started = true;
         playMusic(pm.src, { offset: pm.drop - lead, fadeIn: lead }).then(x => { h = x; });
@@ -350,7 +354,7 @@ export default function GachaScreen({
     const maxRar = Math.max(...results.map(r => r.rarity));
     setHighestRar(maxRar);
     if (maxRar >= 5 && PULL_5STAR_SFX) {
-      try { const a = new Audio(`${BASE}${PULL_5STAR_SFX}`); a.volume = 0.85; a.play().catch(() => {}); } catch { /* empty */ }
+      try { const a = new Audio(`${BASE}${PULL_5STAR_SFX}`); a.volume = 0.85 * getSettings().volume; a.play().catch(() => {}); } catch { /* empty */ }
     }
     setPhase('summon');
   };
@@ -369,7 +373,7 @@ export default function GachaScreen({
     const drop = videoDropRef.current;
     if (drop) { tapped === true ? drop.skip() : drop.ended(); return; }   // pull music: reveal on its drop
     clearTimeout(vidTimer.current);
-    if (revealRef.current) revealRef.current.pause();
+    if (summonRef.current) summonRef.current.pause();
     setPhase('reveal-queue');
   };
 
@@ -414,29 +418,19 @@ export default function GachaScreen({
 
       <audio ref={audioRef} style={{ display:'none' }} />
 
-      {/* Summon intro video */}
+      {/* The pull animation and the per-card reveal videos (eyecatch) share one player:
+          iPhones only let a player use sound after it was started from a tap, and the
+          pull tap unlocks this one — a second player would play the eyecatch muted */}
       {(phase === 'summon' || phase === 'card-video') && <div style={{ position:'absolute', inset:0, background:'#000', zIndex:49 }} />}
       <video
         ref={summonRef}
-        onEnded={() => { if (phaseRef.current === 'summon') onSummonEnd(); }}
-        onPlaying={() => setVidPlaying(true)}
-        onError={() => { if (phaseRef.current === 'summon') skipSummon(); }}
-        playsInline preload="auto" poster={BLANK_POSTER}
-        disablePictureInPicture controls={false}
-        style={{
-          position:'absolute', inset:0, width:'100%', height:'100%',
-          objectFit:'cover', background:'#000', zIndex:50,
-          display: phase === 'summon' ? 'block' : 'none',
-          opacity: vidPlaying ? 1 : 0,
+        onEnded={() => {
+          if (phaseRef.current === 'summon') onSummonEnd();
+          else if (phaseRef.current === 'card-video') onCardVideoEnd();
         }}
-      />
-
-      {/* Per-card reveal video */}
-      <video
-        ref={revealRef}
-        onEnded={() => { if (phaseRef.current === 'card-video') onCardVideoEnd(); }}
         onPlaying={() => setVidPlaying(true)}
         onError={() => {
+          if (phaseRef.current === 'summon') { skipSummon(); return; }
           if (phaseRef.current !== 'card-video') return;
           if (videoDropRef.current) { videoDropRef.current = null; setPhase('buildup'); }   // eyecatch missing: the build-up instead
           else onCardVideoEnd();
@@ -446,7 +440,7 @@ export default function GachaScreen({
         style={{
           position:'absolute', inset:0, width:'100%', height:'100%',
           objectFit:'cover', background:'#000', zIndex:50,
-          display: phase === 'card-video' ? 'block' : 'none',
+          display: phase === 'summon' || phase === 'card-video' ? 'block' : 'none',
           opacity: vidPlaying ? 1 : 0,
         }}
       />
