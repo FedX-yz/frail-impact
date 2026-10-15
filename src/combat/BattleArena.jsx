@@ -5,6 +5,7 @@ import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
 import FocusImg from '../components/FocusImg';
+import TapButton from '../components/TapButton';
 
 const BASE = import.meta.env.BASE_URL;
 const STATUS_PORTRAITS = {
@@ -401,11 +402,11 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             <div style={{ color: '#f9a8d4', fontWeight: 900, fontSize: 22 * Math.max(0.8, k), letterSpacing: 2, textShadow: '0 0 14px #ec4899' }}>ORA ORA ORA</div>
             <div style={{ color: '#ddd', fontSize: 13, marginBottom: 6 }}>Pick a skill to use at full strength</div>
             {s.choosing.options.map((id, i) => (
-              <button key={id} className="ora-opt" onClick={() => engine.choose(i)}>
+              <TapButton key={id} className="ora-opt" onClick={() => engine.choose(i)}>
                 <span style={{ color: '#f9a8d4', fontWeight: 900, marginRight: 8 }}>{i + 1}</span>
                 <b>{SKILL_NAMES[id] ?? id}</b>
                 <span style={{ display: 'block', color: '#bbb', fontSize: 12, fontWeight: 400, marginTop: 2 }}>{describeKit(SKILLS[id], s.stats.si ?? 0)}</span>
-              </button>
+              </TapButton>
             ))}
           </div>
         )}

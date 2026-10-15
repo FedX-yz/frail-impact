@@ -7,6 +7,7 @@ import { CodecPopup } from './Codec';
 import { CODEC, STORY_CSS } from './codecStyle';
 import VNPlayer from './VNPlayer';
 import { playPress } from '../utils/sfx';
+import TapButton from '../components/TapButton';
 
 const BASE = import.meta.env.BASE_URL;
 const NO_LINES = [];
@@ -143,9 +144,9 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
               display: 'flex', flexDirection: 'column', gap: 10, fontFamily: CODEC.font, boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}>
               <div style={{ color: lost ? '#ff6b4a' : CODEC.yellow, fontWeight: 900, fontSize: 26, letterSpacing: 3, textAlign: 'center' }}>{lost ? 'DEFEATED' : 'PAUSED'}</div>
               {lost && <div style={{ color: '#d1fae5', fontSize: 13, textAlign: 'center', marginBottom: 4 }}>Train or change your deck, then come back — or try again now.</div>}
-              {!lost && <button className="vn-choice" style={{ width: '100%' }} onClick={() => { playPress(); setMenu(false); }}>▶ Resume</button>}
-              <button className="vn-choice" style={{ width: '100%' }} onClick={retry}>↻ Retry</button>
-              <button className="vn-choice" style={{ width: '100%' }} onClick={leave}>⌂ Back to map</button>
+              {!lost && <TapButton className="vn-choice" style={{ width: '100%' }} onClick={() => { playPress(); setMenu(false); }}>▶ Resume</TapButton>}
+              <TapButton className="vn-choice" style={{ width: '100%' }} onClick={retry}>↻ Retry</TapButton>
+              <TapButton className="vn-choice" style={{ width: '100%' }} onClick={leave}>⌂ Back to map</TapButton>
             </div>
           </div>
         )}
@@ -167,7 +168,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
           ) : (
             <div style={{ color: '#94a3b8', fontSize: 13 }}>{firstClear ? '' : 'Replay — first-clear rewards already collected.'}</div>
           )}
-          <button className="vn-choice" style={{ width: 'min(300px, 100%)', textAlign: 'center' }} autoFocus onClick={() => { playPress(); onLeave(); }}>Continue ▶</button>
+          <TapButton className="vn-choice" style={{ width: 'min(300px, 100%)', textAlign: 'center' }} autoFocus onClick={() => { playPress(); onLeave(); }}>Continue ▶</TapButton>
         </div>
       </div>
     );

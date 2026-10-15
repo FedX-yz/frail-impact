@@ -5,6 +5,7 @@ import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
 import { playSFX, playPress } from '../utils/sfx';
+import TapButton from '../components/TapButton';
 
 const BASE = import.meta.env.BASE_URL;
 const NO_STEPS = [];
@@ -176,9 +177,9 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
         <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 7, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
           background: 'rgba(3,6,12,0.55)', paddingBottom: st.line ? (tall ? 140 : 150) : 0 }}>
           {st.choice.map((c, n) => (
-            <button key={n} className="vn-choice" onClick={() => choose(c)} autoFocus={n === 0}>
+            <TapButton key={n} className="vn-choice" onClick={() => choose(c)} autoFocus={n === 0}>
               <span style={{ opacity: 0.6, marginRight: 10 }}>{n + 1}</span>{c.text}
-            </button>
+            </TapButton>
           ))}
         </div>
       )}
