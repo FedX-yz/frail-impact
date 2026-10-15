@@ -241,6 +241,12 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const spacing = K(ENEMY_TYPES[e.groupType]?.spacing ?? 40);
       const dx = e.x - leader.x, dy = e.y - leader.y, d = Math.hypot(dx, dy) || 1;
       if (d > spacing) { e.x = leader.x + dx / d * spacing; e.y = leader.y + dy / d * spacing; }
+      // a part left outside the arena (the worm spawns off the right edge and can curl
+      // back before the tail is pulled in) creeps toward the part in front so it can be clicked
+      else if (e.x < 0 || e.x > s.W || e.y < 0 || e.y > s.H) {
+        const step = Math.min(d * 0.9, K(220) * dt);
+        e.x -= dx / d * step; e.y -= dy / d * step;
+      }
       e.angle = Math.atan2(-dy, -dx);   // body parts face the part in front of them
     }
   }

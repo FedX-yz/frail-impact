@@ -6,6 +6,8 @@
 //     color:    name box / codec accent colour
 //     portrait: square face picture for the codec (path inside public/)
 //     sprite:   standing picture for cutscenes (path inside public/)
+//     focus:    optional [x %, y %, zoom] — where the face is in `portrait`, for
+//               full-size art (the codec zooms onto it)
 //     moods:    optional extra sprites, e.g. { angry: 'story/cast/astrec-angry.png' }
 //               — use them with { show: 'astrec', mood: 'angry' } in a scene
 //   }
@@ -24,6 +26,16 @@ export const CAST = {
   ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'characters/iceduke.png', sprite: 'characters/iceduke.png' },
   reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png' },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
+
+  // Anemics Kaisen 5★s — their full art is the sprite, zoomed onto the face for the codec
+  jerry:       { name: 'Jerry',              color: '#E8A33D', portrait: 'cardart/jerry-card.png',              sprite: 'cardart/jerry-card.png',              focus: [18, 34, 2.4] },
+  room16:      { name: 'Room Number 16',     color: '#EC4899', portrait: 'cardart/room16-card.png',             sprite: 'cardart/room16-card.png',             focus: [47, 20, 3] },
+  ice_fire:    { name: 'Ice',                color: '#F97316', portrait: 'cardart/ice-fire-card.png',           sprite: 'cardart/ice-fire-card.png',           focus: [38, 36, 2.2] },
+  tyran:       { name: 'Tyran',              color: '#A855F7', portrait: 'cardart/tyran-card.png',              sprite: 'cardart/tyran-card.png',              focus: [53, 27, 3.4] },
+  ivy:         { name: 'Ivy',                color: '#D946EF', portrait: 'cardart/ivy-card.png',                sprite: 'cardart/ivy-card.png',                focus: [50, 40, 3.4] },
+  doro:        { name: 'Doro',               color: '#FACC15', portrait: 'cardart/doro-proud-card.png',         sprite: 'cardart/doro-proud-card.png',         focus: [65, 17, 3] },
+  bio_shadows: { name: 'Bio',                color: '#6366F1', portrait: 'cardart/bio-shadows-card.png',        sprite: 'cardart/bio-shadows-card.png',        focus: [43, 34, 1.8] },
+  boi:         { name: 'Boiyoujustgotoofed', color: '#22D3EE', portrait: 'cardart/boiyoujustgotoofed-card.png', sprite: 'cardart/boiyoujustgotoofed-card.png', focus: [32, 24, 2.8] },
 
   // Narrator lines ("plain strings" in a scene) use this
   narrator: { name: '', color: '#94a3b8', portrait: null, sprite: null },

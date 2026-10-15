@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES } from './enemies';
 import { getSettings } from '../utils/settings';
+import FocusImg from '../components/FocusImg';
 
 const BASE = import.meta.env.BASE_URL;
 const STATUS_PORTRAITS = {
@@ -447,8 +448,18 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
             <img src={STATUS_PORTRAITS[mainCard.id]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
           </div>
         )}
+        {/* Full art with a face position (portraitFocus in characters.js) → zoom onto the face */}
+        {mainCard && !STATUS_PORTRAITS[mainCard.id] && mainCard.portraitFocus && mainCard.cardArt && (
+          <div style={{
+            position: 'absolute', left: '2%', top: '4%', width: '54%', height: '84%', overflow: 'hidden', pointerEvents: 'none',
+            WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
+            maskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
+          }}>
+            <FocusImg src={mainCard.cardArt} focus={mainCard.portraitFocus} />
+          </div>
+        )}
         {/* No custom status portrait yet → crop the card art into the portrait area */}
-        {mainCard && !STATUS_PORTRAITS[mainCard.id] && (
+        {mainCard && !STATUS_PORTRAITS[mainCard.id] && !(mainCard.portraitFocus && mainCard.cardArt) && (
           <div style={{
             position: 'absolute', left: '2%', top: '4%', width: '54%', height: '84%', overflow: 'hidden', pointerEvents: 'none',
             WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
@@ -468,10 +479,10 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
         <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         <div
           onPointerDown={e => { e.stopPropagation(); onUlt(); }}
-          title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : 'Ult unlocks at LV50'}
+          title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : mainCard?.ult ? 'Ult unlocks at LV50' : 'No ult'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
-          {!ult ? 'LV50' : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
+          {!ult ? (mainCard?.ult ? 'LV50' : '—') : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
               <span>{cd}s</span>
               <span style={{ fontSize: '0.6em', opacity: 0.8 }}>{Math.floor(charge * 100)}%</span>

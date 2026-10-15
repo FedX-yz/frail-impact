@@ -45,8 +45,14 @@ files and finish in seconds.
 - **A new card:** add it to `src/data/characters.js`. For a 5★/6★, give `skill.effect` and
   `ult.effect` one of the ids in `src/combat/kits.js` (or add a new one there). For a
   3★/4★, add its id to a set in `src/combat/sets.js` if it belongs to one.
+- **Card pictures:** `image` is the framed card (grids, deck, pulls) in `public/characters/`;
+  `cardArt` is the full art without the frame (tap-to-zoom) in `public/cardart/`.
+  `portraitFocus: [x %, y %, zoom]` points at the face in the full art, and the battle
+  HP portrait zooms onto it. A 5★ with `skill: null, ult: null` works as a stats-only
+  card and shows "kit coming soon".
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
-  `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. Cards without one use their card art.
+  `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
+  cards with neither use their card art.
 - **A new enemy:** add it to `ENEMY_TYPES` in `src/combat/enemies.js`, then list it in
   `stages.js` (`basics`, `elites` or `boss`).
 - **Enemy art:** put the picture in `public/enemies/` and set `img`. Optional: `facing`

@@ -3,6 +3,7 @@ import { CODEC, useTypewriter } from './codecStyle';
 import { CAST } from './cast';
 import { asset } from './story';
 import { thumb } from '../utils/assets';
+import FocusImg from '../components/FocusImg';
 
 // A cast member's face. No art yet → a placeholder with their initial.
 export const Portrait = memo(function Portrait({ who, size, border = CODEC.yellow }) {
@@ -11,7 +12,10 @@ export const Portrait = memo(function Portrait({ who, size, border = CODEC.yello
   const src = c.portrait && !broken ? thumb(asset(c.portrait)) : null;
   return (
     <div style={{ width: size, height: size, flexShrink: 0, border: `3px solid ${border}`, background: '#f3ea78', overflow: 'hidden', position: 'relative', boxShadow: '0 3px 10px rgba(0,0,0,0.45)' }}>
-      {src ? (
+      {src && c.focus ? (
+        // full art with a face position → zoom onto the face
+        <FocusImg src={src} alt={c.name} focus={c.focus} style={{ filter: 'sepia(0.35) saturate(1.2)' }} />
+      ) : src ? (
         <img src={src} alt={c.name} draggable={false} onError={() => setBroken(true)}
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block', filter: 'sepia(0.35) saturate(1.2)' }} />
       ) : (

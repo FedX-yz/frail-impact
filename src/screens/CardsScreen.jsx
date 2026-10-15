@@ -9,7 +9,7 @@ import useIsMobile from '../hooks/useIsMobile';
 
 const RARITY_COLOR = { 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' };
 const RARITY_LABEL = { 6:'6★', 5:'5★', 4:'4★', 3:'3★' };
-const ELEMENT_ICON = { Geo:'🪨', Hydro:'💧', Ice:'❄️', Fire:'🔥', Lightning:'⚡', Physical:'⚔️', Quantum:'🌌', Imaginary:'✨', Wind:'💨' };
+const ELEMENT_ICON = { Geo:'🪨', Hydro:'💧', Ice:'❄️', Fire:'🔥', Lightning:'⚡', Physical:'⚔️', Quantum:'🌌', Imaginary:'✨', Wind:'💨', Shadow:'🌑' };
 
 const CardImage = memo(({ card, size = 28, small = false }) => {
   const full = card.characterImage || card.image;
@@ -255,6 +255,11 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
                 );
               })()}
 
+              {selected.rarity >= 5 && !selected.skill && !selected.ult && (
+                <div style={{ background:'#1a1000', border:'1px dashed #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8, color:'#998', fontSize:12 }}>
+                  ✦ Skill and ult coming soon — for now this card brings its stats.
+                </div>
+              )}
               {selected.passive && (
                 <div style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
                   <div style={{ color:'#88aaff', fontWeight:700, marginBottom:4 }}>◈ {selected.passive.name}</div>

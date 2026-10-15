@@ -484,6 +484,25 @@ zIndex: 10,
       : <div style={{ position:'absolute', inset:0, zIndex:0, background:`radial-gradient(ellipse at 30% 60%, ${activeBanner.accentColor}22 0%, #07000f 70%)` }} />
     }
 
+    {/* No banner art yet → fan out the featured cards */}
+    {!activeBanner.uiAssets?.bg && activeBanner.featuredIds.length > 0 && (() => {
+      const feat = activeBanner.featuredIds.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean);
+      const n = feat.length;
+      return (
+        <div style={{ position:'absolute', top:'10%', bottom:'8%', left:'40%', right:'4%', zIndex:1, pointerEvents:'none' }}>
+          {feat.map((c, i) => {
+            const t = n > 1 ? i / (n - 1) : 0.5;
+            return (
+              <img key={c.id} src={thumb(c.image)} alt={c.name} draggable={false}
+                style={{ position:'absolute', top: `${4 + Math.abs(t - 0.5) * 12}%`, left: `calc(${t} * (100% - 34%))`, width:'34%', aspectRatio:'2633 / 3752',
+                  transform:`rotate(${(t - 0.5) * 16}deg)`, transformOrigin:'50% 110%', borderRadius:6,
+                  boxShadow:'-4px 6px 18px rgba(0,0,0,0.6)', zIndex: i }} />
+            );
+          })}
+        </div>
+      );
+    })()}
+
     {activeBanner.uiAssets?.text && (
       <img src={`${BASE}ui/${activeBanner.uiAssets.text}.png`} alt="" draggable={false}
         style={{
