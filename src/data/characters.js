@@ -1,9 +1,14 @@
 const BASE = import.meta.env.BASE_URL;
 
 // Pull animation for the Anemics Kaisen cards (plays instead of the normal 5★
-// one). Put the video in public/animations/ and write its path here, e.g.
-// `${BASE}animations/anemics-kaisen.mp4`. null = they use the normal 5★ animation.
-const JJK_EYECATCH = null;
+// one). Either one video, or { wide, tall } for screens wider / taller than they
+// are (phones held upright get `tall`, so nothing important is cropped off).
+// The current one is a placeholder: replace the files in public/animations/
+// (same names), or point these at your own. null = the normal 5★ animation.
+const JJK_EYECATCH = {
+  wide: `${BASE}animations/anemics-kaisen.mp4`,        // 16:9
+  tall: `${BASE}animations/anemics-kaisen-tall.mp4`,   // 9:16
+};
 
 export const CHARACTERS = [
 

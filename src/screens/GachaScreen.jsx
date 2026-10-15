@@ -303,7 +303,9 @@ export default function GachaScreen({
     const maxRar = Math.max(...results.map(r => r.rarity));
     setHighestRar(maxRar);
     // a card with its own pull animation (Anemics Kaisen eyecatch) beats the rarity one
-    setSummonSrc(results.find(r => r.rarity === maxRar && r.summonVideo)?.summonVideo ?? null);
+    const sv = results.find(r => r.rarity === maxRar && r.summonVideo)?.summonVideo;
+    const tall = window.innerHeight > window.innerWidth;
+    setSummonSrc(!sv ? null : typeof sv === 'string' ? sv : (tall ? sv.tall ?? sv.wide : sv.wide ?? sv.tall) ?? null);
     if (maxRar >= 5 && PULL_5STAR_SFX) {
       try { const a = new Audio(`${BASE}${PULL_5STAR_SFX}`); a.volume = 0.85; a.play().catch(() => {}); } catch { /* empty */ }
     }
