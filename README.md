@@ -62,6 +62,11 @@ files and finish in seconds.
   wide screens, `<name>-tall.mp4` for phones held upright). Replace those files to
   change them, or point `summonVideo` at your own video. If one is missing or won't
   play, the normal animation plays instead.
+- **Banner art:** four see-through PNG layers in `public/ui/`, all the same size (3183×2447):
+  `bg` (background), `char1` (right character, behind), `char2` (left character, in front) and
+  `text` (title, drawn on top). Put their names in `uiAssets` in `src/data/banners.js`. Only the
+  bottom ~77% of `bg`/`text` shows inside the card; the characters can stick out over its top edge.
+  The timer goes bottom-right, under an "ends in:" drawn in the `text` layer.
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
   cards with neither use their card art.

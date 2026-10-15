@@ -38,10 +38,10 @@ export const BANNERS = [
       boostedRarity: 5,
       boostedChance: 0.5,
       uiAssets: {
-        bg:    null,
-        char1: null,
-        char2: null,
-        text:  null,
+        bg:    'ui_anemicbannerbg',
+        char1: 'ui_anemicbannerchar1',
+        char2: 'ui_anemicbannerchar2',
+        text:  'ui_anemicbannertext',
       },
     },
     {
