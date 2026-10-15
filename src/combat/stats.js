@@ -79,6 +79,7 @@ export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, m
     ? { ...scaleKit(ULTS[main.ult.effect], si), name: main.ult.name, effect: main.ult.effect,
         cooldown: (main.ult.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si) } : null;
   if (skill?.type === 'crit') { critRate += skill.rate; critDmg += skill.dmg; }
+  if (skill?.type === 'ratio') critRate = Math.max(0, critRate + (skill.critRateMod ?? 0));   // Nanami crits by timing instead
 
   const dmgReduction = Math.min(BAL.MAX_DMG_REDUCTION,
     defReduction + sub.dmgRed + enemyDmgRed + (has('showdown') ? 0.15 : 0));

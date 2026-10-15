@@ -123,6 +123,26 @@ reset story progress, see the current flags, and a list of typos it found (a spe
 missing from cast.js, a `goto` with no matching label, an unknown enemy…). In battle a
 🛠 WIN button skips the fight.
 
+### 5★ kits
+
+Every skill and ult number is in `src/combat/kits.js` (with a weaker `lv1` version
+and per-superimposition `si` steps). The older kits run in `engine.js`; the Anemics
+Kaisen kits run in `src/combat/kitRuntime.js`, which adds a few shared systems:
+allies (crawlers, shikigami, spirits, Mahoraga), lava zones, fire walls, aimed ults
+and the Room 16 skill picker.
+
+| Card | Skill | Ult |
+| --- | --- | --- |
+| Jerry | Infinity: bubble stops shots/dashes/bites, pushes enemies | Hollow Purple: beam from you through your cursor |
+| Room Number 16 | copies a random 5★ skill (weak), every 20s | ORA: pick 1 of 3 skills at full strength for 45s + punch barrage |
+| Ice (fire) | kills leave lava | Maximum: Meteor on your cursor |
+| Tyran | every 6th kill → exploding crawler | 10s: clicks fire 3 slashes through the cursor |
+| Ivy | kills → orbiting spirits (getting hit loses one) | Uzumaki: spends all spirits, scales with how many |
+| Doro | fast cursor movement leaves fire walls that stop shots | Fuga: fire arrow at the strongest enemy + arena burn |
+| Bio (Ten Shadows) | combo 10/25/50 → Dog / Toad (eats a hit) / Nue | Mahoraga: you're suspended; it must clear the field; if it dies you die |
+| Boiyoujustgotoofed | 7:3 ratio bar: time the click for a big guaranteed crit | Overtime: every click is a ratio hit, then Collapse |
+| Astrec (Heavenly Restriction) | enemies aim where you were 0.5s ago; fast auto-attacks | Sorcerer Killer: charges from kills; faster autos + executes |
+
 ### Sounds
 
 Combat sounds (hit, crit, kill, hurt, explosion…) are generated in code as

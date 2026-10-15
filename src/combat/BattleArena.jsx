@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES } from './enemies';
+import { SKILLS, describeKit } from './kits';
+import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
 import FocusImg from '../components/FocusImg';
 
@@ -14,6 +16,8 @@ const STATUS_PORTRAITS = {
   99: `${BASE}ui/ui_statushox.png`,
 };
 const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
+const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
+const SHIKI_ICON = { dog: '🐺', toad: '🐸', nue: '🦅' };
 
 // Load attack-pose pictures up front so the first wind-up doesn't show a blank
 Object.values(ENEMY_TYPES).forEach(t => {
@@ -79,6 +83,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       if (e.repeat) return;   // holding E doesn't spam it
+      if (engine.state.choosing && /^[1-3]$/.test(e.key)) { engine.choose(Number(e.key) - 1); return; }
       if (e.key === 'e' || e.key === 'E') engine.activateUlt();
     };
     window.addEventListener('keydown', onKey);
@@ -114,7 +119,12 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const ult = s.stats.ult;
   const charge = s.ult.charge;
   const ultCd = s.ult.cd > 0 ? Math.ceil(s.ult.cd) : 0;
-  const ultReady = ult && charge >= 1 && !ultCd && !s.ult.active;
+  const ultReady = ult && charge >= 1 && !ultCd && !s.ult.active && !s.ult.blocked;
+  const curSkill = engine.curSkill?.();
+  const P = pl.pos;
+  const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
+  const origin = s.reserved ? { x: (s.reserved.x0 + s.reserved.x1) / 2, y: (s.reserved.y0 + s.reserved.y1) / 2 } : { x: s.W * 0.12, y: s.H * 0.85 };
+  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -159,6 +169,40 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* ── Attack areas ─────────────────────────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4, overflow: 'visible' }}>
+            <defs>
+              <radialGradient id="lavaGrad">
+                <stop offset="0%" stopColor="#fde68a" stopOpacity="0.85" />
+                <stop offset="45%" stopColor="#f97316" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#7c2d12" stopOpacity="0.15" />
+              </radialGradient>
+            </defs>
+            {s.zones.map(z => {
+              const fade = Math.min(1, z.t / 0.25, (z.life - z.t) / 0.6);
+              return <circle key={z.id} cx={z.x} cy={z.y} r={z.r} fill="url(#lavaGrad)" opacity={Math.max(0, fade)} stroke="#fb923c" strokeWidth={2} strokeOpacity={0.6 * fade} />;
+            })}
+            {s.fire.length > 0 && (
+              <g>
+                {s.fire.map(f => {
+                  const o = Math.max(0, 1 - f.t / f.life);
+                  return (
+                    <g key={f.id} opacity={o}>
+                      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#f97316" strokeWidth={22 * k} strokeLinecap="round" opacity={0.25} />
+                      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#ea580c" strokeWidth={12 * k} strokeLinecap="round" />
+                      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#fde68a" strokeWidth={4 * k} strokeLinecap="round" />
+                    </g>
+                  );
+                })}
+              </g>
+            )}
+            {s.kit.meteor && (() => {
+              const m = s.kit.meteor, p = Math.min(1, m.t / m.tele);
+              return (
+                <g>
+                  <circle cx={m.x} cy={m.y} r={m.r} fill={`rgba(249,115,22,${0.1 + 0.25 * p})`} stroke="#fb923c" strokeWidth={3} strokeDasharray={`${12 * k} ${8 * k}`} />
+                  <circle cx={m.x} cy={m.y} r={m.r * p} fill="none" stroke="#fde68a" strokeWidth={2} />
+                </g>
+              );
+            })()}
             {s.hazards.map(h => {
               const grow = Math.min(1, h.t / h.grow), fade = h.t > h.life - 0.5 ? (h.life - h.t) / 0.5 : 1;
               return <circle key={h.id} cx={h.x} cy={h.y} r={h.r * (0.4 + 0.6 * grow)} fill={`rgba(132,204,22,${(grow < 1 ? 0.15 : 0.32) * fade})`}
@@ -168,8 +212,25 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             {s.shots.map(sh => (
               <circle key={sh.id} cx={sh.x} cy={sh.y} r={8 * k} fill="#e9d5ff" stroke="#a855f7" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
             ))}
-            {s.effects.map(f => <EffectShape key={f.id} f={f} k={k} />)}
+            {s.effects.filter(f => !OVER.has(f.kind)).map(f => <EffectShape key={f.id} f={f} k={k} />)}
           </svg>
+
+          {/* ── Allies (crawlers, shikigami) ─────────────────────────── */}
+          {s.allies.map(a => {
+            if (a.kind === 'crawler') {
+              const sz = a.size * k;
+              return (
+                <div key={a.id} className="crawler" style={{ position: 'absolute', left: a.x - sz / 2, top: a.y - sz / 2, width: sz, height: sz, zIndex: 8, pointerEvents: 'none' }}>
+                  <img src={a.img} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'hue-rotate(250deg) saturate(1.8) brightness(0.8) drop-shadow(0 0 6px #a855f7)' }} />
+                </div>
+              );
+            }
+            if (SHIKI_ICON[a.kind]) return (
+              <div key={a.id} className={`shiki ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', fontSize: (a.kind === 'nue' ? 30 : 34) * k,
+                opacity: a.life < 1 ? a.life : 1 }}>{SHIKI_ICON[a.kind]}</div>
+            );
+            return null;
+          })}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
@@ -187,6 +248,65 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
             );
           })}
+
+          {/* ── Kit visuals above the enemies ───────────────────────── */}
+          <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 9, overflow: 'visible' }}>
+            {s.kit.souls > 0 && P && curSkill?.type === 'souls' && (
+              <g>
+                {Array.from({ length: s.kit.souls }, (_, i) => {
+                  const a = s.time * 1.8 + (i / s.kit.souls) * Math.PI * 2;
+                  const rr = 75 * k + Math.sin(s.time * 3 + i) * 6 * k;
+                  const x = P.x + Math.cos(a) * rr, y = P.y + Math.sin(a) * rr;
+                  return <g key={i}><circle cx={x} cy={y} r={10 * k} fill="#e879f9" opacity={0.25} /><circle cx={x} cy={y} r={5 * k} fill="#f5d0fe" /></g>;
+                })}
+              </g>
+            )}
+            {curSkill?.type === 'infinity' && P && !s.mahoraga && (
+              <g opacity={0.25 + 0.6 * s.kit.inf / 100}>
+                <circle cx={P.x} cy={P.y} r={curSkill.radius * k} fill="rgba(147,197,253,0.07)" stroke="#93c5fd" strokeWidth={2}
+                  strokeDasharray={s.kit.inf < 25 ? `${6 * k} ${6 * k}` : 'none'} />
+                <text x={P.x} y={P.y - curSkill.radius * k - 4} textAnchor="middle" fill="#bfdbfe" fontSize={12 * k} fontWeight={900}>∞ {Math.round(s.kit.inf)}%</text>
+              </g>
+            )}
+            {hover && (curSkill?.type === 'ratio' || s.ult.active?.type === 'overtime') && (() => {
+              const w = Math.max(70 * k, hover.size * k * 1.15), x0 = hover.x - w / 2, y = hover.y - hover.size * k * 0.5 - 20 * k, h = 9 * k;
+              const ot = s.ult.active?.type === 'overtime';
+              const win = s.kit.ratioWin || 0.1;
+              return (
+                <g>
+                  <rect x={x0} y={y} width={w} height={h} rx={2} fill="rgba(0,0,0,0.65)" stroke={ot ? '#22d3ee' : '#94a3b8'} strokeWidth={1} />
+                  {ot ? <rect x={x0} y={y} width={w} height={h} rx={2} fill="#22d3ee" opacity={0.6} />
+                      : <rect x={x0 + w * (0.7 - win / 2)} y={y} width={w * win} height={h} fill="#facc15" opacity={0.85} />}
+                  <line x1={x0 + w * 0.7} y1={y - 3 * k} x2={x0 + w * 0.7} y2={y + h + 3 * k} stroke="#fff" strokeWidth={1.5} />
+                  {!ot && <line x1={x0 + w * s.kit.ratioU} y1={y - 4 * k} x2={x0 + w * s.kit.ratioU} y2={y + h + 4 * k} stroke="#ef4444" strokeWidth={3 * k} />}
+                  <text x={x0 + w * 0.7} y={y - 5 * k} textAnchor="middle" fill="#fde68a" fontSize={9 * k} fontWeight={900}>7:3</text>
+                </g>
+              );
+            })()}
+            {s.kit.purple && (() => {
+              const pu = s.kit.purple, p = 1 - pu.t / pu.dur, aim = P ?? { x: s.W / 2, y: s.H / 2 };
+              const d = 70 * k * (1 - p);
+              const dx = aim.x - origin.x, dy = aim.y - origin.y, len = Math.hypot(dx, dy) || 1, L = Math.hypot(s.W, s.H);
+              return (
+                <g>
+                  <line x1={origin.x} y1={origin.y} x2={origin.x + dx / len * L} y2={origin.y + dy / len * L} stroke="#a855f7" strokeWidth={pu.width} opacity={0.12 + 0.15 * p} />
+                  <circle cx={origin.x - d} cy={origin.y} r={16 * k} fill="#3b82f6" style={{ filter: 'drop-shadow(0 0 10px #3b82f6)' }} />
+                  <circle cx={origin.x + d} cy={origin.y} r={16 * k} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
+                </g>
+              );
+            })()}
+            {s.allies.filter(a => a.kind === 'arrow').map(a => (
+              <g key={a.id} style={{ filter: 'drop-shadow(0 0 8px #f97316)' }}>
+                <line x1={a.x - Math.cos(a.ang) * 60 * k} y1={a.y - Math.sin(a.ang) * 60 * k} x2={a.x} y2={a.y} stroke="#fb923c" strokeWidth={8 * k} strokeLinecap="round" />
+                <circle cx={a.x} cy={a.y} r={10 * k} fill="#fde68a" />
+              </g>
+            ))}
+            {s.kit.meteor && (() => {
+              const m = s.kit.meteor, p = Math.min(1, m.t / m.tele);
+              return <circle cx={m.x + (1 - p) * 160 * k} cy={m.y - (1 - p) * 420 * k} r={(18 + 22 * p) * k} fill="#fdba74" style={{ filter: 'drop-shadow(0 0 16px #f97316)' }} />;
+            })()}
+            {s.effects.filter(f => OVER.has(f.kind)).map(f => <EffectShape key={f.id} f={f} k={k} />)}
+          </svg>
 
           {/* ── Floating numbers (re-rendered only when one is added/removed) ── */}
           <FloaterLayer floaters={s.floaters} ver={s.floaterVer} k={k} />
@@ -206,17 +326,43 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         {s.timeStop > 0 && <div style={{ position: 'absolute', inset: 0, background: 'rgba(80,160,255,0.16)', backdropFilter: 'grayscale(0.7)', pointerEvents: 'none', zIndex: 10 }} />}
         {pl.hitT > 0 && <div style={{ position: 'absolute', inset: 0, boxShadow: `inset 0 0 ${80 * pl.hitT}px rgba(255,0,0,0.9)`, pointerEvents: 'none', zIndex: 11 }} />}
         {s.effects.some(f => f.kind === 'ult') && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.5, pointerEvents: 'none', zIndex: 12, animation: 'ultFlash 0.5s ease-out forwards' }} />}
+        {s.effects.filter(f => f.kind === 'flash').map(f => (
+          <div key={f.id} style={{ position: 'absolute', inset: 0, background: f.color, opacity: 0.45 * Math.max(0, 1 - f.t / (f.life ?? 0.5)), pointerEvents: 'none', zIndex: 12 }} />
+        ))}
+
+        {/* Mahoraga: everything else goes grey, you can only watch */}
+        {s.mahoraga && (() => {
+          const m = s.mahoraga, w = 150 * k;
+          return (
+            <>
+              <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', backdropFilter: 'grayscale(1) brightness(0.7)', WebkitBackdropFilter: 'grayscale(1) brightness(0.7)' }} />
+              <div className="suspended-text">SUSPENDED · WATCH AND PRAY</div>
+              <div style={{ position: 'absolute', left: m.x - w / 2, top: m.y - w * 0.3, width: w, zIndex: 13, pointerEvents: 'none' }}>
+                <div style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 4 * k, display: 'flex', alignItems: 'center', gap: 4 * k }}>
+                  <span className="maho-wheel" style={{ transform: `rotate(${m.wheel * 45}deg)`, fontSize: 20 * k }}>☸</span>
+                  <div style={{ width: w * 0.8, height: 7 * k, background: 'rgba(0,0,0,0.7)', borderRadius: 4, border: '1px solid #fde047' }}>
+                    <div style={{ width: `${Math.max(0, m.hp / m.maxHp) * 100}%`, height: '100%', background: '#fde047', borderRadius: 4 }} />
+                  </div>
+                </div>
+                <img src={MAHORAGA_IMG} alt="Mahoraga" draggable={false} style={{ width: '100%', display: 'block', filter: m.invuln > 0.15 ? 'brightness(1.8)' : 'drop-shadow(0 0 12px #fde047)' }} />
+              </div>
+            </>
+          );
+        })()}
 
         <StageBarView {...stageBarProps(s, bossParts)} />
 
         <ComboMeter n={s.combo.n} left={s.combo.n ? Math.max(0, 1 - s.combo.t / BAL.COMBO_WINDOW) : 0} k={k} top={comboTop} />
 
         {/* Status chips */}
-        <div style={{ position: 'absolute', top: 44, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, zIndex: 13, pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: s.mahoraga ? 62 : 44, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, zIndex: 13, pointerEvents: 'none' }}>
+          <KitChip s={s} sk={s.stats.skill} cur={curSkill} />
           {s.stage.mod && <span title={s.stage.mod.desc}><Chip color={s.stage.mod.color}>◆ {s.stage.mod.name}</Chip></span>}
           {s.frenzy > 0 && <Chip color="#ff8c00">FRENZY {s.frenzy.toFixed(0)}s</Chip>}
           {s.timeStop > 0 && <Chip color="#67e8f9">TIME STOP {s.timeStop.toFixed(1)}s</Chip>}
-          {s.ult.active && <Chip color="#c084fc">{ult?.name ?? 'ULT'} {s.ult.active.t.toFixed(1)}s</Chip>}
+          {s.ult.active && (s.ult.active.type === 'mahoraga'
+            ? <Chip color="#fde047">☸ MAHORAGA · {s.mahoraga ? Object.values(s.mahoraga.adapt).reduce((a, n) => a + Math.min(n, 3), 0) : 0} adapted</Chip>
+            : <Chip color="#c084fc">{(ult?.name ?? 'ULT').length > 24 ? ult.name.split(' ').slice(-2).join(' ') : ult?.name ?? 'ULT'} {s.ult.active.t.toFixed(1)}s</Chip>)}
         </div>
 
         {s.banner && (
@@ -234,7 +380,22 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
           hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd}
-          onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} />
+          onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null} />
+
+        {/* Room 16's ult: pick a skill (the fight waits) */}
+        {s.choosing && (
+          <div className="ora-pick" onPointerDown={e => e.stopPropagation()}>
+            <div style={{ color: '#f9a8d4', fontWeight: 900, fontSize: 22 * Math.max(0.8, k), letterSpacing: 2, textShadow: '0 0 14px #ec4899' }}>ORA ORA ORA</div>
+            <div style={{ color: '#ddd', fontSize: 13, marginBottom: 6 }}>Pick a skill to use at full strength</div>
+            {s.choosing.options.map((id, i) => (
+              <button key={id} className="ora-opt" onClick={() => engine.choose(i)}>
+                <span style={{ color: '#f9a8d4', fontWeight: 900, marginRight: 8 }}>{i + 1}</span>
+                <b>{SKILL_NAMES[id] ?? id}</b>
+                <span style={{ display: 'block', color: '#bbb', fontSize: 12, fontWeight: 400, marginTop: 2 }}>{describeKit(SKILLS[id], s.stats.si ?? 0)}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Extra layers from the screen using the arena (story mode: codec popups) */}
         {children}
@@ -281,7 +442,36 @@ function AttackShape({ a, k }) {
 }
 
 function EffectShape({ f, k }) {
-  const p = f.t / 0.5;
+  const p = Math.min(1, f.t / (f.life ?? 0.5));
+  if (f.kind === 'beam') return (
+    <g opacity={1 - p * p}>
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#7e22ce" strokeWidth={f.w * 1.25} strokeLinecap="round" opacity={0.35} />
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#c084fc" strokeWidth={f.w} strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 18px #a855f7)' }} />
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#fff" strokeWidth={f.w * 0.3} strokeLinecap="round" />
+    </g>
+  );
+  if (f.kind === 'slash') return <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#f5d0fe" strokeWidth={7 * k * (1 - p)} strokeLinecap="round" opacity={1 - p} style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />;
+  if (f.kind === 'zap') {
+    const pts = [0, 0.25, 0.5, 0.75, 1].map((t, i) => {
+      const j = i === 0 || i === 4 ? 0 : (((f.id * 7 + i * 13) % 10) - 5) * 3 * k;
+      return `${f.x1 + (f.x2 - f.x1) * t + j},${f.y1 + (f.y2 - f.y1) * t - j}`;
+    }).join(' ');
+    return <polyline points={pts} fill="none" stroke="#fde047" strokeWidth={3 * k} opacity={1 - p} style={{ filter: 'drop-shadow(0 0 6px #facc15)' }} />;
+  }
+  if (f.kind === 'fist') return <text x={f.x} y={f.y} textAnchor="middle" dominantBaseline="middle" fontSize={26 * k * (1 + p * 0.4)} opacity={1 - p}>👊</text>;
+  if (f.kind === 'stab') return <line x1={f.x - f.r * 0.6} y1={f.y + f.r * 0.6} x2={f.x + f.r * 0.6} y2={f.y - f.r * 0.6} stroke="#fff" strokeWidth={3 * k} opacity={1 - p} />;
+  if (f.kind === 'ratio') return <line x1={f.x - f.r} y1={f.y + f.r * 0.4} x2={f.x + f.r} y2={f.y - f.r * 0.4} stroke="#facc15" strokeWidth={5 * k * (1 - p * 0.5)} opacity={1 - p} style={{ filter: 'drop-shadow(0 0 8px #facc15)' }} />;
+  if (f.kind === 'spiral') {
+    const arms = [0, 1, 2].map(arm => {
+      let d = '';
+      for (let i = 0; i <= 24; i++) {
+        const r = (i / 24) * f.r * (0.3 + p), a = arm * 2.094 + i * 0.32 + p * 5;
+        d += `${i ? 'L' : 'M'}${f.x + Math.cos(a) * r},${f.y + Math.sin(a) * r}`;
+      }
+      return <path key={arm} d={d} fill="none" stroke="#e879f9" strokeWidth={10 * k * (1 - p)} strokeLinecap="round" />;
+    });
+    return <g opacity={1 - p} style={{ filter: 'drop-shadow(0 0 10px #d946ef)' }}>{arms}</g>;
+  }
   if (f.kind === 'shards') {
     const n = f.n ?? 8, ease = 1 - (1 - Math.min(1, p)) ** 2;
     return (
@@ -434,11 +624,21 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
   );
 }, (a, b) => a.n === b.n && Math.abs(a.left - b.left) < 0.04 && a.k === b.k);
 
+// What the main card's kit is doing right now (spirits, Infinity, copied skill…)
+function KitChip({ s, sk, cur }) {
+  if (!sk) return null;
+  if (sk.type === 'souls') return <Chip color="#e879f9">👻 {s.kit.souls}/{Math.round(sk.cap)}</Chip>;
+  if (sk.type === 'infinity') return <Chip color="#93c5fd">∞ {Math.round(s.kit.inf)}%</Chip>;
+  if (sk.type === 'transfig') { const ev = Math.max(2, Math.round(sk.every)); return <Chip color="#c084fc">✋ next in {ev - (s.kit.kills % ev)}</Chip>; }
+  if (sk.type === 'copy' && cur) return <Chip color="#f472b6">{s.kit.oraSkill ? 'ORA' : '⧉'} {cur.name}{!s.kit.oraSkill && ` ${Math.max(0, Math.ceil(s.kit.copyT))}s`}</Chip>;
+  return null;
+}
+
 const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{children}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -482,7 +682,7 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
           title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : mainCard?.ult ? 'Ult unlocks at LV50' : 'No ult'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
-          {!ult ? (mainCard?.ult ? 'LV50' : '—') : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
+          {!ult ? (mainCard?.ult ? 'LV50' : '—') : blocked ? <span style={{ fontSize: '0.8em' }}>{blocked}</span> : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
               <span>{cd}s</span>
               <span style={{ fontSize: '0.6em', opacity: 0.8 }}>{Math.floor(charge * 100)}%</span>
@@ -522,6 +722,19 @@ const ARENA_CSS = `
   .enemy-img.flick1 { animation: flickB 0.16s steps(1) infinite; }
   @keyframes flickA { 0% { opacity:1 } 50% { opacity:0 } }
   @keyframes flickB { 0% { opacity:0 } 50% { opacity:1 } }
+  .crawler { animation: crawl 0.35s ease-in-out infinite alternate; }
+  @keyframes crawl { from { transform: skewX(-8deg) scaleY(0.92); } to { transform: skewX(8deg) scaleY(1.05); } }
+  .shiki { transform: translate(-50%, -50%); filter: drop-shadow(0 0 8px #6366f1) drop-shadow(0 2px 3px #000); line-height: 1; }
+  .shiki.dog { animation: shikiHop 0.3s ease-in-out infinite alternate; }
+  .shiki.nue { animation: shikiHop 0.5s ease-in-out infinite alternate; }
+  @keyframes shikiHop { from { margin-top: 0; } to { margin-top: -5px; } }
+  .suspended-text { position:absolute; top:34px; left:50%; transform:translateX(-50%); z-index:13; pointer-events:none; white-space:nowrap;
+                    color:#fde047; font-weight:900; letter-spacing:3px; font-size:clamp(11px, 2.4vw, 14px); text-shadow:0 0 12px #000, 0 0 4px #000; animation: blinkSlow 1.4s ease-in-out infinite; }
+  @keyframes blinkSlow { 50% { opacity: 0.45; } }
+  .maho-wheel { display:inline-block; color:#fde047; text-shadow:0 0 8px #000; transition: transform 0.35s cubic-bezier(.3,1.6,.5,1); line-height:1; }
+  .ora-pick { position:absolute; inset:0; z-index:40; background:rgba(20,5,20,0.82); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:12px; }
+  .ora-opt { width:min(420px, 92%); text-align:left; background:#2a0f2a; border:2px solid #ec4899; border-radius:8px; color:#fff; padding:10px 14px; font-size:15px; cursor:pointer; }
+  .ora-opt:hover, .ora-opt:focus-visible { background:#4a1240; outline:none; }
   .squash { width:100%; height:100%; transition: transform 70ms ease-out; }
   .squash.hit { transform: scale(0.86, 0.9); }
   .affix-aura { position:absolute; inset:-14%; border-radius:50%; pointer-events:none;

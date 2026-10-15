@@ -7,6 +7,7 @@ import { BAL, speedHpMult } from './balance';
 import { ENEMY_TYPES, ATTACK_DMG, AFFIXES } from './enemies';
 import { makeEndlessStage, MODIFIERS } from './stages';
 import { sfx } from '../utils/sfx';
+import { createKitRuntime } from './kitRuntime';
 
 let uid = 1;
 const rand  = (a, b) => a + Math.random() * (b - a);
@@ -76,7 +77,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     return { x: s.W * 0.6, y: s.H * 0.45 };
   }
   // Where an attack aims: the player, or somewhere sensible if they haven't moved yet
-  const aimPoint = () => s.player.pos ?? { x: s.W * 0.5, y: s.H * 0.5 };
+  const aimPoint = () => rt.aimPoint() ?? s.player.pos ?? { x: s.W * 0.5, y: s.H * 0.5 };
 
   // ── Floaters & effects ──────────────────────────────────────────────────
   function floater(text, x, y, color = '#fff', big = false, icon = null, kind = null) {
@@ -86,6 +87,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
   const effect = (e) => { s.effects.push({ id: uid++, t: 0, ...e }); if (s.effects.length > 60) s.effects.shift(); };
   const shake = (amt) => { s.shake = Math.max(s.shake, amt); };
+
+  // The Anemics Kaisen kits (kitRuntime.js) plug in through these hooks
+  const rt = createKitRuntime({
+    s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
+    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt,
+    announce: (...a) => announce(...a),
+  });
 
   // ── Spawning ────────────────────────────────────────────────────────────
   function spawnEnemy(typeId, opts = {}) {
@@ -182,6 +190,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function updateSpawns(dt) {
+    if (s.mahoraga) return;   // nothing new shows up while Mahoraga is out
     const st = s.stage, T = s.timers;
     if (s.phase === 'fight' || s.phase === 'boss') {
       T.basic -= dt;
@@ -362,7 +371,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function updateAttacks(dt) {
-    const P = s.player.pos;
+    const T = rt.target();      // you, or Mahoraga while it's out
     for (const a of s.attacks) {
       if (a.phase === 'done') continue;
       const owner = a.free ? null : s.enemies.find(e => e.id === a.owner);
@@ -383,10 +392,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (a.kind === 'circle' || a.kind === 'poke') {
             a.phase = 'strike';
             if (a.opts.boom) { sfx('boom'); shake(0.25); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#f97316', n: 14 }); }
-            if (P && dist(P.x, P.y, a.cx, a.cy) <= a.r) hitPlayer(a.dmg);
+            if (T && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r) hurt(a.dmg, 'circle');
           } else if (a.kind === 'slash') {
             a.phase = 'strike';
-            if (P && distToSegment(P.x, P.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2) hitPlayer(a.dmg);
+            if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r) hurt(a.dmg, 'slash');
           } else if (a.kind === 'shot') {
             a.phase = 'fly';
           } else if (a.kind === 'dash') {
@@ -398,15 +407,22 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (a.t >= BAL.STRIKE_FLASH) finishAttack(a);
       } else if (a.phase === 'fly') {
         if (a.kind === 'shot') {
-          a.x += a.ux * a.speed * dt; a.y += a.uy * a.speed * dt;
-          if (!a.hitDone && P && dist(P.x, P.y, a.x, a.y) <= a.r + K(6)) { a.hitDone = true; hitPlayer(a.dmg); }
+          const sp = a.speed * dt * rt.shotSpeed(a, dt);   // Infinity slows shots down
+          a.x += a.ux * sp; a.y += a.uy * sp;
+          if (s.fire.length && rt.shotBlocked(a)) {         // Doro's fire walls burn them up
+            effect({ kind: 'burst', x: a.x, y: a.y, r: K(18), color: '#fb923c' }); finishAttack(a); continue;
+          }
+          if (!a.hitDone && T && dist(T.x, T.y, a.x, a.y) <= a.r + K(6) + T.r) { a.hitDone = true; hurt(a.dmg, 'shot'); }
           if (a.x < -50 || a.y < -50 || a.x > s.W + 50 || a.y > s.H + 50 || a.hitDone) finishAttack(a);
         } else if (a.kind === 'dash') {
           const spd = K(950);
           const dx = a.tx - owner.x, dy = a.ty - owner.y, d = Math.hypot(dx, dy);
           const step = Math.min(d, spd * dt);
           if (d > 0) { owner.x += dx / d * step; owner.y += dy / d * step; }
-          if (!a.hitDone && P && dist(P.x, P.y, owner.x, owner.y) <= owner.size * s.k * 0.5) { a.hitDone = true; hitPlayer(a.dmg); }
+          if (!a.hitDone && T && dist(T.x, T.y, owner.x, owner.y) <= owner.size * s.k * 0.5 + T.r) {
+            a.hitDone = true; hurt(a.dmg, 'dash', owner);
+            if (a.phase === 'done') continue;   // Infinity stopped the dash
+          }
           if (d <= 1) finishAttack(a);
         }
       }
@@ -415,9 +431,15 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── Player getting hit ──────────────────────────────────────────────────
-  function hitPlayer(raw) {
+  // An enemy attack connected with whatever it was aimed at
+  function hurt(raw, kind, src = null) {
+    if (s.mahoraga) { rt.hitMahoraga(raw, kind); return; }
+    hitPlayer(raw, kind, src);
+  }
+  function hitPlayer(raw, kind = 'hit', src = null) {
     const pl = s.player;
     if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return;
+    if (rt.absorbHit(kind, src)) { pl.invuln = Math.max(pl.invuln, 0.3); return; }   // Toad / Infinity
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction)));
     pl.hp = Math.max(0, pl.hp - dmg);
     pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; shake(0.3);
@@ -426,6 +448,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     sfx('hurt');
     if (s.combo.n >= 5) floater(`COMBO LOST (${s.combo.n})`, p.x, p.y - K(48), '#94a3b8');
     s.combo.n = 0;
+    rt.onPlayerHit();
     cb('onPlayerHit', dmg);
     if (pl.hp <= 0) startDefeat();
   }
@@ -438,21 +461,28 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // ── Damaging enemies ────────────────────────────────────────────────────
   function chargeUlt(dmg, weight = 1) {
-    if (!s.stats.ult || s.ult.active) return;
+    if (!s.stats.ult || s.ult.active || s.stats.ult.chargeOn === 'kills') return;
     const need = s.stats.clickDmg * BAL.ULT_CHARGE_CLICKS * (s.stats.ult.charge ?? 1) / s.stats.ultChargeMult;
     s.ult.charge = Math.min(1, s.ult.charge + dmg * weight / Math.max(1, need));
   }
 
-  function rollClick(mult = 1) {
+  // mods: { ratio, bonus } = Nanami's ratio hit (always a crit), noCount = a
+  // skill effect's hit (doesn't count toward "every 10th click")
+  function rollClick(mult = 1, mods = {}) {
     const st = s.stats;
-    s.clickCount++;
-    let crit = Math.random() < st.critRate;
-    let critMult = 1 + st.critDmg;
-    if (st.labubuEvery && s.clickCount % st.labubuEvery === 0) { crit = true; critMult = Math.max(critMult, 3); }
+    if (!mods.noCount) s.clickCount++;
+    let critRate = st.critRate, critDmg = st.critDmg;
+    const cs = rt.skill();
+    if (cs && cs !== st.skill && cs.type === 'crit') { critRate += cs.rate; critDmg += cs.dmg; }   // Room 16 copying Reality Slice
+    let crit = Math.random() < critRate;
+    let critMult = 1 + critDmg;
+    if (!mods.noCount && st.labubuEvery && s.clickCount % st.labubuEvery === 0) { crit = true; critMult = Math.max(critMult, 3); }
+    if (mods.ratio) { crit = true; critMult = 1 + critDmg + mods.bonus; }
     let dmg = st.clickDmg * mult * rand(0.9, 1.1);
     if (st.highHpAtkBonus && s.player.hp > s.player.maxHp / 2) dmg *= 1 + st.highHpAtkBonus;
     if (s.frenzy > 0) dmg *= 2;
     if (s.ult.active?.type === 'transform') dmg *= s.ult.active.clickMult;
+    if (s.ult.active?.type === 'overtime') dmg *= s.ult.active.mult;
     dmg *= 1 + Math.min(s.combo.n, BAL.COMBO_MAX) * BAL.COMBO_PER;
     if (crit) dmg *= critMult;
     return { dmg, crit };
@@ -463,14 +493,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const c = s.combo;
     c.n++; c.t = 0; c.best = Math.max(c.best, c.n);
     const m = BAL.COMBO_MILESTONES.indexOf(c.n);
-    if (m >= 0) { announce(`COMBO ${c.n}!  +${Math.round(Math.min(c.n, BAL.COMBO_MAX) * BAL.COMBO_PER * 100)}% DMG`, ['#facc15', '#fb923c', '#f43f5e'][m]); sfx('combo', m); }
+    if (m >= 0) { announce(`COMBO ${c.n}!  +${Math.round(Math.min(c.n, BAL.COMBO_MAX) * BAL.COMBO_PER * 100)}% DMG`, ['#facc15', '#fb923c', '#f43f5e'][m]); sfx('combo', m); rt.onCombo(m); }
   }
 
   function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false } = {}) {
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
     let dmg = rawDmg * M('playerDmg');
     e.lastHit = s.time;
-    const sk = s.stats.skill;
+    const sk = rt.skill();
     if (e.frozen > 0 && sk?.type === 'frost') dmg *= 1 + sk.bonus;
     if (e.tier === 'boss') dmg *= s.stats.bossDmgMult;
     dmg = Math.max(1, Math.round(dmg));
@@ -529,6 +559,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (gems)  floater(`+${gems}`, e.x, e.y + K(30), '#7aa2ff', false, 'gem');
     cb('onReward', { coins, gems, xp: Math.round((t.xp ?? BAL.XP[e.tier] ?? 0) * M('xp') * reward), kill: e.tier !== 'treasure' && !e.group });
     if (M('killHeal', 0) && e.tier !== 'treasure') heal(s.player.maxHp * M('killHeal', 0));
+    rt.onKill(e);
 
     // affix death effects
     if (e.affix === 'volatile') {
@@ -622,19 +653,22 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function clickEnemy(e, mult = 1, auto = false) {
-    const sk = s.stats.skill;
-    const { dmg, crit } = rollClick(mult);
-    const dealt = damageEnemy(e, dmg, { crit });
+    const sk = rt.skill();
+    const mods = auto ? undefined : rt.clickMods(e);   // e.g. Nanami's ratio hit
+    const { dmg, crit } = rollClick(mult, mods);
+    const dealt = damageEnemy(e, dmg, { crit, label: mods?.label ?? '' });
     if (!auto && dealt > 0) {
       comboHit();
       sfx(crit ? 'crit' : 'hit');
-      if (crit) shake(0.08);
+      if (crit) shake(mods?.ratio ? 0.14 : 0.08);
     }
+    rt.afterClick(e, dmg, auto, mods);
     if (!sk) return;
     if (sk.type === 'splash') {
       effect({ kind: 'burst', x: e.x, y: e.y, r: K(sk.radius), color: '#F59E0B' });
+      // numbers only on the first couple (a floater per enemy per click was the slowest thing on phones)
       s.enemies.filter(o => o !== e && dist(o.x, o.y, e.x, e.y) <= K(sk.radius))
-        .forEach(o => damageEnemy(o, dmg * sk.pct, { color: '#F59E0B', label: '🪨' }));
+        .forEach((o, i) => damageEnemy(o, dmg * sk.pct, { color: '#F59E0B', label: '🪨', quiet: i >= 2 }));
     } else if (sk.type === 'frost' && e.hp > 0 && Math.random() < sk.chance) {
       e.frozen = sk.dur; floater('❄ FROZEN', e.x, e.y - K(36), '#67e8f9');
     } else if (sk.type === 'lifesteal' && !auto) {
@@ -647,9 +681,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function pointerDown(x, y) {
-    if (s.paused) return;
+    if (s.paused || s.choosing) return;
     s.player.pos = { x, y };
     if (s.phase === 'defeat' || s.phase === 'clear') return;
+    if (rt.onPointerDown(x, y)) return;   // suspended (Mahoraga) / Tyran's slashes
     // boss weak points first
     for (const wp of s.weakPts) {
       const boss = s.enemies.find(e => e.id === wp.boss);
@@ -666,9 +701,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const e = enemyAt(x, y);
     effect({ kind: 'ripple', x, y, miss: !e });
     if (e) { clickEnemy(e); return; }
-    if (!s.stats.skill || s.stats.skill.type !== 'gun') sfx('miss');
+    const sk = rt.skill();
+    if (!sk || sk.type !== 'gun') sfx('miss');
     // Gun skill: clicking empty space fires a homing shot
-    const sk = s.stats.skill;
     if (sk?.type === 'gun') {
       const targets = [...s.enemies].sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
       targets.forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult: sk.pct }));
@@ -694,7 +729,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Ult ─────────────────────────────────────────────────────────────────
   function activateUlt() {
     const u = s.stats.ult;
-    if (!u || s.paused || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
+    if (!u || s.paused || s.choosing || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
+    const blocked = rt.ultBlocked();   // e.g. Uzumaki without enough spirits
+    if (blocked) { const P = s.player.pos ?? { x: s.W / 2, y: s.H / 2 }; floater(`needs ${blocked}`, P.x, P.y - K(40), '#e879f9', true); return false; }
     s.ult.charge = 0;
     s.ult.cd = s.ult.cdMax = u.cooldown ?? 30;
     const base = s.stats.clickDmg;
@@ -703,6 +740,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     effect({ kind: 'ult', color: '#ffffff', t: 0 });
     sfx('ult'); shake(0.35);
     cb('onUlt', u);
+    if (rt.activateUlt(u)) return true;
 
     switch (u.type) {
       case 'nuke':      hitAll(u.mult, '#F59E0B', '🗿'); break;
@@ -760,6 +798,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
   function stageClear() {
     s.phase = 'clear'; s.phaseT = 3;
+    rt.reset('clear');
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = [];
     const r = s.stage.clearReward;
@@ -770,12 +809,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
   function startDefeat() {
     s.phase = 'defeat'; s.phaseT = 2.6;
+    rt.reset('defeat');
     s.attacks = []; s.shots = []; s.hazards = []; s.combo.n = 0;
     s.banner = { text: 'DEFEATED', sub: s.stage.story ? null : `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
     cb('onDefeat', s.stageNum);
   }
   function loadStage(n) {
     s.stageNum = n; s.stage = makeStage(n);
+    rt.reset('load');
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = [];
     s.player.hp = s.player.maxHp; s.player.invuln = 1;
@@ -805,7 +846,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // ── Main tick ───────────────────────────────────────────────────────────
   function update(rawDt) {
-    if (!s.W || s.paused) return;
+    if (!s.W || s.paused || s.choosing) return;   // choosing = Room 16 picking a skill
     // hit-stop: freeze the action for a few frames on big kills
     if (s.hitStop > 0) { s.hitStop -= Math.min(rawDt, 0.05); return; }
     const dt = Math.min(rawDt, 0.05) * s.dev.timeScale;
@@ -822,7 +863,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.floaters.forEach(f => { f.t += dt; if (f.t >= 1.1) expired = true; });
     if (expired) { s.floaters = s.floaters.filter(f => f.t < 1.1); s.floaterVer++; }
     s.effects.forEach(f => { f.t += dt; });
-    s.effects = s.effects.filter(f => f.t < 0.5);
+    s.effects = s.effects.filter(f => f.t < (f.life ?? 0.5));
     s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); if (e.attackT > 0) e.attackT -= dt; });
 
     if (s.phase !== 'defeat' && pl.hp > 0 && !M('noRegen', false)) heal(s.stats.regen * dt);
@@ -835,10 +876,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     // poison puddles (Toxic elites): grow in, then hurt while your cursor is inside
     if (s.hazards.length) {
-      const P0 = pl.pos;
+      const T0 = rt.target();
       s.hazards.forEach(h => {
         h.t += dt;
-        if (P0 && h.t > h.grow && h.t < h.life && dist(P0.x, P0.y, h.x, h.y) <= h.r) hitPlayer(enemyDmg('poison'));
+        if (T0 && h.t > h.grow && h.t < h.life && dist(T0.x, T0.y, h.x, h.y) <= h.r + T0.r) hurt(enemyDmg('poison'), 'poison');
       });
       s.hazards = s.hazards.filter(h => h.t < h.life);
     }
@@ -855,14 +896,15 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (targets.length) clickEnemy(pick(targets), 1, true);
         }
       }
-      if (act.t <= 0) s.ult.active = null;
+      if (act.t <= 0) { rt.endUlt(act); s.ult.active = null; }
     }
 
     updatePhase(dt);
     updateShots(dt);
+    rt.update(dt);
 
     // Pulse skill
-    const sk = s.stats.skill;
+    const sk = rt.skill();
     if (sk?.type === 'pulse' && pl.pos && s.phase !== 'defeat' && s.phase !== 'clear') {
       s.timers.pulse -= dt;
       if (s.timers.pulse <= 0) {
@@ -891,7 +933,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
 
     // Enemies
-    const P = pl.pos;
+    const TG = rt.target();
     for (const e of [...s.enemies]) {
       if (e.shield && e.shield.hp < e.shield.max) {
         e.shield.regenT -= dt;
@@ -916,8 +958,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         }
       }
       // worm head bites your cursor
-      if (e.move === 'worm' && e.role === 'head' && P && dist(P.x, P.y, e.x, e.y) <= e.size * s.k * 0.45) {
-        hitPlayer(enemyDmg('bite'));
+      if (e.move === 'worm' && e.role === 'head' && TG && dist(TG.x, TG.y, e.x, e.y) <= e.size * s.k * 0.45 + TG.r) {
+        hurt(enemyDmg('bite'), 'bite', e);
       }
       if (e.life != null) {
         e.life -= dt;
@@ -999,6 +1041,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; startBossIntro(); },
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
     clearEnemies: () => {
+      rt.reset('load');
       s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = [];
       // boss removed → back to the fight, one kill short of summoning it again
       if (s.phase === 'boss' || s.phase === 'bossIntro') { s.phase = 'fight'; s.kills = Math.min(s.kills, s.stage.killTarget - 1); }
@@ -1018,7 +1061,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const setPaused = (p) => { s.paused = !!p; };
   const restart = () => loadStage(s.stageNum);
 
-  return { state: s, setPaused, restart, update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };
+  const choose = (i) => rt.choose(i);   // Room 16's ult: pick a skill
+
+  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

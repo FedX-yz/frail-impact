@@ -207,7 +207,7 @@ export const CHARACTERS = [
     },
   },
 
-  // ── 5★ Anemics Kaisen (kits coming later) ───────────────────────
+  // ── 5★ Anemics Kaisen (kits: combat/kitRuntime.js) ──────────────
   // sprite: the character cut out of the background (optional).
   // portraitFocus: [x %, y %, zoom] — where the face is in the sprite (or the
   // full art if there's no sprite); the battle HP portrait centres on it.
@@ -226,8 +226,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1350, atk: 165, def: 75 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Infinity',
+      description: 'A bubble around your cursor stops shots, dashes and bites and pushes enemies away.',
+      effect: 'infinity',
+    },
+    ult: {
+      name: 'Hollow Purple',
+      description: 'A beam from you through your cursor: 2500% click DMG to everything in its path.',
+      effect: 'hollow_purple',
+      cooldown: 30,
+    },
     passive: null,
   },
 
@@ -246,8 +255,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1300, atk: 175, def: 70 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Guest Platinum',
+      description: 'Copies a random 5★ skill (weaker), switching every 20s.',
+      effect: 'copy',
+    },
+    ult: {
+      name: 'ORA ORA ORA',
+      description: 'Pick 1 of 3 skills at full strength for 45s, plus a punch barrage.',
+      effect: 'ora',
+      cooldown: 70,
+    },
     passive: null,
   },
 
@@ -266,8 +284,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1250, atk: 180, def: 65 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Volcano',
+      description: 'Kills erupt into lava that burns enemies.',
+      effect: 'lava',
+    },
+    ult: {
+      name: 'Maximum: Meteor',
+      description: 'A meteor drops on your cursor: 2000% click DMG and a lava field.',
+      effect: 'meteor',
+      cooldown: 30,
+    },
     passive: null,
   },
 
@@ -286,8 +313,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1700, atk: 130, def: 95 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Idle Transfiguration',
+      description: 'Every 6th kill becomes a crawler that explodes on an enemy.',
+      effect: 'transfig',
+    },
+    ult: {
+      name: 'Self-Embodiment of Perfection',
+      description: 'For 10s every click also fires 3 slashes through your cursor (42% click DMG each).',
+      effect: 'distortion',
+      cooldown: 30,
+    },
     passive: null,
   },
 
@@ -306,8 +342,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1450, atk: 150, def: 80 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Cursed Spirit Manipulation',
+      description: 'Kills become spirits that orbit your cursor and hurt enemies they touch.',
+      effect: 'souls',
+    },
+    ult: {
+      name: 'Maximum: Uzumaki',
+      description: 'Fires every spirit at once. More spirits, bigger hit.',
+      effect: 'uzumaki',
+      cooldown: 25,
+    },
     passive: null,
   },
 
@@ -327,8 +372,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1400, atk: 160, def: 80 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Dismantle Trail',
+      description: 'Moving your cursor fast leaves fire walls that burn enemies and stop shots.',
+      effect: 'firetrail',
+    },
+    ult: {
+      name: 'Open: Fuga',
+      description: 'A fire arrow hits the strongest enemy for 1200%, then the arena burns for 400%.',
+      effect: 'fuga',
+      cooldown: 28,
+    },
     passive: null,
   },
 
@@ -347,8 +401,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1400, atk: 155, def: 85 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Ten Shadows',
+      description: 'Combo 10 / 25 / 50 summon a Divine Dog / Toad / Nue.',
+      effect: 'shadows',
+    },
+    ult: {
+      name: 'Eight-Handled Sword Divergent Sila Divine General Mahoraga',
+      description: 'Mahoraga fights for you while you watch. It must clear the field, boss included. If it dies, you die.',
+      effect: 'mahoraga',
+      cooldown: 60,
+    },
     passive: null,
   },
 
@@ -368,8 +431,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1500, atk: 145, def: 85 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Ratio Technique',
+      description: 'Time your click on the 7:3 mark for a guaranteed big crit.',
+      effect: 'ratio',
+    },
+    ult: {
+      name: 'Overtime',
+      description: '10s of guaranteed ratio hits at 150% DMG, then Collapse.',
+      effect: 'overtime',
+      cooldown: 30,
+    },
     passive: null,
   },
 
@@ -389,8 +461,17 @@ export const CHARACTERS = [
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1550, atk: 175, def: 70 },
-    skill: null,     // kit coming soon
-    ult: null,
+    skill: {
+      name: 'Heavenly Restriction',
+      description: 'Enemies aim where you were a moment ago. Rapid auto-attacks.',
+      effect: 'phantom',
+    },
+    ult: {
+      name: 'Sorcerer Killer',
+      description: 'Charges from kills. 8s of 5× auto-attack speed at 150% DMG that executes weak enemies.',
+      effect: 'sorcerer_killer',
+      cooldown: 25,
+    },
     passive: null,
   },
 
