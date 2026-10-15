@@ -237,7 +237,7 @@ export const CHARACTERS = [
     cardArt:         `${BASE}cardart/jerry-card.png`,
     portraitFocus:   [22, 31, 2.2],
     voiceLine:       null,
-    pullMusic:       { src: `${BASE}audio/pull/jerry.mp3`, drop: 16.72 },
+    pullMusic:       { src: `${BASE}audio/pull/jerry.mp3`, drop: 13.62 },   // (the clip ends in loud static: trimmed off at 16.6 s)
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     eyecatch('jerry'),
     stats: { hp: 1350, atk: 165, def: 75 },
