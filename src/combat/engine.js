@@ -81,6 +81,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // ── Floaters & effects ──────────────────────────────────────────────────
   function floater(text, x, y, color = '#fff', big = false, icon = null, kind = null) {
+    // keep the whole text inside the arena (enemies at the edges, CRUSHED against a wall…)
+    if (s.W) {
+      const fs = (kind === 'crit' ? 24 : big ? 20 : 15) * Math.max(0.8, s.k);
+      const half = Math.min(s.W / 2, String(text).length * fs * 0.3 + (icon ? 12 : 0) + 4);
+      x = clamp(x, half, s.W - half);
+      y = clamp(y, fs * 0.7, s.H - fs * 0.7);
+    }
     s.floaters.push({ id: uid++, text, x, y, color, big, icon, kind, t: 0 });
     if (s.floaters.length > 60) s.floaters.shift();
     s.floaterVer++;   // lets the renderer skip the floater layer when nothing changed
@@ -267,7 +274,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       // crowd around you (not on you) at their own spot in the ring
       e.swarmOff.a += dt * 0.6;
       const P = aimPoint();
-      e.target = { x: P.x + Math.cos(e.swarmOff.a) * e.swarmOff.d, y: P.y + Math.sin(e.swarmOff.a) * e.swarmOff.d };
+      // (kept inside the arena, or they'd walk off the edge when you're near it)
+      e.target = { x: clamp(P.x + Math.cos(e.swarmOff.a) * e.swarmOff.d, s.W * 0.05, s.W * 0.95),
+                   y: clamp(P.y + Math.sin(e.swarmOff.a) * e.swarmOff.d, s.H * 0.12, s.H * 0.92) };
     }
     if (e.move === 'still' || e.busy > 0) return;
     if (e.move === 'hop') {            // treasure: skittish hops near its anchor
@@ -648,7 +657,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   function nearestEnemy(x, y) {
     let best = null, bd = Infinity;
-    for (const e of s.enemies) { const d = dist(x, y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
+    for (const e of s.enemies) { if (e.down > 0) continue; const d = dist(x, y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
     return best;
   }
 
@@ -705,7 +714,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!sk || sk.type !== 'gun') sfx('miss');
     // Gun skill: clicking empty space fires a homing shot
     if (sk?.type === 'gun') {
-      const targets = [...s.enemies].sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
+      const targets = s.enemies.filter(e => !(e.down > 0)).sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
       targets.forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult: sk.pct }));
     }
   }
@@ -713,7 +722,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function updateShots(dt) {
     for (const sh of s.shots) {
       let t = s.enemies.find(e => e.id === sh.target);
-      if (!t) { t = nearestEnemy(sh.x, sh.y); if (!t) { sh.dead = true; continue; } sh.target = t.id; }
+      if (!t || t.down > 0) { t = nearestEnemy(sh.x, sh.y); if (!t) { sh.dead = true; continue; } sh.target = t.id; }
       const dx = t.x - sh.x, dy = t.y - sh.y, d = Math.hypot(dx, dy) || 1;
       if (d <= t.size * s.k * 0.4) {
         const { dmg, crit } = rollClick(sh.mult);
@@ -746,7 +755,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       case 'nuke':      hitAll(u.mult, '#F59E0B', '🗿'); break;
       case 'blackhole': {
         const c = { x: s.W * 0.6, y: s.H * 0.48 };
-        all.forEach(e => { if (e.tier !== 'boss') { e.x = c.x + rand(-40, 40) * s.k; e.y = c.y + rand(-40, 40) * s.k; e.target = null; } e.frozen = Math.max(e.frozen, u.stun); });
+        all.forEach(e => { if (e.tier !== 'boss') { e.x = c.x + rand(-40, 40) * s.k; e.y = c.y + rand(-40, 40) * s.k; e.target = null; e.kb = null; } e.frozen = Math.max(e.frozen, u.stun); });
         effect({ kind: 'burst', x: c.x, y: c.y, r: K(200), color: '#8B5CF6' });
         hitAll(u.mult, '#8B5CF6', '🌌');
         break;
@@ -892,7 +901,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         act.acc += dt * act.autoClicks;
         while (act.acc >= 1) {
           act.acc -= 1;
-          const targets = s.enemies.filter(e => e.tier !== 'treasure');
+          const targets = s.enemies.filter(e => e.tier !== 'treasure' && !(e.down > 0));
           if (targets.length) clickEnemy(pick(targets), 1, true);
         }
       }
@@ -925,7 +934,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.timers.auto -= dt;
     if (s.timers.auto <= 0) {
       s.timers.auto = BAL.AUTO_INTERVAL;
-      const targets = s.enemies.filter(e => e.tier !== 'treasure');
+      const targets = s.enemies.filter(e => e.tier !== 'treasure' && !(e.down > 0));   // (downed hydra heads can't be hurt)
       if (targets.length && s.phase !== 'clear' && s.phase !== 'defeat') {
         const e = pick(targets);
         damageEnemy(e, s.stats.autoDps * BAL.AUTO_INTERVAL * rand(0.85, 1.15), { color: '#ffffff', charge: BAL.AUTO_CHARGE_WEIGHT });
@@ -947,6 +956,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         }
         continue;
       }
+      if (e.kb) { rt.slide(e, dt); if (!s.enemies.includes(e)) continue; }   // thrown by Jerry's repel
       if (e.frozen > 0) { e.frozen -= dt; continue; }
       // affixes that act every frame
       if (e.affix === 'regen' && e.hp < e.maxHp && s.time - e.lastHit > 1.5) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.06 * dt);
@@ -965,7 +975,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         e.life -= dt;
         if (e.life <= 0) { s.enemies = s.enemies.filter(x => x !== e); floater('it got away…', e.x, e.y - K(20), '#aaa'); continue; }
       }
-      moveEnemy(e, dt);
+      if (!e.kb) moveEnemy(e, dt);
       if (e.busy === 0 && !e.dashing && s.phase !== 'clear' && s.phase !== 'defeat') {
         const canAttack = e.tier === 'boss' || e.tier === 'elite' || e.armed;
         if (canAttack) {

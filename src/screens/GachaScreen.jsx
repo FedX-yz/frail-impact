@@ -14,6 +14,10 @@ const SUMMON_VID   = {
   4: `${BASE}animations/4star.mp4`,
   3: `${BASE}animations/3star.mp4`,
 };
+// Extra sound on a 5★+ pull, on top of the video's own audio. The file was never
+// added (every 5★ pull asked for it and got a 404), so it's off until there is one:
+// drop it in public/sounds/ and put its name here, e.g. 'sounds/pull_5star.mp3'
+const PULL_5STAR_SFX = null;
 
 const rc = r => RARITY_COLOR[r] || '#fff';
 // 1×1 black poster: hides the grey "play" placeholder phones show before a video starts
@@ -254,8 +258,8 @@ export default function GachaScreen({
 
     const maxRar = Math.max(...results.map(r => r.rarity));
     setHighestRar(maxRar);
-    if (maxRar >= 5) {
-      try { const a = new Audio(`${BASE}sounds/pull_5star.mp3`); a.volume = 0.85; a.play().catch(() => {}); } catch { /* empty */ }
+    if (maxRar >= 5 && PULL_5STAR_SFX) {
+      try { const a = new Audio(`${BASE}${PULL_5STAR_SFX}`); a.volume = 0.85; a.play().catch(() => {}); } catch { /* empty */ }
     }
     setPhase('summon');
   };

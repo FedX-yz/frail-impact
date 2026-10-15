@@ -124,7 +124,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
   const origin = s.reserved ? { x: (s.reserved.x0 + s.reserved.x1) / 2, y: (s.reserved.y0 + s.reserved.y1) / 2 } : { x: s.W * 0.12, y: s.H * 0.85 };
-  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral']);   // effects drawn above enemies
+  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -208,6 +208,15 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <circle key={h.id} cx={h.x} cy={h.y} r={h.r * (0.4 + 0.6 * grow)} fill={`rgba(132,204,22,${(grow < 1 ? 0.15 : 0.32) * fade})`}
                 stroke={`rgba(190,242,100,${0.8 * fade})`} strokeWidth={2} strokeDasharray={grow < 1 ? '4 4' : 'none'} />;
             })}
+            {/* enemies thrown by Jerry's repel leave a streak */}
+            {s.enemies.map(e => {
+              if (!e.kb) return null;
+              const sp = Math.hypot(e.kb.vx, e.kb.vy);
+              if (sp < 200 * k) return null;
+              const len = Math.min(sp * 0.08, 140 * k), ux = e.kb.vx / sp, uy = e.kb.vy / sp;
+              return <line key={`kb${e.id}`} x1={e.x - ux * len} y1={e.y - uy * len} x2={e.x} y2={e.y} stroke="#bfdbfe"
+                strokeWidth={e.size * k * 0.45} strokeLinecap="round" opacity={0.3} />;
+            })}
             {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} />)}
             {s.shots.map(sh => (
               <circle key={sh.id} cx={sh.x} cy={sh.y} r={8 * k} fill="#e9d5ff" stroke="#a855f7" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
@@ -261,13 +270,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 })}
               </g>
             )}
-            {curSkill?.type === 'infinity' && P && !s.mahoraga && (
-              <g opacity={0.25 + 0.6 * s.kit.inf / 100}>
-                <circle cx={P.x} cy={P.y} r={curSkill.radius * k} fill="rgba(147,197,253,0.07)" stroke="#93c5fd" strokeWidth={2}
-                  strokeDasharray={s.kit.inf < 25 ? `${6 * k} ${6 * k}` : 'none'} />
-                <text x={P.x} y={P.y - curSkill.radius * k - 4} textAnchor="middle" fill="#bfdbfe" fontSize={12 * k} fontWeight={900}>∞ {Math.round(s.kit.inf)}%</text>
-              </g>
-            )}
+            {curSkill?.type === 'infinity' && P && !s.mahoraga && (() => {
+              const ready = s.kit.repelN >= Math.max(2, Math.round(curSkill.every ?? 4)) - 1;   // the next hit repels
+              return (
+                <g opacity={0.25 + 0.6 * s.kit.inf / 100}>
+                  <circle cx={P.x} cy={P.y} r={curSkill.radius * k} fill={ready ? 'rgba(191,219,254,0.14)' : 'rgba(147,197,253,0.07)'}
+                    stroke={ready ? '#eff6ff' : '#93c5fd'} strokeWidth={ready ? 3.5 : 2}
+                    strokeDasharray={s.kit.inf < 25 ? `${6 * k} ${6 * k}` : 'none'} />
+                  <text x={P.x} y={P.y - curSkill.radius * k - 4} textAnchor="middle" fill="#bfdbfe" fontSize={12 * k} fontWeight={900}>∞ {Math.round(s.kit.inf)}%{ready ? ' · REPEL' : ''}</text>
+                </g>
+              );
+            })()}
             {hover && (curSkill?.type === 'ratio' || s.ult.active?.type === 'overtime') && (() => {
               const w = Math.max(70 * k, hover.size * k * 1.15), x0 = hover.x - w / 2, y = hover.y - hover.size * k * 0.5 - 20 * k, h = 9 * k;
               const ot = s.ult.active?.type === 'overtime';
@@ -490,6 +503,16 @@ function EffectShape({ f, k }) {
     if (q >= 1) return null;
     return <circle cx={f.x} cy={f.y} r={(6 + 22 * q) * k} fill="none" stroke={f.miss ? 'rgba(255,255,255,0.45)' : '#fff8d0'} strokeWidth={(f.miss ? 1.5 : 2.5) * k} opacity={1 - q} />;
   }
+  if (f.kind === 'crack') {
+    // jagged cracks spreading from where something got slammed into the wall
+    const lines = [-1.1, -0.55, 0, 0.55, 1.1].map((off, i) => {
+      const a = f.a + off, L = f.r * (0.7 + ((f.id + i * 3) % 4) * 0.15);
+      const mx = f.x + Math.cos(a) * L * 0.5 + Math.cos(a + 1.57) * L * 0.12 * (i % 2 ? 1 : -1);
+      const my = f.y + Math.sin(a) * L * 0.5 + Math.sin(a + 1.57) * L * 0.12 * (i % 2 ? 1 : -1);
+      return <polyline key={i} points={`${f.x},${f.y} ${mx},${my} ${f.x + Math.cos(a) * L},${f.y + Math.sin(a) * L}`} fill="none" stroke="#e0f2fe" strokeWidth={3 * k} strokeLinejoin="bevel" />;
+    });
+    return <g opacity={p < 0.6 ? 1 : (1 - p) / 0.4}>{lines}</g>;
+  }
   if (f.kind === 'poof') return <circle cx={f.x} cy={f.y} r={f.r * (0.6 + p)} fill="none" stroke="#fff" strokeWidth={3 * k} opacity={1 - p} />;
   if (f.kind === 'burst') return <circle cx={f.x} cy={f.y} r={f.r * (0.4 + 0.6 * p)} fill={f.color} fillOpacity={0.15 * (1 - p)} stroke={f.color} strokeWidth={4 * k} opacity={1 - p} />;
   return null;
@@ -628,7 +651,10 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
 function KitChip({ s, sk, cur }) {
   if (!sk) return null;
   if (sk.type === 'souls') return <Chip color="#e879f9">👻 {s.kit.souls}/{Math.round(sk.cap)}</Chip>;
-  if (sk.type === 'infinity') return <Chip color="#93c5fd">∞ {Math.round(s.kit.inf)}%</Chip>;
+  if (sk.type === 'infinity') {
+    const left = Math.max(2, Math.round(sk.every ?? 4)) - s.kit.repelN;
+    return <Chip color="#93c5fd">∞ {Math.round(s.kit.inf)}% · {left > 1 ? `repel in ${left}` : 'next hit REPELS'}</Chip>;
+  }
   if (sk.type === 'transfig') { const ev = Math.max(2, Math.round(sk.every)); return <Chip color="#c084fc">✋ next in {ev - (s.kit.kills % ev)}</Chip>; }
   if (sk.type === 'copy' && cur) return <Chip color="#f472b6">{s.kit.oraSkill ? 'ORA' : '⧉'} {cur.name}{!s.kit.oraSkill && ` ${Math.max(0, Math.ceil(s.kit.copyT))}s`}</Chip>;
   return null;

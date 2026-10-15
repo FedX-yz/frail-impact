@@ -64,10 +64,10 @@ export const SKILLS = {
                lv1: { cap: 12, perSoul: 0.035 },
                si: { cap: 2.5, perSoul: 0.01 },
                desc: 'Kills become spirits that orbit your cursor (up to {cap}; elites give 3). Each spirit deals {perSoul} click DMG per second to enemies they touch. Getting hit loses one.' },
-  infinity:  { type: 'infinity',  radius: 90,
-               lv1: { radius: 65 },
-               si: { radius: 10 },
-               desc: 'Infinity: a {radius} bubble around your cursor stops enemy shots, dashes and the worm\'s bite, and pushes enemies away. Blocking drains it; it refills when idle. Red circles and slashes still hit.' },
+  infinity:  { type: 'infinity',  radius: 90, every: 4, crush: 2,
+               lv1: { radius: 65, every: 5, crush: 1.2 },
+               si: { radius: 10, every: -0.25, crush: 0.4 },
+               desc: 'Infinity: a {radius} bubble around your cursor stops enemy shots, dashes and the worm\'s bite (blocking drains it; it refills when idle). Every {every}th hit repels the enemy away from your cursor: slam it into a wall to CRUSH it for {crush} click DMG, or into another enemy to hurt both. Bosses are too heavy to move and take half.' },
   phantom:   { type: 'phantom',   lag: 0.5, autoRate: 4, autoPct: 0.25,
                lv1: { lag: 0.3, autoRate: 2, autoPct: 0.2 },
                si: { lag: 0.05, autoPct: 0.05 },
@@ -141,7 +141,7 @@ export const ULT_CD_PER_SI = 0.08;
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['mult', 'collapse', 'burn', 'base', 'perSpirit']);
+const MULT_KEYS = new Set(['mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
@@ -167,7 +167,9 @@ export function scaleKit(kit, si = 0) {
 export function describeKit(kit, si = 0) {
   if (!kit) return '';
   const k = scaleKit(kit, si);
-  return kit.desc.replace(/\{(\w+)\}/g, (_, key) => (key in k ? showVal(key, k[key]) : key));
+  return kit.desc.replace(/\{(\w+)\}/g, (_, key) => (key in k ? showVal(key, k[key]) : key))
+    // "{every}th" → 1st / 2nd / 3rd / 4th…
+    .replace(/\b(\d+)th\b/g, (_, n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'));
 }
 
 // One line saying what the next superimposition improves, e.g. "range 110 → 128, DMG 50% → 62%"
@@ -175,7 +177,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', width: 'width', punches: 'punches/s', hp: 'HP' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

@@ -20,14 +20,18 @@ const COPY_POOL = Object.keys(SKILLS).filter(id => id !== 'copy');
 const MAX_LAVA = 6, MAX_FIRE = 50, MAX_CRAWLERS = 4, MAX_SHIKI = 3;
 const ZONE_TICK = 0.5;            // lava / fire / spirits deal damage this often
 const SHIKI = ['dog', 'toad', 'nue'];
+// Jerry's repel: launch speed (slides about speed / friction px), how fast it
+// slows down, and how fast it has to be going for a wall or an enemy to crush it
+const REPEL_SPEED = 1400, REPEL_FRICTION = 5, CRUSH_SPEED = 260;
 
 export function createKitRuntime(api) {
-  const { s, K, rand, pick, dist, distToSegment, floater, effect, shake, sfx, nextId } = api;
+  const { s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId } = api;
 
   function init() {
     s.kit = {
       souls: 0, kills: 0, hits: 0,
       inf: 100, infUsed: -9,          // Infinity meter (0–100) and when it last blocked
+      repelN: 0,                      // Jerry: hits toward the next repel
       copied: null, copyT: 0,         // Room 16
       oraSkill: null,
       trailPt: null, trailT: 0,       // Doro's trail
@@ -56,7 +60,8 @@ export function createKitRuntime(api) {
   }
   // An ult's hit: flat click DMG × mult, no crit (like the older ults)
   const ultHit = (e, mult, color, label) => api.damageEnemy(e, s.stats.clickDmg * mult, { color, label, charge: 0 });
-  const foes = () => s.enemies.filter(e => e.tier !== 'treasure');
+  // things worth hitting: not treasure, not a hydra head that's down (it can't be damaged)
+  const foes = () => s.enemies.filter(e => e.tier !== 'treasure' && !(e.down > 0));
   const fighting = () => s.phase === 'fight' || s.phase === 'boss' || s.phase === 'bossIntro';
   const radius = e => e.size * s.k * 0.5;
   const center = () => ({ x: s.W / 2, y: s.H / 2 });
@@ -103,17 +108,98 @@ export function createKitRuntime(api) {
       s.kit.inf = Math.max(0, s.kit.inf - 25); s.kit.infUsed = s.time;
       floater('∞', P.x, P.y - K(40), '#93c5fd', true);
       effect({ kind: 'burst', x: P.x, y: P.y, r: K(sk.radius), color: '#60a5fa' });
-      if (src) {   // shove whatever touched you back out of the bubble
-        const a = Math.atan2(src.y - P.y, src.x - P.x) || 0;
-        const d = K(sk.radius) + radius(src) + K(6);
-        src.x = P.x + Math.cos(a) * d; src.y = P.y + Math.sin(a) * d;
+      if (src) {
         if (src.dashing) api.finishAttack(src.dashing);
-        if (src.move === 'worm') src.angle = a;
-        src.target = null;
+        // a dasher gets thrown back hard (into a wall = crushed); the worm is
+        // too long to throw, so its head is just shoved out of the bubble
+        if (!launch(src, P, 1.3)) {
+          const a = Math.atan2(src.y - P.y, src.x - P.x) || 0;
+          const d = K(sk.radius) + radius(src) + K(6);
+          src.x = clamp(P.x + Math.cos(a) * d, 0, s.W); src.y = clamp(P.y + Math.sin(a) * d, 0, s.H);
+          if (src.move === 'worm') src.angle = a;
+          src.target = null;
+        }
       }
       return true;
     }
     return false;
+  }
+
+  // ── Jerry's repel ────────────────────────────────────────────────────────
+  // Bosses, worm parts and hydra heads are too heavy to throw
+  const heavy = e => e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || !!e.group;
+  // Throw an enemy away from a point. false = it didn't budge
+  function launch(e, from, power = 1) {
+    if (heavy(e) || e.down > 0 || !s.enemies.includes(e)) return false;
+    let dx = e.x - from.x, dy = e.y - from.y, d = Math.hypot(dx, dy);
+    // hit dead centre → it flies outward, toward the nearest walls
+    if (d < radius(e) * 0.3) { dx = e.x - s.W / 2; dy = e.y - s.H / 2; d = Math.hypot(dx, dy); }
+    if (d < 0.5) { const a = rand(0, Math.PI * 2); dx = Math.cos(a); dy = Math.sin(a); d = 1; }
+    if (e.dashing) api.finishAttack(e.dashing);
+    const v = K(REPEL_SPEED) * power * (e.tier === 'elite' ? 0.7 : 1);
+    const sk = skill();
+    e.kb = { vx: dx / d * v, vy: dy / d * v, hit: [], crush: sk?.crush ?? 2 };
+    e.target = null;
+    effect({ kind: 'burst', x: e.x, y: e.y, r: radius(e) * 1.3, color: '#93c5fd' });
+    return true;
+  }
+  function crushHit(e, mult, big, quiet = false) {
+    if (kitHit(e, mult, { color: '#bfdbfe', label: '💥', quiet }) > 0 && big) {
+      floater('CRUSHED', e.x, e.y - radius(e) - K(22), '#93c5fd', true);
+    }
+  }
+  // A thrown enemy sliding (called by the engine instead of its normal move)
+  function slide(e, dt) {
+    const kb = e.kb;
+    e.x += kb.vx * dt; e.y += kb.vy * dt;
+    const sp = Math.hypot(kb.vx, kb.vy);
+    const f = Math.exp(-REPEL_FRICTION * dt);
+    kb.vx *= f; kb.vy *= f;
+    const fast = sp >= K(CRUSH_SPEED);
+    // walls: the arena's edges, and the status frame in the corner
+    const rr = radius(e) * 0.8;
+    let wall = null;
+    if (e.x < rr) { e.x = rr; wall = { x: 0, y: e.y, a: 0 }; }
+    else if (e.x > s.W - rr) { e.x = s.W - rr; wall = { x: s.W, y: e.y, a: Math.PI }; }
+    if (e.y < rr) { e.y = rr; wall = { x: e.x, y: 0, a: Math.PI / 2 }; }
+    else if (e.y > s.H - rr) { e.y = s.H - rr; wall = { x: e.x, y: s.H, a: -Math.PI / 2 }; }
+    const r = s.reserved;
+    if (!wall && r && e.x > r.x0 - rr && e.x < r.x1 + rr && e.y > r.y0 - rr && e.y < r.y1) {
+      // pushed out the shortest way (the frame has no bottom edge in the arena)
+      const out = [[e.x - (r.x0 - rr), -1, 0], [r.x1 + rr - e.x, 1, 0], [e.y - (r.y0 - rr), 0, -1]]
+        .reduce((a, b) => (b[0] < a[0] ? b : a));
+      e.x += out[1] * out[0]; e.y += out[2] * out[0];
+      wall = { x: e.x - out[1] * rr, y: e.y - out[2] * rr, a: Math.atan2(out[2], out[1]) };
+    }
+    if (wall) {
+      e.kb = null;
+      if (fast) {
+        crushHit(e, kb.crush, true);
+        effect({ kind: 'crack', x: wall.x, y: wall.y, a: wall.a, r: radius(e) * 1.2, life: 0.8 });
+        effect({ kind: 'shards', x: wall.x, y: wall.y, r: radius(e), color: '#93c5fd', n: 9 });
+        shake(0.15); sfx('crit');
+      }
+      return;
+    }
+    // slamming into other enemies: both get hurt, and the momentum carries on
+    if (fast) {
+      for (const o of s.enemies) {
+        if (o === e || o.down > 0 || o.tier === 'treasure' || kb.hit.includes(o.id)) continue;
+        if (dist(o.x, o.y, e.x, e.y) > (radius(o) + radius(e)) * 0.75) continue;
+        kb.hit.push(o.id);
+        crushHit(o, kb.crush * 0.5, false);
+        crushHit(e, kb.crush * 0.5, false, true);   // one number per collision is plenty
+        effect({ kind: 'shards', x: (o.x + e.x) / 2, y: (o.y + e.y) / 2, r: radius(o), color: '#93c5fd', n: 5 });
+        sfx('hit');
+        if (!s.enemies.includes(e)) return;
+        if (!s.enemies.includes(o)) { kb.vx *= 0.6; kb.vy *= 0.6; break; }   // smashed straight through it
+        if (heavy(o)) { e.kb = null; return; }                               // bounced off something that won't move
+        if (!o.kb) { o.kb = { vx: kb.vx * 0.7, vy: kb.vy * 0.7, hit: [e.id], crush: kb.crush }; o.target = null; }
+        kb.vx *= 0.35; kb.vy *= 0.35;
+        break;
+      }
+    }
+    if (Math.hypot(kb.vx, kb.vy) < K(50)) e.kb = null;
   }
   function onPlayerHit() {
     const sk = skill();
@@ -157,6 +243,18 @@ export function createKitRuntime(api) {
     if (sk?.type === 'lava' && !auto) {
       s.kit.hits++;
       if (s.kit.hits % 6 === 0) addLava(e.x, e.y, K(sk.radius) * 0.6, sk.dur * 0.7, sk.dps);
+    }
+    // Jerry: every Nth hit repels. A hit that kills keeps the repel for the next one;
+    // bosses (and other heavy things) can't be thrown, so they take half the crush instead
+    if (sk?.type === 'infinity' && !auto && !(e.down > 0)) {
+      const every = Math.max(2, Math.round(sk.every ?? 4));
+      s.kit.repelN = Math.min(every, s.kit.repelN + 1);
+      if (s.kit.repelN >= every && e.hp > 0 && s.enemies.includes(e)) {
+        const P = s.player.pos ?? { x: e.x, y: e.y };
+        if (launch(e, P)) sfx('shield');
+        else { crushHit(e, (sk.crush ?? 2) * 0.5, false); effect({ kind: 'burst', x: e.x, y: e.y, r: radius(e), color: '#93c5fd' }); }
+        s.kit.repelN = 0;
+      }
     }
   }
   // true = swallow the click (you're suspended while Mahoraga fights)
@@ -347,22 +445,8 @@ export function createKitRuntime(api) {
       while (kit.posHist.length && kit.posHist[0].t < s.time - 2) kit.posHist.shift();
     }
 
-    // Infinity: refills when it hasn't blocked for a second; pushes enemies out
-    if (sk?.type === 'infinity') {
-      if (s.time - kit.infUsed > 1) kit.inf = Math.min(100, kit.inf + 30 * dt);
-      if (P && !s.mahoraga) {
-        const R = K(sk.radius);
-        for (const e of s.enemies) {
-          if (e.tier === 'boss' || e.move === 'worm' || e.dashing) continue;
-          const d = dist(e.x, e.y, P.x, P.y), need = R + radius(e) * 0.9;
-          if (d < need) {
-            const a = d > 0.5 ? Math.atan2(e.y - P.y, e.x - P.x) : rand(0, Math.PI * 2);
-            const step = Math.min(need - d, K(360) * dt);
-            e.x += Math.cos(a) * step; e.y += Math.sin(a) * step; e.target = null;
-          }
-        }
-      }
-    }
+    // Infinity refills when it hasn't blocked anything for a second
+    if (sk?.type === 'infinity' && s.time - kit.infUsed > 1) kit.inf = Math.min(100, kit.inf + 30 * dt);
 
     // Doro: moving fast leaves fire behind the cursor
     if (sk?.type === 'firetrail' && P && live) {
@@ -484,7 +568,7 @@ export function createKitRuntime(api) {
       a.life -= dt;
       if (a.kind === 'crawler') {
         let t = s.enemies.find(e => e.id === a.target);
-        if (!t || t.tier === 'treasure') { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
+        if (!t || t.tier === 'treasure' || t.down > 0) { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
         if (t) {
           const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
           const spd = K(a.big ? 210 : 260);
@@ -499,7 +583,7 @@ export function createKitRuntime(api) {
         }
       } else if (a.kind === 'dog') {
         let t = s.enemies.find(e => e.id === a.target);
-        if (!t || t.tier === 'treasure') { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
+        if (!t || t.tier === 'treasure' || t.down > 0) { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
         if (t) {
           const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
           const reach = radius(t) + K(14);
@@ -529,7 +613,7 @@ export function createKitRuntime(api) {
         }
       } else if (a.kind === 'arrow') {
         let t = s.enemies.find(e => e.id === a.targetId);
-        if (!t) { t = strongest(); a.targetId = t?.id ?? null; }
+        if (!t || t.down > 0) { t = strongest(); a.targetId = t?.id ?? null; }
         const tx = t ? t.x : s.W / 2, ty = t ? t.y : s.H / 2;
         const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
         a.ang = Math.atan2(dy, dx);
@@ -626,6 +710,6 @@ export function createKitRuntime(api) {
     skill, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked,
     clickMods, afterClick, onPointerDown, onKill, onCombo,
     ultBlocked, activateUlt, endUlt, choose, hitMahoraga,
-    update, reset, origin,
+    update, reset, origin, slide,
   };
 }

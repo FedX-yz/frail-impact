@@ -133,7 +133,7 @@ and the Room 16 skill picker.
 
 | Card | Skill | Ult |
 | --- | --- | --- |
-| Jerry | Infinity: bubble stops shots/dashes/bites, pushes enemies | Hollow Purple: beam from you through your cursor |
+| Jerry | Infinity: bubble stops shots/dashes/bites; every 4th hit repels the enemy, and slamming it into a wall (or another enemy) crushes it | Hollow Purple: beam from you through your cursor |
 | Room Number 16 | copies a random 5★ skill (weak), every 20s | ORA: pick 1 of 3 skills at full strength for 45s + punch barrage |
 | Ice (fire) | kills leave lava | Maximum: Meteor on your cursor |
 | Tyran | every 6th kill → exploding crawler | 10s: clicks fire 3 slashes through the cursor |
