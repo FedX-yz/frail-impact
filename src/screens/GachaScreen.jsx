@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
-import { playClose } from '../utils/sfx';
+import { playClose, preloadSound, playMusic, stopMusic, musicElapsed } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 
 const BASE = import.meta.env.BASE_URL;
@@ -20,6 +20,11 @@ const SUMMON_VID   = {
 const PULL_5STAR_SFX = null;
 
 const rc = r => RARITY_COLOR[r] || '#fff';
+// Build-up before a card with pull music: the silhouette shakes harder and harder
+const TREMBLE = Array.from({ length: 41 }, (_, i) => {
+  const p = i / 40, a = p * p * 9;
+  return `${(p * 100).toFixed(1)}%{transform:translate(${((i % 2 ? 1 : -1) * a).toFixed(1)}px,${(((i % 3) - 1) * a * 0.6).toFixed(1)}px)}`;
+}).join(' ');
 // 1×1 black poster: hides the grey "play" placeholder phones show before a video starts
 const BANNER_KEY = 'frail_banner';
 const BLANK_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -160,6 +165,12 @@ export default function GachaScreen({
 
   const currentCard = batch[queueIdx] ?? null;
 
+  // Pull music build-up: { lead, key } once the track is fading in; flash = the drop just hit
+  const [build, setBuild] = useState(null);
+  const [flash, setFlash] = useState(false);
+  const revealNowRef = useRef(null);
+  useEffect(() => () => stopMusic(0.2), []);   // leaving the gacha screen
+
   const stopAudio = () => {
     if (!audioRef.current) return;
     audioRef.current.pause();
@@ -200,6 +211,8 @@ export default function GachaScreen({
     setQueueIdx(idx);
     if (isHighRarity(card) && card.resultVideo) {
       setPhase('card-video');
+    } else if (card?.pullMusic) {
+      setPhase('buildup');
     } else {
       setPhase('reveal-queue');
     }
@@ -215,6 +228,33 @@ export default function GachaScreen({
     const card = batchRef.current[queueIdx];
     if (card?.resultVideo) playVideo(revealRef, card.resultVideo, () => setPhase('reveal-queue'));
     else setPhase('reveal-queue');
+  }, [phase, queueIdx]);
+
+  // Cards with pull music: the track fades in `lead` seconds before its drop
+  // and the card is revealed right on the drop (timed off the audio clock).
+  // Tapping skips straight to the drop.
+  useEffect(() => {
+    if (phase !== 'buildup') return;
+    const pm = batchRef.current[queueIdx]?.pullMusic;
+    if (!pm) { setPhase('reveal-queue'); return; }
+    const lead = Math.max(0.5, Math.min(pm.lead ?? 2.5, pm.drop));
+    let done = false, raf = 0;
+    const reveal = () => {
+      if (done) return;
+      done = true; cancelAnimationFrame(raf); clearTimeout(giveUp);
+      setBuild(null); setFlash(true); setPhase('reveal-queue');
+    };
+    revealNowRef.current = () => { if (!done) { playMusic(pm.src, { offset: pm.drop }); reveal(); } };
+    const giveUp = setTimeout(reveal, (lead + 4) * 1000);   // track didn't load in time: reveal anyway
+    setBuild(null);
+    playMusic(pm.src, { offset: pm.drop - lead, fadeIn: lead }).then(h => {
+      if (done) return;
+      if (!h) { reveal(); return; }
+      setBuild({ lead, key: queueIdx });   // starts the build-up animation in step with the music
+      const tick = () => { if (musicElapsed(h) >= lead) reveal(); else raf = requestAnimationFrame(tick); };
+      tick();
+    });
+    return () => { done = true; cancelAnimationFrame(raf); clearTimeout(giveUp); };
   }, [phase, queueIdx]);
 
   useEffect(() => {
@@ -252,6 +292,7 @@ export default function GachaScreen({
 
     setCollection(prev => [...prev, ...collectionResults.map(c => ({ id: c.id }))]);
 
+    results.forEach(r => preloadSound(r.pullMusic?.src));   // ready by the time its card comes up
     batchRef.current = results;
     setBatch(results);
     setQueueIdx(0);
@@ -281,7 +322,7 @@ export default function GachaScreen({
   };
 
   const advanceQueue = () => {
-    stopAudio();
+    stopAudio(); stopMusic(); setFlash(false);
     const b    = batchRef.current;
     const next = queueIdx + 1;
     if (next >= b.length) {
@@ -296,7 +337,7 @@ export default function GachaScreen({
 
   const handleSmartSkip = e => {
     e.stopPropagation();
-    stopAudio();
+    stopAudio(); stopMusic(); setFlash(false);
     const b = batchRef.current;
 
     let nextHighIdx = -1;
@@ -374,6 +415,11 @@ export default function GachaScreen({
         @keyframes ringPulse       { 0%{transform:scale(0.6);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
         @keyframes charFloat       { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-8px)} }
         @keyframes pulseGlow       { 0%,100%{opacity:0.7} 50%{opacity:1} }
+        @keyframes buildGlow       { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1.5)} }
+        @keyframes buildRise       { from{opacity:0;transform:scale(0.75)} 30%{opacity:0.9} to{opacity:1;transform:scale(1.06)} }
+        @keyframes buildTremble    { ${TREMBLE} }
+        @keyframes dropFlash       { 0%{opacity:0.95} 100%{opacity:0} }
+        @keyframes dropJolt        { 0%{transform:scale(1.18)} 25%{transform:scale(0.96) translate(-6px,4px)} 45%{transform:scale(1.03) translate(5px,-3px)} 70%{transform:scale(0.99) translate(-2px,1px)} 100%{transform:scale(1)} }
         .result-tile {
           display:flex; flex-direction:column; align-items:center;
           justify-content:flex-end; gap:6px;
@@ -665,6 +711,31 @@ zIndex: 10,
         </div>
       )}
 
+      {/* ── BUILD-UP (pull music fading in before the drop) ──── */}
+      {phase === 'buildup' && currentCard && (
+        <div onClick={() => revealNowRef.current?.()} style={{ position:'absolute', inset:0, zIndex:52, cursor:'pointer', overflow:'hidden', background:'#030008',
+          display:'flex', alignItems:'center', justifyContent:'center' }}>
+          {build && (
+            <div key={build.key} style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 50% 55%, ${rg(currentCard.rarity)} 0%, transparent 62%)`,
+                animation:`buildGlow ${build.lead}s cubic-bezier(.6,0,1,1) forwards` }} />
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{ position:'absolute', width:160, height:160, borderRadius:'50%', border:`2px solid ${rc(currentCard.rarity)}`,
+                  animation:`ringPulse ${Math.max(0.35, build.lead / 3)}s cubic-bezier(0,0,0.2,1) ${i * build.lead / 4}s infinite`, opacity:0 }} />
+              ))}
+              <div style={{ animation:`buildTremble ${build.lead}s linear forwards` }}>
+                <img src={currentCard.characterImage || currentCard.image} alt="" draggable={false}
+                  style={{ maxHeight:'50vh', maxWidth:'80vw', objectFit:'contain', display:'block',
+                    filter:`brightness(0) drop-shadow(0 0 18px ${rc(currentCard.rarity)}) drop-shadow(0 0 40px ${rg(currentCard.rarity)})`,
+                    animation:`buildRise ${build.lead}s cubic-bezier(.5,0,1,1) forwards` }} />
+              </div>
+            </div>
+          )}
+          <div style={{ position:'absolute', top:20, left:24, color:'rgba(255,255,255,0.4)', fontSize:14 }}>{queueIdx+1} / {batch.length}</div>
+          <div style={{ position:'absolute', top:20, right:20, color:'rgba(255,255,255,0.45)', fontSize:13 }}>tap to skip</div>
+        </div>
+      )}
+
       {/* ── REVEAL QUEUE ─────────────────────────────────────── */}
       {phase === 'reveal-queue' && batch.length > 0 && currentCard && (() => {
         const c            = currentCard;
@@ -689,6 +760,8 @@ zIndex: 10,
             )}
 
             <div style={{ position:'absolute', top:20, left:24, color:'rgba(255,255,255,0.4)', fontSize:14, zIndex:2 }}>{queueIdx+1} / {batch.length}</div>
+            {flash && <div key={`flash${queueIdx}`} onAnimationEnd={() => setFlash(false)}
+              style={{ position:'absolute', inset:0, zIndex:20, background:'#fff', pointerEvents:'none', animation:'dropFlash 0.8s ease-out forwards' }} />}
 
             {!isHigh && !isLast && (
               <button
@@ -705,7 +778,8 @@ zIndex: 10,
               </button>
             )}
 
-            <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:18, padding:'20px 32px', textAlign:'center' }}>
+            <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:18, padding:'20px 32px', textAlign:'center',
+              animation: flash ? 'dropJolt 0.5s ease-out' : 'none' }}>
               <div style={{ position:'relative' }}>
                 <img
                   key={c.instanceId}

@@ -51,6 +51,11 @@ files and finish in seconds.
   `portraitFocus: [x %, y %, zoom]` points at the face in the sprite (or the full art),
   and the battle HP portrait centres on it. A 5★ with `skill: null, ult: null` works as a stats-only
   card and shows "kit coming soon".
+- **Pull music:** put the track in `public/audio/pull/` and give the card
+  `pullMusic: { src, drop, lead }`. `drop` is the second in the track where the beat
+  drops; the music fades in `lead` seconds before it (default 2.5) while the card's
+  silhouette builds up, and the card is revealed exactly on the drop. Tapping skips
+  straight to the drop. To move the reveal, change `drop`.
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
   cards with neither use their card art.

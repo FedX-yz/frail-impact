@@ -209,6 +209,9 @@ export const CHARACTERS = [
 
   // ── 5★ Anemics Kaisen (kits: combat/kitRuntime.js) ──────────────
   // sprite: the character cut out of the background (optional).
+  // pullMusic: { src, drop, lead } — music when you pull the card. It fades in
+  //   `lead` seconds (default 2.5) before `drop` (seconds into the track: the
+  //   beat drop) and the card is revealed right on the drop.
   // portraitFocus: [x %, y %, zoom] — where the face is in the sprite (or the
   // full art if there's no sprite); the battle HP portrait centres on it.
   {
@@ -223,6 +226,7 @@ export const CHARACTERS = [
     cardArt:         `${BASE}cardart/jerry-card.png`,
     portraitFocus:   [22, 31, 2.2],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/jerry.mp3`, drop: 16.72 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1350, atk: 165, def: 75 },
@@ -252,6 +256,7 @@ export const CHARACTERS = [
     cardArt:         `${BASE}cardart/room16-card.png`,
     portraitFocus:   [41, 24, 2.6],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/room16.mp3`, drop: 7.78 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1300, atk: 175, def: 70 },
@@ -281,6 +286,7 @@ export const CHARACTERS = [
     cardArt:         `${BASE}cardart/ice-fire-card.png`,
     portraitFocus:   [36, 38, 2.0],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/ice-fire.mp3`, drop: 13.42 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1250, atk: 180, def: 65 },
@@ -310,6 +316,7 @@ export const CHARACTERS = [
     cardArt:         `${BASE}cardart/tyran-card.png`,
     portraitFocus:   [50, 34, 2.6],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/tyran.mp3`, drop: 16.55 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1700, atk: 130, def: 95 },
@@ -339,6 +346,7 @@ export const CHARACTERS = [
     cardArt:         `${BASE}cardart/ivy-card.png`,
     portraitFocus:   [50, 43, 2.8],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/ivy.mp3`, drop: 3.01 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1450, atk: 150, def: 80 },
@@ -458,6 +466,7 @@ export const CHARACTERS = [
     sprite:          `${BASE}sprites/astrec-hr.png`,   // cut out (no background)
     portraitFocus:   [68, 17, 3.0],
     voiceLine:       null,
+    pullMusic:       { src: `${BASE}audio/pull/astrec-hr.mp3`, drop: 3.1, lead: 3.0 },
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1550, atk: 175, def: 70 },

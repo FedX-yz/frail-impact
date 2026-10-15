@@ -55,6 +55,55 @@ const unlock = () => { if (_audioCtx.state === 'suspended') _audioCtx.resume().c
 window.addEventListener('pointerdown', unlock, { capture: true });
 window.addEventListener('keydown', unlock, { capture: true });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Music (pull reveals). One track at a time. It goes through the same master
+// volume, and fades are done with Web Audio because iPhones ignore an <audio>
+// element's volume.
+// ─────────────────────────────────────────────────────────────────────────────
+let music = null;
+// Start downloading/decoding a track early (e.g. while the pull animation plays)
+export const preloadSound = (src) => { if (src) loadBuffer(src).catch(() => {}); };
+// Play `src` from `offset` seconds, fading in over `fadeIn` seconds.
+// Resolves to a handle once it's actually playing (null if it couldn't load or
+// was stopped first); musicElapsed(handle) says how far into the fade it is.
+export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1 } = {}) {
+  stopMusic(0);
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  const handle = { stopped: false };
+  music = handle;
+  return loadBuffer(src).then(decoded => {
+    if (handle.stopped) return null;
+    const source = _audioCtx.createBufferSource(), g = _audioCtx.createGain();
+    source.buffer = decoded;
+    source.connect(g); g.connect(master);
+    const t = _audioCtx.currentTime + 0.03;
+    if (fadeIn > 0) {
+      // swells in (slow at first, full volume right on the drop)
+      const curve = Float32Array.from({ length: 32 }, (_, i) => gain * Math.pow(i / 31, 1.5));
+      curve[0] = 0.0001;
+      g.gain.setValueCurveAtTime(curve, t, fadeIn);
+    } else g.gain.setValueAtTime(gain, t);
+    source.start(t, Math.max(0, Math.min(offset, decoded.duration - 0.05)));
+    Object.assign(handle, { source, gain: g, t0: t });
+    return handle;
+  }).catch(() => null);
+}
+export const musicElapsed = (h) => (h?.t0 != null ? _audioCtx.currentTime - h.t0 : 0);
+export function stopMusic(fade = 0.3) {
+  const m = music;
+  music = null;
+  if (!m) return;
+  m.stopped = true;
+  if (!m.source) return;
+  const t = _audioCtx.currentTime;
+  try {
+    m.gain.gain.cancelScheduledValues(t);
+    m.gain.gain.setValueAtTime(Math.max(0.0001, m.gain.gain.value), t);
+    m.gain.gain.linearRampToValueAtTime(0.0001, t + Math.max(0.01, fade));
+    m.source.stop(t + Math.max(0.01, fade) + 0.02);
+  } catch { /* already stopped */ }
+}
+
 export const playClose = () => playSFX(`${BASE}sounds/ui_close.mp3`);
 export const playPress = () => {
   playSFX(UI_SOUNDS[1 + Math.floor(Math.random() * 2)]);   // ui_press or ui_press2
