@@ -1,5 +1,10 @@
 const BASE = import.meta.env.BASE_URL;
 
+// Pull animation for the Anemics Kaisen cards (plays instead of the normal 5★
+// one). Put the video in public/animations/ and write its path here, e.g.
+// `${BASE}animations/anemics-kaisen.mp4`. null = they use the normal 5★ animation.
+const JJK_EYECATCH = null;
+
 export const CHARACTERS = [
 
   // ── 5★ ──────────────────────────────────────────────────────────
@@ -209,6 +214,7 @@ export const CHARACTERS = [
 
   // ── 5★ Anemics Kaisen (kits: combat/kitRuntime.js) ──────────────
   // sprite: the character cut out of the background (optional).
+  // summonVideo: a custom pull animation (instead of the rarity one), see JJK_EYECATCH.
   // pullMusic: { src, drop, lead } — music when you pull the card. It fades in
   //   `lead` seconds (default 2.5) before `drop` (seconds into the track: the
   //   beat drop) and the card is revealed right on the drop.
@@ -228,6 +234,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/jerry.mp3`, drop: 16.72 },
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1350, atk: 165, def: 75 },
     skill: {
@@ -258,6 +265,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/room16.mp3`, drop: 7.78 },
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1300, atk: 175, def: 70 },
     skill: {
@@ -288,6 +296,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/ice-fire.mp3`, drop: 13.42 },
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1250, atk: 180, def: 65 },
     skill: {
@@ -318,6 +327,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/tyran.mp3`, drop: 16.55 },
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1700, atk: 130, def: 95 },
     skill: {
@@ -348,6 +358,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/ivy.mp3`, drop: 3.01 },
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1450, atk: 150, def: 80 },
     skill: {
@@ -378,6 +389,7 @@ export const CHARACTERS = [
     portraitFocus:   [57, 19, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1400, atk: 160, def: 80 },
     skill: {
@@ -407,6 +419,7 @@ export const CHARACTERS = [
     portraitFocus:   [41, 50, 2.4],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1400, atk: 155, def: 85 },
     skill: {
@@ -437,6 +450,7 @@ export const CHARACTERS = [
     portraitFocus:   [37, 17, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1500, atk: 145, def: 85 },
     skill: {
@@ -468,6 +482,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/astrec-hr.mp3`, drop: 3.1, lead: 3.0 },
     animationVideo:  `${BASE}animations/5star.mp4`,
+    summonVideo:     JJK_EYECATCH,
     resultVideo:     null,
     stats: { hp: 1550, atk: 175, def: 70 },
     skill: {

@@ -131,6 +131,7 @@ export default function GachaScreen({
   const [batch,           setBatch]           = useState([]);
   const [queueIdx,        setQueueIdx]        = useState(0);
   const [highestRar,      setHighestRar]      = useState(3);
+  const [summonSrc,       setSummonSrc]       = useState(null);   // custom pull animation (card.summonVideo)
   const [showArt,         setShowArt]         = useState(null);
   const [selectedResult,  setSelectedResult]  = useState(null);
   const [summaryBatch,    setSummaryBatch]    = useState([]);
@@ -220,8 +221,10 @@ export default function GachaScreen({
 
   useEffect(() => {
     if (phase !== 'summon') return;
-    playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3], () => skipSummonRef.current());
-  }, [phase, highestRar]);
+    // a custom animation that won't play falls back to the normal one, rather than nothing
+    if (summonSrc) playVideo(summonRef, summonSrc, () => setSummonSrc(null));
+    else playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3], () => skipSummonRef.current());
+  }, [phase, highestRar, summonSrc]);
 
   useEffect(() => {
     if (phase !== 'card-video') return;
@@ -299,6 +302,8 @@ export default function GachaScreen({
 
     const maxRar = Math.max(...results.map(r => r.rarity));
     setHighestRar(maxRar);
+    // a card with its own pull animation (Anemics Kaisen eyecatch) beats the rarity one
+    setSummonSrc(results.find(r => r.rarity === maxRar && r.summonVideo)?.summonVideo ?? null);
     if (maxRar >= 5 && PULL_5STAR_SFX) {
       try { const a = new Audio(`${BASE}${PULL_5STAR_SFX}`); a.volume = 0.85; a.play().catch(() => {}); } catch { /* empty */ }
     }
@@ -368,7 +373,7 @@ export default function GachaScreen({
         ref={summonRef}
         onEnded={() => { if (phaseRef.current === 'summon') onSummonEnd(); }}
         onPlaying={() => setVidPlaying(true)}
-        onError={() => { if (phaseRef.current === 'summon') skipSummon(); }}
+        onError={() => { if (phaseRef.current !== 'summon') return; if (summonSrc) setSummonSrc(null); else skipSummon(); }}
         playsInline preload="auto" poster={BLANK_POSTER}
         disablePictureInPicture controls={false}
         style={{
