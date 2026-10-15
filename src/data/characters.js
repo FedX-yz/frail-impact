@@ -1,6 +1,6 @@
 const BASE = import.meta.env.BASE_URL;
 
-// Anemics Kaisen eyecatch: plays right before the card is revealed (its
+// Anemic Kaisen eyecatch: plays right before the card is revealed (its
 // resultVideo), with the card's silhouette, synced to the eyecatch theme. Each
 // card has two files in public/animations/eyecatch/: <name>.mp4 (16:9) and
 // <name>-tall.mp4 (9:16, for phones held upright so nothing gets cropped).
@@ -217,7 +217,7 @@ export const CHARACTERS = [
     },
   },
 
-  // ── 5★ Anemics Kaisen (kits: combat/kitRuntime.js) ──────────────
+  // ── 5★ Anemic Kaisen (kits: combat/kitRuntime.js) ──────────────
   // sprite: the character cut out of the background (optional).
   // pullMusic: { src, drop, lead } — music when you pull the card. It fades in
   //   `lead` seconds before `drop` (seconds into the track: the beat drop) — under

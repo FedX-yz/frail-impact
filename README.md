@@ -57,11 +57,16 @@ files and finish in seconds.
   silhouette builds up, and the card is revealed exactly on the drop. Tapping skips
   straight to the drop. To move the reveal, change `drop`.
 - **Pull animation:** `summonVideo` plays instead of the normal rarity animation when
-  the card is the best pull of the batch. The Anemics Kaisen cards each have an
+  the card is the best pull of the batch. The Anemic Kaisen cards each have an
   eyecatch with their silhouette in `public/animations/eyecatch/` (`<name>.mp4` for
   wide screens, `<name>-tall.mp4` for phones held upright). Replace those files to
   change them, or point `summonVideo` at your own video. If one is missing or won't
   play, the normal animation plays instead.
+- **Banner schedule:** `BANNER_SCHEDULE` at the top of `src/data/banners.js` decides which
+  limited banner is live, how long it runs (`days`) and what comes next (the order of
+  `rotation`), starting from `start`. `permanent` banners are always there. The gacha screen
+  shows the countdown and an "Up next" line, and the banner picker lists what's coming.
+  Developer mode lets you pick any banner, live or not.
 - **Banner art:** four see-through PNG layers in `public/ui/`, all the same size (3183×2447):
   `bg` (background), `char1` (right character, behind), `char2` (left character, in front) and
   `text` (title, drawn on top). Put their names in `uiAssets` in `src/data/banners.js`. Only the
@@ -142,7 +147,7 @@ missing from cast.js, a `goto` with no matching label, an unknown enemy…). In 
 ### 5★ kits
 
 Every skill and ult number is in `src/combat/kits.js` (with a weaker `lv1` version
-and per-superimposition `si` steps). The older kits run in `engine.js`; the Anemics
+and per-superimposition `si` steps). The older kits run in `engine.js`; the Anemic
 Kaisen kits run in `src/combat/kitRuntime.js`, which adds a few shared systems:
 allies (crawlers, shikigami, spirits, Mahoraga), lava zones, fire walls, aimed ults
 and the Room 16 skill picker.
@@ -187,7 +192,7 @@ Deck screen's **Battle Stats** box shows the result:
 Tap the **SETTINGS** title 5 times (or open the site with `?dev`) to turn on
 developer mode. A **DEV** button then appears on the battle screen with a sandbox:
 give gems/coins/cards, set levels and superimposition, god mode, game speed,
-spawn any enemy or boss, spawn an elite with a chosen affix, set the stage modifier, jump to a stage, force the next gacha pull to be a 5★.
+spawn any enemy or boss, spawn an elite with a chosen affix, set the stage modifier, jump to a stage, force the next gacha pull to be a 5★, and pick any gacha banner even when it isn't live.
 It changes your real save, so use Reset Save in Settings to start clean.
 
 ### Debugging

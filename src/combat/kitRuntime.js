@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// How the Anemics Kaisen kits work in battle. The numbers are in kits.js;
+// How the Anemic Kaisen kits work in battle. The numbers are in kits.js;
 // engine.js calls the hooks below (onKill, onCombo, absorbHit, …).
 //
 // Shared systems:

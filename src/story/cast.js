@@ -27,7 +27,7 @@ export const CAST = {
   reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png' },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
 
-  // Anemics Kaisen 5★s — cut-out sprites (Room 16 still uses his full art until he has one);
+  // Anemic Kaisen 5★s — cut-out sprites (Room 16 still uses his full art until he has one);
   // the codec centres on the face (same spot as the card's portraitFocus)
   jerry:       { name: 'Jerry',              color: '#E8A33D', portrait: 'sprites/jerry.png', sprite: 'sprites/jerry.png', focus: [16, 25, 2.8] },
   room16:      { name: 'Room Number 16',     color: '#EC4899', portrait: 'cardart/room16-card.png',      sprite: 'cardart/room16-card.png',      focus: [41, 24, 3] },

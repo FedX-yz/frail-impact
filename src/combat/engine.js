@@ -95,7 +95,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const effect = (e) => { s.effects.push({ id: uid++, t: 0, ...e }); if (s.effects.length > 60) s.effects.shift(); };
   const shake = (amt) => { s.shake = Math.max(s.shake, amt); };
 
-  // The Anemics Kaisen kits (kitRuntime.js) plug in through these hooks
+  // The Anemic Kaisen kits (kitRuntime.js) plug in through these hooks
   const rt = createKitRuntime({
     s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
     rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt,

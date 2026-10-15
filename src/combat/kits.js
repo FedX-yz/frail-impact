@@ -42,7 +42,7 @@ export const SKILLS = {
                    si: { pct: 0.01, healPctHp: 0.001 },
                    desc: "Clicks also bite off {pct} of the target's current HP and heal you for {healPctHp} max HP." },
 
-  // ── Anemics Kaisen ──────────────────────────────────────────────────────
+  // ── Anemic Kaisen ──────────────────────────────────────────────────────
   // (how each one works in battle: combat/kitRuntime.js)
   ratio:     { type: 'ratio',     period: 1.0, window: 0.12, bonus: 1.5, critRateMod: -0.10,
                lv1: { window: 0.09, bonus: 0.8 },
@@ -105,7 +105,7 @@ export const ULTS = {
                     si: { bossPct: 0.04 },
                     desc: "Eats every non-boss enemy, bites {bossPct} of the boss's max HP and fully heals you." },
 
-  // ── Anemics Kaisen ──────────────────────────────────────────────────────
+  // ── Anemic Kaisen ──────────────────────────────────────────────────────
   overtime:        { type: 'overtime',   dur: 10, mult: 1.5, collapse: 5, charge: 1,
                      si: { dur: 1, collapse: 1 },
                      desc: 'OVERTIME for {dur}s: every click is a ratio hit and deals {mult} DMG. When it ends, Collapse hits every enemy for {collapse} click DMG.' },

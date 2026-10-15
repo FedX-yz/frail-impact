@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
+import { bannerStatus, formatTimeLeft } from '../utils/bannerSchedule';
 import { playClose, preloadSound, playMusic, stopMusic, musicElapsed } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { getSettings } from '../utils/settings';
@@ -94,39 +95,16 @@ function doPulls(count, pity4, pity5, banner, force5 = false) {
   return force5 ? { results, newPity4: pity4, newPity5: pity5 } : { results, newPity4: p4, newPity5: p5 };
 }
 
-// ── Countdown hook ─────────────────────────────────────────────
-// Banners rotate on a 21-day cycle so the timer never sits on "Ended".
-// (The old fixed date, 2025-06-01, had already passed.)
-const BANNER_CYCLE_MS    = 21 * 86400000;
-const BANNER_CYCLE_START = Date.UTC(2026, 0, 1);
-function nextBannerEnd() {
-  const elapsed = Date.now() - BANNER_CYCLE_START;
-  return new Date(BANNER_CYCLE_START + (Math.floor(elapsed / BANNER_CYCLE_MS) + 1) * BANNER_CYCLE_MS);
+// ── Clock ─────────────────────────────────────────────────────
+// Ticks once a second: runs the banner countdown and swaps the banner when one
+// ends. Which banners are live comes from BANNER_SCHEDULE in data/banners.js.
+function useNow() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
+  return now;
 }
-
-function useCountdown(endDate) {
-  const [timeLeft, setTimeLeft] = useState('');
-  useEffect(() => {
-    const tick = () => {
-      const end  = typeof endDate === 'function' ? endDate() : endDate;
-      const diff = end - Date.now();
-      if (diff <= 0) { setTimeLeft('Ended'); return; }
-      const d = Math.floor(diff / 86400000);
-      const h = Math.floor((diff % 86400000) / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(
-        d > 0
-          ? `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`
-          : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-      );
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [endDate]);
-  return timeLeft;
-}
+// how long a banner runs: "21 days", "1 day", "12 h"
+const formatLength = ms => { const d = ms / 86400000; return d >= 1 ? `${+d.toFixed(1)} day${d === 1 ? '' : 's'}` : `${Math.round(d * 24)} h`; };
 
 // ─────────────────────────────────────────────────────────────────
 export default function GachaScreen({
@@ -144,10 +122,9 @@ export default function GachaScreen({
   const [showArt,         setShowArt]         = useState(null);
   const [selectedResult,  setSelectedResult]  = useState(null);
   const [summaryBatch,    setSummaryBatch]    = useState([]);
-  // remembers the banner you were on (per device)
+  // remembers the banner you were on (per device); if it's no longer live you get the current one
   const [activeBannerId,  setActiveBannerIdRaw] = useState(() => {
-    try { const id = localStorage.getItem(BANNER_KEY); if (BANNERS.some(b => b.id === id)) return id; } catch { /* storage blocked */ }
-    return BANNERS[0].id;
+    try { return localStorage.getItem(BANNER_KEY); } catch { return null; }
   });
   const setActiveBannerId = (id) => {
     setActiveBannerIdRaw(id);
@@ -160,9 +137,14 @@ export default function GachaScreen({
   const [hovBtn1, setHovBtn1] = useState(false);
   const [hovBtn2, setHovBtn2] = useState(false);
 
-  const timeLeft = useCountdown(nextBannerEnd);
-
-  const activeBanner = BANNERS.find(b => b.id === activeBannerId) || BANNERS[0];
+  const now = useNow();
+  const { live, endsAt, upcoming } = bannerStatus(now);
+  // developer mode: every banner can be picked, live or not, to test it early
+  const pickable = devMode ? [...live, ...BANNERS.filter(b => !live.includes(b))] : live;
+  const activeBanner = pickable.find(b => b.id === activeBannerId) || live[0] || BANNERS[0];
+  const bannerLive = live.includes(activeBanner);
+  const timeLeftOf = b => !live.includes(b) ? 'not live' : endsAt[b.id] ? formatTimeLeft(endsAt[b.id] - now) : 'Permanent';
+  const timeLeft = timeLeftOf(activeBanner);
 
   // Dev: every pull is a 5★ (remembered; only works while dev mode is on)
   const [force5Raw, setForce5Raw] = useState(() => { try { return localStorage.getItem(FORCE5_KEY) === '1'; } catch { return false; } });
@@ -245,7 +227,7 @@ export default function GachaScreen({
     playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3], () => skipSummonRef.current());
   }, [phase, highestRar]);
 
-  // A card's reveal video (the older 5★ reveals, the Anemics Kaisen eyecatch).
+  // A card's reveal video (the older 5★ reveals, the Anemic Kaisen eyecatch).
   // With pull music, the track fades in under the last `lead` seconds of the
   // video and the card is revealed on its drop, right as the video ends.
   const videoDropRef = useRef(null);
@@ -654,7 +636,7 @@ zIndex: 10,
       <div style={{ position:'absolute', left:20, bottom:20, zIndex:3, pointerEvents:'none' }}>
         <div style={{ color:activeBanner.accentColor, fontSize:'clamp(18px,3vw,32px)', fontWeight:900 }}>{activeBanner.name}</div>
         <div style={{ color:'rgba(255,255,255,0.5)', fontSize:13 }}>{activeBanner.subtitle}</div>
-        <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>ends in: {timeLeft}</div>
+        <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>{bannerLive && !endsAt[activeBanner.id] ? 'Permanent banner' : `ends in: ${timeLeft}`}</div>
       </div>
     )}
   </div>
@@ -686,6 +668,12 @@ zIndex: 10,
       }} />
   )}
 </div>
+    {/* What's coming after the current limited banner */}
+    {upcoming[0] && (
+      <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: '0 12px' }}>
+        Up next: <span style={{ color: upcoming[0].banner.accentColor, fontWeight: 700 }}>{upcoming[0].banner.name}</span> in {formatTimeLeft(upcoming[0].start - now)}
+      </div>
+    )}
     {/* Pity + buttons */}
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
@@ -1064,15 +1052,16 @@ zIndex: 10,
             position:'fixed', inset:0, zIndex:150,
             background:'rgba(0,0,0,0.88)', backdropFilter:'blur(10px)',
             display:'flex', flexDirection:'column',
-            alignItems:'center', justifyContent:'center',
-            gap:14, padding:24,
+            alignItems:'center', justifyContent:'safe center',
+            gap:14, padding:24, overflowY:'auto',
           }}
         >
           <div style={{ fontSize:22, fontWeight:900, color:'#fff', marginBottom:4, letterSpacing:1 }}>Select Banner</div>
           <div style={{ color:'rgba(255,255,255,0.3)', fontSize:13, marginBottom:8 }}>Choose which banner to pull from</div>
 
-          {BANNERS.map(banner => {
-            const isActive = banner.id === activeBannerId;
+          {pickable.map(banner => {
+            const isActive = banner === activeBanner;
+            const isLive = live.includes(banner);
             return (
               <div
                 key={banner.id}
@@ -1094,6 +1083,9 @@ zIndex: 10,
                   <div>
                     <div style={{ fontWeight:800, fontSize:16, color:banner.accentColor }}>{banner.name}</div>
                     <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{banner.subtitle}</div>
+                    <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,0.55)' : '#f87171', marginTop:3, fontWeight:600 }}>
+                      {!isLive ? '🛠 not live (developer mode)' : endsAt[banner.id] ? `ends in ${timeLeftOf(banner)}` : 'Permanent'}
+                    </div>
                   </div>
                   {isActive && (
                     <div style={{ fontSize:12, color:banner.accentColor, fontWeight:700, background:`${banner.accentColor}22`, border:`1px solid ${banner.accentColor}66`, borderRadius:20, padding:'4px 12px' }}>
@@ -1118,6 +1110,19 @@ zIndex: 10,
               </div>
             );
           })}
+
+          {upcoming.length > 0 && (
+            <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:468, display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', letterSpacing:2, fontWeight:700, marginTop:4 }}>UP NEXT</div>
+              {upcoming.map(u => (
+                <div key={u.banner.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, borderRadius:12, padding:'10px 18px',
+                  border:'1px dashed rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.02)' }}>
+                  <span style={{ color:u.banner.accentColor, fontWeight:700, fontSize:14, opacity:0.8 }}>{u.banner.name}</span>
+                  <span style={{ fontSize:12, color:'rgba(255,255,255,0.45)', textAlign:'right' }}>in {formatTimeLeft(u.start - now)} · {formatLength(u.end - u.start)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div style={{ color:'rgba(255,255,255,0.2)', fontSize:12, marginTop:4 }}>tap outside to cancel</div>
         </div>
