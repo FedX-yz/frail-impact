@@ -27,17 +27,17 @@ export const CAST = {
   reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png' },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
 
-  // Anemics Kaisen 5★s — cut-out sprite where there is one, otherwise the full art;
+  // Anemics Kaisen 5★s — cut-out sprites (Room 16 still uses his full art until he has one);
   // the codec centres on the face (same spot as the card's portraitFocus)
-  jerry:       { name: 'Jerry',              color: '#E8A33D', portrait: 'cardart/jerry-card.png',       sprite: 'cardart/jerry-card.png',       focus: [22, 31, 2.6] },
+  jerry:       { name: 'Jerry',              color: '#E8A33D', portrait: 'sprites/jerry.png', sprite: 'sprites/jerry.png', focus: [16, 25, 2.8] },
   room16:      { name: 'Room Number 16',     color: '#EC4899', portrait: 'cardart/room16-card.png',      sprite: 'cardart/room16-card.png',      focus: [41, 24, 3] },
-  ice_fire:    { name: 'Ice',                color: '#F97316', portrait: 'cardart/ice-fire-card.png',    sprite: 'cardart/ice-fire-card.png',    focus: [36, 38, 2.6] },
-  tyran:       { name: 'Tyran',              color: '#A855F7', portrait: 'cardart/tyran-card.png',       sprite: 'cardart/tyran-card.png',       focus: [50, 34, 3.2] },
-  ivy:         { name: 'Ivy',                color: '#D946EF', portrait: 'cardart/ivy-card.png',         sprite: 'cardart/ivy-card.png',         focus: [50, 43, 3.4] },
-  doro:        { name: 'Doro',               color: '#FACC15', portrait: 'sprites/doro-proud.png',       sprite: 'sprites/doro-proud.png',       focus: [57, 19, 3.4] },
-  bio_shadows: { name: 'Bio',                color: '#6366F1', portrait: 'cardart/bio-shadows-card.png', sprite: 'cardart/bio-shadows-card.png', focus: [41, 50, 3] },
-  boi:         { name: 'Boiyoujustgotoofed', color: '#22D3EE', portrait: 'sprites/boiyoujustgotoofed.png', sprite: 'sprites/boiyoujustgotoofed.png', focus: [37, 17, 3.4] },
-  astrec_hr:   { name: 'Astrec',             color: '#FB7185', portrait: 'sprites/astrec-hr.png',        sprite: 'sprites/astrec-hr.png',        focus: [68, 17, 3.6] },
+  ice_fire:    { name: 'Ice',                color: '#F97316', portrait: 'sprites/ice-fire.png', sprite: 'sprites/ice-fire.png', focus: [42, 37, 3.2] },
+  tyran:       { name: 'Tyran',              color: '#A855F7', portrait: 'sprites/tyran.png', sprite: 'sprites/tyran.png', focus: [69, 20, 3.4] },
+  ivy:         { name: 'Ivy',                color: '#D946EF', portrait: 'sprites/ivy.png', sprite: 'sprites/ivy.png', focus: [50, 10, 3.6] },
+  doro:        { name: 'Doro',               color: '#FACC15', portrait: 'sprites/doro-proud.png', sprite: 'sprites/doro-proud.png', focus: [60, 19, 3.4] },
+  bio_shadows: { name: 'Bio',                color: '#6366F1', portrait: 'sprites/bio-shadows.png', sprite: 'sprites/bio-shadows.png', focus: [52, 53, 3.0] },
+  boi:         { name: 'Boiyoujustgotoofed', color: '#22D3EE', portrait: 'sprites/boiyoujustgotoofed.png', sprite: 'sprites/boiyoujustgotoofed.png', focus: [36, 15, 3.6] },
+  astrec_hr:   { name: 'Astrec',             color: '#FB7185', portrait: 'sprites/astrec-hr.png', sprite: 'sprites/astrec-hr.png', focus: [67, 15, 3.6] },
 
   // Narrator lines ("plain strings" in a scene) use this
   narrator: { name: '', color: '#94a3b8', portrait: null, sprite: null },
