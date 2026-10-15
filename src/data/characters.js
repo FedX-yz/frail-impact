@@ -1,14 +1,14 @@
 const BASE = import.meta.env.BASE_URL;
 
-// Pull animation for the Anemics Kaisen cards (plays instead of the normal 5★
-// one). Either one video, or { wide, tall } for screens wider / taller than they
-// are (phones held upright get `tall`, so nothing important is cropped off).
-// The current one is a placeholder: replace the files in public/animations/
-// (same names), or point these at your own. null = the normal 5★ animation.
-const JJK_EYECATCH = {
-  wide: `${BASE}animations/anemics-kaisen.mp4`,        // 16:9
-  tall: `${BASE}animations/anemics-kaisen-tall.mp4`,   // 9:16
-};
+// Anemics Kaisen eyecatch: plays right before the card is revealed (its
+// resultVideo), with the card's silhouette, synced to the eyecatch theme. Each
+// card has two files in public/animations/eyecatch/: <name>.mp4 (16:9) and
+// <name>-tall.mp4 (9:16, for phones held upright so nothing gets cropped).
+// resultVideo can be one path (like the older 5★s) or { wide, tall }.
+const eyecatch = (name) => ({
+  wide: `${BASE}animations/eyecatch/${name}.mp4`,
+  tall: `${BASE}animations/eyecatch/${name}-tall.mp4`,
+});
 
 export const CHARACTERS = [
 
@@ -219,10 +219,10 @@ export const CHARACTERS = [
 
   // ── 5★ Anemics Kaisen (kits: combat/kitRuntime.js) ──────────────
   // sprite: the character cut out of the background (optional).
-  // summonVideo: a custom pull animation (instead of the rarity one), see JJK_EYECATCH.
   // pullMusic: { src, drop, lead } — music when you pull the card. It fades in
-  //   `lead` seconds (default 2.5) before `drop` (seconds into the track: the
-  //   beat drop) and the card is revealed right on the drop.
+  //   `lead` seconds before `drop` (seconds into the track: the beat drop) — under
+  //   the end of the eyecatch (2 s), or during a build-up if there's no video
+  //   (2.5 s) — and the card is revealed right on the drop.
   // portraitFocus: [x %, y %, zoom] — where the face is in the sprite (or the
   // full art if there's no sprite); the battle HP portrait centres on it.
   {
@@ -239,8 +239,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/jerry.mp3`, drop: 16.72 },
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('jerry'),
     stats: { hp: 1350, atk: 165, def: 75 },
     skill: {
       name: 'Infinity',
@@ -270,8 +269,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/room16.mp3`, drop: 7.78 },
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('room16'),
     stats: { hp: 1300, atk: 175, def: 70 },
     skill: {
       name: 'Guest Platinum',
@@ -301,8 +299,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/ice-fire.mp3`, drop: 13.42 },
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('ice-fire'),
     stats: { hp: 1250, atk: 180, def: 65 },
     skill: {
       name: 'Volcano',
@@ -332,8 +329,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/tyran.mp3`, drop: 16.55 },
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('tyran'),
     stats: { hp: 1700, atk: 130, def: 95 },
     skill: {
       name: 'Idle Transfiguration',
@@ -363,8 +359,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/ivy.mp3`, drop: 3.01 },
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('ivy'),
     stats: { hp: 1450, atk: 150, def: 80 },
     skill: {
       name: 'Cursed Spirit Manipulation',
@@ -394,8 +389,7 @@ export const CHARACTERS = [
     portraitFocus:   [57, 19, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('doro-proud'),
     stats: { hp: 1400, atk: 160, def: 80 },
     skill: {
       name: 'Dismantle Trail',
@@ -424,8 +418,7 @@ export const CHARACTERS = [
     portraitFocus:   [41, 50, 2.4],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('bio-shadows'),
     stats: { hp: 1400, atk: 155, def: 85 },
     skill: {
       name: 'Ten Shadows',
@@ -455,8 +448,7 @@ export const CHARACTERS = [
     portraitFocus:   [37, 17, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('boiyoujustgotoofed'),
     stats: { hp: 1500, atk: 145, def: 85 },
     skill: {
       name: 'Ratio Technique',
@@ -487,8 +479,7 @@ export const CHARACTERS = [
     voiceLine:       null,
     pullMusic:       { src: `${BASE}audio/pull/astrec-hr.mp3`, drop: 3.1, lead: 3.0 },
     animationVideo:  `${BASE}animations/5star.mp4`,
-    summonVideo:     JJK_EYECATCH,
-    resultVideo:     null,
+    resultVideo:     eyecatch('astrec-hr'),
     stats: { hp: 1550, atk: 175, def: 70 },
     skill: {
       name: 'Heavenly Restriction',

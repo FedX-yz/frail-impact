@@ -44,6 +44,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) window.__battle = engine;
   }, [engine]);
 
+  // pictures an enemy switches to mid-fight (a broken shield): load them up front so the swap is instant
+  useEffect(() => { Object.values(ENEMY_TYPES).forEach(t => { if (t.imgBroken) new Image().src = t.imgBroken; }); }, []);
+
   // Arena size → engine
   useEffect(() => {
     const el = ref.current;
@@ -247,7 +250,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             const isWormHead = e.move === 'worm' && e.role === 'head';
             return (
               <EnemySprite key={e.id} id={e.id} register={register}
-                img={e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
+                img={e.shield && e.shield.hp <= 0 && e.type.imgBroken ? e.type.imgBroken : e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
                 size={e.size * k} k={k} isWormHead={isWormHead}
                 frozen={e.frozen > 0} down={e.down > 0 ? Math.ceil(e.down * 10) / 10 : 0}
                 flashRed={e.flashRed} hurt={e.hurt > 0} dashing={!!e.dashing} paused={s.timeStop > 0}

@@ -19,6 +19,7 @@
 //              flicker) while it winds up, attack while it strikes/dashes
 //   poseFacing: which way the pose pictures look (180 = left, 0 = right); they
 //              then turn toward the attack (flipped instead of upside down)
+//   imgBroken: picture while its own shield is broken (Shield Bonk)
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -64,7 +65,7 @@ export const ENEMY_TYPES = {
   // last hit, so keep the pressure on.
   shielder: {
     name: 'Shield Bonk', tier: 'elite',
-    img: `${BASE}enemies/bonkenemy.png`, tint: 'hue-rotate(185deg) saturate(1.6)', size: 84,
+    img: `${BASE}enemies/shielder.png`, imgBroken: `${BASE}enemies/shielder_broken.png`, size: 92,
     hp: 110, coin: 75, speed: 0.1,
     attacks: ['shot'], cooldown: [4, 5.5],
     shield: { pct: 0.7, radius: 125, regen: 5 },

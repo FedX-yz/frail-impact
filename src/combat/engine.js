@@ -964,7 +964,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         e.puddleT -= dt;
         if (e.puddleT <= 0) {
           e.puddleT = rand(1.4, 2);
-          if (s.hazards.length < 14) s.hazards.push({ id: uid++, x: e.x, y: e.y, r: K(48), t: 0, grow: 0.6, life: 4.5 });
+          if (s.hazards.length < 14) {
+            // Never right under it (clicking a Toxic enemy that stands still meant standing in
+            // poison every time): behind it while it walks, around it while it stands still
+            const r = K(48), d = e.size * s.k * 0.55 + K(6) + r;   // edge of the puddle = edge of its click area
+            const walking = e.target && e.move !== 'still' && !e.busy && dist(e.x, e.y, e.target.x, e.target.y) > 4;
+            const a = walking ? Math.atan2(e.y - e.target.y, e.x - e.target.x) + rand(-0.4, 0.4) : rand(0, Math.PI * 2);
+            s.hazards.push({ id: uid++, x: e.x + Math.cos(a) * d, y: e.y + Math.sin(a) * d, r, t: 0, grow: 0.6, life: 4.5 });
+          }
         }
       }
       // worm head bites your cursor

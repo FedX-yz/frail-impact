@@ -56,6 +56,12 @@ files and finish in seconds.
   drops; the music fades in `lead` seconds before it (default 2.5) while the card's
   silhouette builds up, and the card is revealed exactly on the drop. Tapping skips
   straight to the drop. To move the reveal, change `drop`.
+- **Pull animation:** `summonVideo` plays instead of the normal rarity animation when
+  the card is the best pull of the batch. The Anemics Kaisen cards each have an
+  eyecatch with their silhouette in `public/animations/eyecatch/` (`<name>.mp4` for
+  wide screens, `<name>-tall.mp4` for phones held upright). Replace those files to
+  change them, or point `summonVideo` at your own video. If one is missing or won't
+  play, the normal animation plays instead.
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
   cards with neither use their card art.

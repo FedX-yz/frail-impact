@@ -30,6 +30,9 @@ const BANNER_KEY = 'frail_banner';
 const BLANK_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const rg = r => RARITY_GLOW[r]  || 'transparent';
 const isHighRarity = card => card && card.rarity >= 5;
+// A card's reveal video: one path, or { wide, tall } (phones held upright get `tall`)
+const pickVideo = v => (!v ? null : typeof v === 'string' ? v
+  : (window.innerHeight > window.innerWidth ? v.tall ?? v.wide : v.wide ?? v.tall) ?? null);
 
 const formatCoins = v => v >= 1000 ? `${Math.floor(v / 1000)}k` : String(v);
 
@@ -131,7 +134,6 @@ export default function GachaScreen({
   const [batch,           setBatch]           = useState([]);
   const [queueIdx,        setQueueIdx]        = useState(0);
   const [highestRar,      setHighestRar]      = useState(3);
-  const [summonSrc,       setSummonSrc]       = useState(null);   // custom pull animation (card.summonVideo)
   const [showArt,         setShowArt]         = useState(null);
   const [selectedResult,  setSelectedResult]  = useState(null);
   const [summaryBatch,    setSummaryBatch]    = useState([]);
@@ -210,7 +212,7 @@ export default function GachaScreen({
     const b    = cards || batchRef.current;
     const card = b[idx];
     setQueueIdx(idx);
-    if (isHighRarity(card) && card.resultVideo) {
+    if (isHighRarity(card) && pickVideo(card.resultVideo)) {
       setPhase('card-video');
     } else if (card?.pullMusic) {
       setPhase('buildup');
@@ -221,16 +223,46 @@ export default function GachaScreen({
 
   useEffect(() => {
     if (phase !== 'summon') return;
-    // a custom animation that won't play falls back to the normal one, rather than nothing
-    if (summonSrc) playVideo(summonRef, summonSrc, () => setSummonSrc(null));
-    else playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3], () => skipSummonRef.current());
-  }, [phase, highestRar, summonSrc]);
+    playVideo(summonRef, SUMMON_VID[highestRar] || SUMMON_VID[3], () => skipSummonRef.current());
+  }, [phase, highestRar]);
 
+  // A card's reveal video (the older 5★ reveals, the Anemics Kaisen eyecatch).
+  // With pull music, the track fades in under the last `lead` seconds of the
+  // video and the card is revealed on its drop, right as the video ends.
+  const videoDropRef = useRef(null);
   useEffect(() => {
     if (phase !== 'card-video') return;
     const card = batchRef.current[queueIdx];
-    if (card?.resultVideo) playVideo(revealRef, card.resultVideo, () => setPhase('reveal-queue'));
-    else setPhase('reveal-queue');
+    const src = pickVideo(card?.resultVideo), pm = card?.pullMusic;
+    videoDropRef.current = null;
+    // video won't play: the build-up instead (if it has music), or straight to the card
+    if (!src) { setPhase(pm ? 'buildup' : 'reveal-queue'); return; }
+    playVideo(revealRef, src, () => setPhase(pm ? 'buildup' : 'reveal-queue'));
+    if (!pm) return;
+    const lead = Math.max(0.5, Math.min(pm.lead ?? 2, pm.drop, 2));
+    let raf = 0, done = false, started = false, h = null;
+    const reveal = () => {
+      if (done) return;
+      done = true; cancelAnimationFrame(raf); clearTimeout(vidTimer.current);
+      revealRef.current?.pause();
+      setFlash(true); setPhase('reveal-queue');
+    };
+    const toDrop = () => { if (!done) { playMusic(pm.src, { offset: pm.drop }); reveal(); } };
+    videoDropRef.current = {
+      skip: toDrop,                                   // tapped: straight to the drop
+      ended: () => (h ? reveal() : toDrop()),         // video over: the drop is now
+    };
+    const tick = () => {
+      const v = revealRef.current;
+      if (!started && v && isFinite(v.duration) && v.duration > 0 && v.currentTime >= v.duration - lead) {
+        started = true;
+        playMusic(pm.src, { offset: pm.drop - lead, fadeIn: lead }).then(x => { h = x; });
+      }
+      if (h && musicElapsed(h) >= lead) { reveal(); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => { done = true; cancelAnimationFrame(raf); };
   }, [phase, queueIdx]);
 
   // Cards with pull music: the track fades in `lead` seconds before its drop
@@ -302,10 +334,6 @@ export default function GachaScreen({
 
     const maxRar = Math.max(...results.map(r => r.rarity));
     setHighestRar(maxRar);
-    // a card with its own pull animation (Anemics Kaisen eyecatch) beats the rarity one
-    const sv = results.find(r => r.rarity === maxRar && r.summonVideo)?.summonVideo;
-    const tall = window.innerHeight > window.innerWidth;
-    setSummonSrc(!sv ? null : typeof sv === 'string' ? sv : (tall ? sv.tall ?? sv.wide : sv.wide ?? sv.tall) ?? null);
     if (maxRar >= 5 && PULL_5STAR_SFX) {
       try { const a = new Audio(`${BASE}${PULL_5STAR_SFX}`); a.volume = 0.85; a.play().catch(() => {}); } catch { /* empty */ }
     }
@@ -322,7 +350,9 @@ export default function GachaScreen({
   const skipSummonRef = useRef(skipSummon);
   skipSummonRef.current = skipSummon;
 
-  const onCardVideoEnd = () => {
+  const onCardVideoEnd = (tapped) => {
+    const drop = videoDropRef.current;
+    if (drop) { tapped === true ? drop.skip() : drop.ended(); return; }   // pull music: reveal on its drop
     clearTimeout(vidTimer.current);
     if (revealRef.current) revealRef.current.pause();
     setPhase('reveal-queue');
@@ -375,7 +405,7 @@ export default function GachaScreen({
         ref={summonRef}
         onEnded={() => { if (phaseRef.current === 'summon') onSummonEnd(); }}
         onPlaying={() => setVidPlaying(true)}
-        onError={() => { if (phaseRef.current !== 'summon') return; if (summonSrc) setSummonSrc(null); else skipSummon(); }}
+        onError={() => { if (phaseRef.current === 'summon') skipSummon(); }}
         playsInline preload="auto" poster={BLANK_POSTER}
         disablePictureInPicture controls={false}
         style={{
@@ -391,7 +421,11 @@ export default function GachaScreen({
         ref={revealRef}
         onEnded={() => { if (phaseRef.current === 'card-video') onCardVideoEnd(); }}
         onPlaying={() => setVidPlaying(true)}
-        onError={() => { if (phaseRef.current === 'card-video') onCardVideoEnd(); }}
+        onError={() => {
+          if (phaseRef.current !== 'card-video') return;
+          if (videoDropRef.current) { videoDropRef.current = null; setPhase('buildup'); }   // eyecatch missing: the build-up instead
+          else onCardVideoEnd();
+        }}
         playsInline preload="auto" poster={BLANK_POSTER}
         disablePictureInPicture controls={false}
         style={{
@@ -708,13 +742,13 @@ zIndex: 10,
 
       {/* ── CARD-VIDEO: name hint only ────────────────────────── */}
       {phase === 'card-video' && currentCard && (
-        <div onClick={onCardVideoEnd} style={{ position:'absolute', inset:0, zIndex:51, cursor:'pointer' }}>
+        <div onClick={() => onCardVideoEnd(true)} style={{ position:'absolute', inset:0, zIndex:51, cursor:'pointer' }}>
           <div style={{ position:'absolute', top:20, right:20, color:'rgba(255,255,255,0.5)', fontSize:13 }}>tap to skip</div>
-          <div style={{ position:'absolute', bottom:32, left:0, right:0, textAlign:'center' }}>
+          {typeof currentCard.resultVideo === 'string' && <div style={{ position:'absolute', bottom:32, left:0, right:0, textAlign:'center' }}>
             <div style={{ color:rc(currentCard.rarity), fontSize:18, fontWeight:700, textShadow:'0 0 20px rgba(0,0,0,0.8)' }}>
               {'★'.repeat(Math.min(currentCard.rarity,6))} {currentCard.name}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
