@@ -17,6 +17,7 @@ const SUMMON_VID   = {
 
 const rc = r => RARITY_COLOR[r] || '#fff';
 // 1×1 black poster: hides the grey "play" placeholder phones show before a video starts
+const BANNER_KEY = 'frail_banner';
 const BLANK_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const rg = r => RARITY_GLOW[r]  || 'transparent';
 const isHighRarity = card => card && card.rarity >= 5;
@@ -124,7 +125,15 @@ export default function GachaScreen({
   const [showArt,         setShowArt]         = useState(null);
   const [selectedResult,  setSelectedResult]  = useState(null);
   const [summaryBatch,    setSummaryBatch]    = useState([]);
-  const [activeBannerId,  setActiveBannerId]  = useState(BANNERS[0].id);
+  // remembers the banner you were on (per device)
+  const [activeBannerId,  setActiveBannerIdRaw] = useState(() => {
+    try { const id = localStorage.getItem(BANNER_KEY); if (BANNERS.some(b => b.id === id)) return id; } catch { /* storage blocked */ }
+    return BANNERS[0].id;
+  });
+  const setActiveBannerId = (id) => {
+    setActiveBannerIdRaw(id);
+    try { localStorage.setItem(BANNER_KEY, id); } catch { /* storage blocked */ }
+  };
   const [showBannerSelect,setShowBannerSelect]= useState(false);
   const [s5CoinsEarned,   setS5CoinsEarned]   = useState(0);
 

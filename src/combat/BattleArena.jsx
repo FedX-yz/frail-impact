@@ -449,17 +449,17 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
           </div>
         )}
         {/* Full art with a face position (portraitFocus in characters.js) → zoom onto the face */}
-        {mainCard && !STATUS_PORTRAITS[mainCard.id] && mainCard.portraitFocus && mainCard.cardArt && (
+        {mainCard && !STATUS_PORTRAITS[mainCard.id] && mainCard.portraitFocus && (mainCard.sprite || mainCard.cardArt) && (
           <div style={{
             position: 'absolute', left: '2%', top: '4%', width: '54%', height: '84%', overflow: 'hidden', pointerEvents: 'none',
             WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
             maskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
           }}>
-            <FocusImg src={mainCard.cardArt} focus={mainCard.portraitFocus} />
+            <FocusImg src={mainCard.sprite || mainCard.cardArt} focus={mainCard.portraitFocus} at={[40, 46]} />   {/* left of the ult orb */}
           </div>
         )}
         {/* No custom status portrait yet → crop the card art into the portrait area */}
-        {mainCard && !STATUS_PORTRAITS[mainCard.id] && !(mainCard.portraitFocus && mainCard.cardArt) && (
+        {mainCard && !STATUS_PORTRAITS[mainCard.id] && !(mainCard.portraitFocus && (mainCard.sprite || mainCard.cardArt)) && (
           <div style={{
             position: 'absolute', left: '2%', top: '4%', width: '54%', height: '84%', overflow: 'hidden', pointerEvents: 'none',
             WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',

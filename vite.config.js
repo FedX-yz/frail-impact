@@ -20,7 +20,7 @@ import ffmpegPath from 'ffmpeg-static'
 // Results are cached in node_modules/.cache/frail-assets, so only new or
 // changed files get processed on the next build.
 // ─────────────────────────────────────────────────────────────────────────────
-const MAX_SIZE = { characters: 1100, cardart: 1600, ui: 2048, enemies: 512, backgrounds: 1920, story: 1920 }
+const MAX_SIZE = { characters: 1100, cardart: 1600, ui: 2048, enemies: 512, backgrounds: 1920, story: 1920, sprites: 1100 }
 const KEEP_FORMAT = new Set(['ui/mouse.png', 'ui/frail.png'])   // cursor + favicon: PNG works everywhere
 const IMG = /\.(png|jpe?g|gif)$/i
 const CACHE_DIR = path.resolve('node_modules/.cache/frail-assets')

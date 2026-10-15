@@ -208,8 +208,9 @@ export const CHARACTERS = [
   },
 
   // ── 5★ Anemics Kaisen (kits coming later) ───────────────────────
-  // portraitFocus: [x %, y %, zoom] — where the face is in the full art,
-  // used for the battle HP portrait and the story codec.
+  // sprite: the character cut out of the background (optional).
+  // portraitFocus: [x %, y %, zoom] — where the face is in the sprite (or the
+  // full art if there's no sprite); the battle HP portrait centres on it.
   {
     id: 28,
     name: 'Jerry',
@@ -220,7 +221,7 @@ export const CHARACTERS = [
     image:           `${BASE}characters/jerry.png`,
     characterImage:  `${BASE}characters/jerry.png`,
     cardArt:         `${BASE}cardart/jerry-card.png`,
-    portraitFocus:   [18, 34, 1.8],
+    portraitFocus:   [22, 31, 2.2],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -240,7 +241,7 @@ export const CHARACTERS = [
     image:           `${BASE}characters/room16.png`,
     characterImage:  `${BASE}characters/room16.png`,
     cardArt:         `${BASE}cardart/room16-card.png`,
-    portraitFocus:   [47, 20, 2.2],
+    portraitFocus:   [41, 24, 2.6],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -260,7 +261,7 @@ export const CHARACTERS = [
     image:           `${BASE}characters/ice-fire.png`,
     characterImage:  `${BASE}characters/ice-fire.png`,
     cardArt:         `${BASE}cardart/ice-fire-card.png`,
-    portraitFocus:   [38, 36, 1.6],
+    portraitFocus:   [36, 38, 2.0],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -280,7 +281,7 @@ export const CHARACTERS = [
     image:           `${BASE}characters/tyran.png`,
     characterImage:  `${BASE}characters/tyran.png`,
     cardArt:         `${BASE}cardart/tyran-card.png`,
-    portraitFocus:   [53, 27, 2.7],
+    portraitFocus:   [50, 34, 2.6],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -300,7 +301,7 @@ export const CHARACTERS = [
     image:           `${BASE}characters/ivy.png`,
     characterImage:  `${BASE}characters/ivy.png`,
     cardArt:         `${BASE}cardart/ivy-card.png`,
-    portraitFocus:   [50, 40, 2.6],
+    portraitFocus:   [50, 43, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -320,7 +321,8 @@ export const CHARACTERS = [
     image:           `${BASE}characters/doro-proud.png`,
     characterImage:  `${BASE}characters/doro-proud.png`,
     cardArt:         `${BASE}cardart/doro-proud-card.png`,
-    portraitFocus:   [65, 17, 2.2],
+    sprite:          `${BASE}sprites/doro-proud.png`,   // cut out (no background)
+    portraitFocus:   [57, 19, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -340,7 +342,7 @@ export const CHARACTERS = [
     image:           `${BASE}characters/bio-shadows.png`,
     characterImage:  `${BASE}characters/bio-shadows.png`,
     cardArt:         `${BASE}cardart/bio-shadows-card.png`,
-    portraitFocus:   [43, 34, 1.4],
+    portraitFocus:   [41, 50, 2.4],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
@@ -360,11 +362,33 @@ export const CHARACTERS = [
     image:           `${BASE}characters/boiyoujustgotoofed.png`,
     characterImage:  `${BASE}characters/boiyoujustgotoofed.png`,
     cardArt:         `${BASE}cardart/boiyoujustgotoofed-card.png`,
-    portraitFocus:   [32, 24, 2.1],
+    sprite:          `${BASE}sprites/boiyoujustgotoofed.png`,   // cut out (no background)
+    portraitFocus:   [37, 17, 2.8],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/5star.mp4`,
     resultVideo:     null,
     stats: { hp: 1500, atk: 145, def: 85 },
+    skill: null,     // kit coming soon
+    ult: null,
+    passive: null,
+  },
+
+  {
+    id: 36,
+    name: 'Astrec',
+    subtitle: 'Heavenly Restriction',
+    rarity: 5,
+    element: 'Physical',
+    color: '#FB7185',
+    image:           `${BASE}characters/astrec-hr.png`,
+    characterImage:  `${BASE}characters/astrec-hr.png`,
+    cardArt:         `${BASE}cardart/astrec-hr-card.png`,
+    sprite:          `${BASE}sprites/astrec-hr.png`,   // cut out (no background)
+    portraitFocus:   [68, 17, 3.0],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/5star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 1550, atk: 175, def: 70 },
     skill: null,     // kit coming soon
     ult: null,
     passive: null,

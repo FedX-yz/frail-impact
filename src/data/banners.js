@@ -34,7 +34,7 @@ export const BANNERS = [
       name: 'Anemic Kaisen',
       subtitle: 'Limited · Anemic Characters from JJK',
       accentColor: '#3B82F6',
-      featuredIds: [28, 29, 30, 31, 32, 33, 34, 35],   // the Anemics Kaisen exclusives
+      featuredIds: [28, 29, 30, 31, 32, 33, 34, 35, 36],   // the Anemics Kaisen exclusives
       boostedRarity: 5,
       boostedChance: 0.5,
       uiAssets: {

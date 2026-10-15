@@ -47,8 +47,9 @@ files and finish in seconds.
   3★/4★, add its id to a set in `src/combat/sets.js` if it belongs to one.
 - **Card pictures:** `image` is the framed card (grids, deck, pulls) in `public/characters/`;
   `cardArt` is the full art without the frame (tap-to-zoom) in `public/cardart/`.
-  `portraitFocus: [x %, y %, zoom]` points at the face in the full art, and the battle
-  HP portrait zooms onto it. A 5★ with `skill: null, ult: null` works as a stats-only
+  `sprite` (optional) is the character cut out of the background, in `public/sprites/`.
+  `portraitFocus: [x %, y %, zoom]` points at the face in the sprite (or the full art),
+  and the battle HP portrait centres on it. A 5★ with `skill: null, ult: null` works as a stats-only
   card and shows "kit coming soon".
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
