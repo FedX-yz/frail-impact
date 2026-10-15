@@ -222,6 +222,7 @@ export default function App() {
       pity5={pity5} setPity5={setPity5}
       cardInventory={cardInventory}
       setCoins={setCoins}
+      devMode={devMode}
     />
   );
 

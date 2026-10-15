@@ -27,6 +27,7 @@ const TREMBLE = Array.from({ length: 41 }, (_, i) => {
 }).join(' ');
 // 1×1 black poster: hides the grey "play" placeholder phones show before a video starts
 const BANNER_KEY = 'frail_banner';
+const FORCE5_KEY = 'frail_force5';   // dev: guaranteed 5★ toggle
 const BLANK_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const rg = r => RARITY_GLOW[r]  || 'transparent';
 const isHighRarity = card => card && card.rarity >= 5;
@@ -45,7 +46,8 @@ const GemImg = ({ size = 22 }) => (
 );
 
 // ── Pull logic ────────────────────────────────────────────────────
-function doPulls(count, pity4, pity5, banner) {
+// force5 (dev): every pull is a 5★ — a featured one on banners that have them
+function doPulls(count, pity4, pity5, banner, force5 = false) {
   let p4 = pity4, p5 = pity5;
   const results = [];
 
@@ -56,7 +58,9 @@ function doPulls(count, pity4, pity5, banner) {
     // 0.6% base 5★ rate, soft pity from 60, hard pity at 90.
     // (Before, 5★ was impossible until pull 60.)
     const rate5 = p5 >= 60 ? 2 + (p5 - 60) * 6 : 0.6;
-    if (p5 >= 90 || rand < rate5) {
+    if (force5) {
+      rarity = 5;
+    } else if (p5 >= 90 || rand < rate5) {
       rarity = Math.random() < 0.1 ? 6 : 5; p5 = 0;
     } else if (p4 >= 10 || rand < 5.1) {
       rarity = 4; p4 = 0;
@@ -69,7 +73,7 @@ function doPulls(count, pity4, pity5, banner) {
     if (
       banner.featuredIds.length > 0 &&
       rarity === banner.boostedRarity &&
-      Math.random() < banner.boostedChance
+      (force5 || Math.random() < banner.boostedChance)
     ) {
       const featuredOfRarity = CHARACTERS.filter(c =>
         banner.featuredIds.includes(c.id) && c.rarity === rarity
@@ -85,7 +89,8 @@ function doPulls(count, pity4, pity5, banner) {
       instanceId: `${pulled.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     });
   }
-  return { results, newPity4: p4, newPity5: p5 };
+  // the debug toggle doesn't touch pity
+  return force5 ? { results, newPity4: pity4, newPity5: pity5 } : { results, newPity4: p4, newPity5: p5 };
 }
 
 // ── Countdown hook ─────────────────────────────────────────────
@@ -129,6 +134,7 @@ export default function GachaScreen({
   pity4, setPity4, pity5, setPity5,
   cardInventory = {},
   setCoins,
+  devMode = false,
 }) {
   const [phase,           setPhase]           = useState('idle');
   const [batch,           setBatch]           = useState([]);
@@ -156,6 +162,15 @@ export default function GachaScreen({
   const timeLeft = useCountdown(nextBannerEnd);
 
   const activeBanner = BANNERS.find(b => b.id === activeBannerId) || BANNERS[0];
+
+  // Dev: every pull is a 5★ (remembered; only works while dev mode is on)
+  const [force5Raw, setForce5Raw] = useState(() => { try { return localStorage.getItem(FORCE5_KEY) === '1'; } catch { return false; } });
+  const force5 = devMode && force5Raw;
+  const toggleForce5 = () => {
+    const v = !force5Raw;
+    setForce5Raw(v);
+    try { if (v) localStorage.setItem(FORCE5_KEY, '1'); else localStorage.removeItem(FORCE5_KEY); } catch { /* storage blocked */ }
+  };
 
   const summonRef = useRef(null);
   const revealRef = useRef(null);
@@ -302,7 +317,7 @@ export default function GachaScreen({
   const startPulls = cnt => {
     if (phase !== 'idle' || currency < cnt) return;
     setCurrency(c => c - cnt);
-    const { results, newPity4, newPity5 } = doPulls(cnt, pity4, pity5, activeBanner);
+    const { results, newPity4, newPity5 } = doPulls(cnt, pity4, pity5, activeBanner, force5);
     setPity4(newPity4);
     setPity5(newPity5);
 
@@ -488,6 +503,8 @@ export default function GachaScreen({
       .pull-btn-overlay:focus { outline:none; }
       .pull-btn-overlay:focus-visible { outline:none; }
       .pull-btn-overlay:disabled { cursor:not-allowed; }
+      /* phones: the pity panel under the banner already shows these */
+      @media (max-width: 560px) { .gacha-hdr-pity { display:none; } }
       `}</style>
 
       {/* ══════════════════════════════════════════════════════════
@@ -505,7 +522,7 @@ export default function GachaScreen({
     {/* Header bar */}
     <div style={{
       width: '100%', flexShrink: 0,
-      display: 'flex', alignItems: 'center', gap: 12,
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', rowGap: 6,   // wraps on phones instead of pushing the page sideways
       padding: '6px 20px',
 background: 'rgba(0,0,0,0.55)',
 zIndex: 10,
@@ -550,7 +567,18 @@ zIndex: 10,
       </div>
 
       <div style={{ flex: 1 }} />
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.38)', textAlign: 'right' }}>
+      {devMode && (
+        <button onClick={toggleForce5} title="Dev: every pull is a 5★ (featured on banners that have them). Doesn't change pity."
+          style={{
+            background: force5 ? 'rgba(168,85,247,0.35)' : 'rgba(0,0,0,0.55)', color: force5 ? '#f3e8ff' : '#c4b5fd',
+            border: `1px solid ${force5 ? '#c084fc' : 'rgba(168,85,247,0.5)'}`, borderRadius: 20,
+            padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+            boxShadow: force5 ? '0 0 12px rgba(168,85,247,0.6)' : 'none',
+          }}>
+          🛠 Guaranteed 5★: {force5 ? 'ON' : 'OFF'}
+        </button>
+      )}
+      <div className="gacha-hdr-pity" style={{ fontSize: 11, color: 'rgba(255,255,255,0.38)', textAlign: 'right' }}>
         4★ {pity4}/10 · 5★ {pity5}/90 · {collection.length} cards
       </div>
     </div>
