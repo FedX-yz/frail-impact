@@ -1,32 +1,27 @@
 // ── Banner schedule ───────────────────────────────────────────────
-// This decides which limited banner is live, how long it lasts and what comes
-// next. It runs on the clock, so every player sees the same banner at the same
-// time. The gacha screen shows the countdown and an "Up next" line from this.
+// Which limited banners are live is controlled from the owner's schedule panel
+// (open the game with ?schedule at the end of the address). The panel saves the
+// schedule to a file in the GitHub repo (SCHEDULE_SOURCE below), and every player's
+// game reads that file, so the schedule changes without a new deploy. Only someone
+// with a GitHub key that can write to the repo can save it.
 //
+// DEFAULT_SCHEDULE is only used until that file has been loaded once (or if it
+// can't be reached and the player has never loaded it). Same format as the file:
 //   permanent  banners that are always there, with no timer
-//   start      when the first banner in `rotation` begins. 'Z' means UTC; you can
-//              also write your own time zone, e.g. '2026-10-16T18:00+04:00'
-//   rotation   played top to bottom. `days` is how long each one runs (0.5 = 12 h).
-//              Several at once: banner: ['retirement-home', 'unending-hunger'].
-//              A break with no limited banner: banner: null.
-//   repeat     true = after the last one, start again from the top.
-//              false = after the last one, only the permanent banners are left.
-//
-// To move everything later or earlier, change `start`. To make the current
-// banner last longer, raise its `days`. In developer mode every banner can be
-// picked, live or not, so you can test one before it goes live.
-export const BANNER_SCHEDULE = {
+//   entries    { banner, start, end } — live from start until end (end: null = no
+//              end). Entries can overlap, so several banners can be live at once.
+export const SCHEDULE_SOURCE = { owner: 'FedX-yz', repo: 'frail-impact', branch: 'schedule', path: 'banner-schedule.json' };
+
+export const DEFAULT_SCHEDULE = {
   permanent: ['standard'],
-  start: '2026-10-16T00:00Z',
-  rotation: [
-    { banner: 'anemic-kaisen',   days: 21 },
-    { banner: 'retirement-home', days: 21 },
-    { banner: 'unending-hunger', days: 7 },
+  entries: [
+    { id: 'ak1', banner: 'anemic-kaisen',   start: '2026-10-16T00:00:00.000Z', end: '2026-11-06T00:00:00.000Z' },
+    { id: 'rh1', banner: 'retirement-home', start: '2026-11-06T00:00:00.000Z', end: '2026-11-27T00:00:00.000Z' },
+    { id: 'uh1', banner: 'unending-hunger', start: '2026-11-27T00:00:00.000Z', end: '2026-12-04T00:00:00.000Z' },
   ],
-  repeat: true,
 };
 
-// Every banner. Which ones are live is decided by BANNER_SCHEDULE above.
+// Every banner. Which ones are live is decided by the schedule above.
 export const BANNERS = [
     {
       id: 'standard',

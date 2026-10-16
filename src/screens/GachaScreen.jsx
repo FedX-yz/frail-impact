@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
-import { bannerStatus, formatTimeLeft } from '../utils/bannerSchedule';
+import { bannerStatus, formatTimeLeft, formatLength } from '../utils/bannerSchedule';
+import { useLiveSchedule } from '../utils/liveSchedule';
 import { playClose, preloadSound, playMusic, stopMusic, musicElapsed } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { getSettings } from '../utils/settings';
@@ -97,14 +98,12 @@ function doPulls(count, pity4, pity5, banner, force5 = false) {
 
 // ── Clock ─────────────────────────────────────────────────────
 // Ticks once a second: runs the banner countdown and swaps the banner when one
-// ends. Which banners are live comes from BANNER_SCHEDULE in data/banners.js.
+// ends. Which banners are live comes from the owner's schedule (utils/liveSchedule.js).
 function useNow() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
   return now;
 }
-// how long a banner runs: "21 days", "1 day", "12 h"
-const formatLength = ms => { const d = ms / 86400000; return d >= 1 ? `${+d.toFixed(1)} day${d === 1 ? '' : 's'}` : `${Math.round(d * 24)} h`; };
 
 // ─────────────────────────────────────────────────────────────────
 export default function GachaScreen({
@@ -138,12 +137,11 @@ export default function GachaScreen({
   const [hovBtn2, setHovBtn2] = useState(false);
 
   const now = useNow();
-  const { live, endsAt, upcoming } = bannerStatus(now);
-  // developer mode: every banner can be picked, live or not, to test it early
-  const pickable = devMode ? [...live, ...BANNERS.filter(b => !live.includes(b))] : live;
-  const activeBanner = pickable.find(b => b.id === activeBannerId) || live[0] || BANNERS[0];
-  const bannerLive = live.includes(activeBanner);
-  const timeLeftOf = b => !live.includes(b) ? 'not live' : endsAt[b.id] ? formatTimeLeft(endsAt[b.id] - now) : 'Permanent';
+  const schedule = useLiveSchedule();
+  const { live, endsAt, upcoming } = bannerStatus(now, schedule);
+  const activeBanner = live.find(b => b.id === activeBannerId) || live[0] || BANNERS[0];
+  const isPermanent = b => !(b.id in endsAt);
+  const timeLeftOf = b => isPermanent(b) ? 'Permanent' : formatTimeLeft(endsAt[b.id] - now);
   const timeLeft = timeLeftOf(activeBanner);
 
   // Dev: every pull is a 5★ (remembered; only works while dev mode is on)
@@ -636,7 +634,7 @@ zIndex: 10,
       <div style={{ position:'absolute', left:20, bottom:20, zIndex:3, pointerEvents:'none' }}>
         <div style={{ color:activeBanner.accentColor, fontSize:'clamp(18px,3vw,32px)', fontWeight:900 }}>{activeBanner.name}</div>
         <div style={{ color:'rgba(255,255,255,0.5)', fontSize:13 }}>{activeBanner.subtitle}</div>
-        <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>{bannerLive && !endsAt[activeBanner.id] ? 'Permanent banner' : `ends in: ${timeLeft}`}</div>
+        <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>{isPermanent(activeBanner) ? 'Permanent banner' : endsAt[activeBanner.id] === Infinity ? 'Limited · no end date yet' : `ends in: ${timeLeft}`}</div>
       </div>
     )}
   </div>
@@ -1059,9 +1057,8 @@ zIndex: 10,
           <div style={{ fontSize:22, fontWeight:900, color:'#fff', marginBottom:4, letterSpacing:1 }}>Select Banner</div>
           <div style={{ color:'rgba(255,255,255,0.3)', fontSize:13, marginBottom:8 }}>Choose which banner to pull from</div>
 
-          {pickable.map(banner => {
+          {live.map(banner => {
             const isActive = banner === activeBanner;
-            const isLive = live.includes(banner);
             return (
               <div
                 key={banner.id}
@@ -1083,8 +1080,8 @@ zIndex: 10,
                   <div>
                     <div style={{ fontWeight:800, fontSize:16, color:banner.accentColor }}>{banner.name}</div>
                     <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{banner.subtitle}</div>
-                    <div style={{ fontSize:11, color: isLive ? 'rgba(255,255,255,0.55)' : '#f87171', marginTop:3, fontWeight:600 }}>
-                      {!isLive ? '🛠 not live (developer mode)' : endsAt[banner.id] ? `ends in ${timeLeftOf(banner)}` : 'Permanent'}
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginTop:3, fontWeight:600 }}>
+                      {isPermanent(banner) ? 'Permanent' : endsAt[banner.id] === Infinity ? 'No end date yet' : `ends in ${timeLeftOf(banner)}`}
                     </div>
                   </div>
                   {isActive && (
@@ -1114,8 +1111,8 @@ zIndex: 10,
           {upcoming.length > 0 && (
             <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:468, display:'flex', flexDirection:'column', gap:8 }}>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', letterSpacing:2, fontWeight:700, marginTop:4 }}>UP NEXT</div>
-              {upcoming.map(u => (
-                <div key={u.banner.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, borderRadius:12, padding:'10px 18px',
+              {upcoming.slice(0, 4).map(u => (
+                <div key={`${u.banner.id}-${u.start}`} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, borderRadius:12, padding:'10px 18px',
                   border:'1px dashed rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.02)' }}>
                   <span style={{ color:u.banner.accentColor, fontWeight:700, fontSize:14, opacity:0.8 }}>{u.banner.name}</span>
                   <span style={{ fontSize:12, color:'rgba(255,255,255,0.45)', textAlign:'right' }}>in {formatTimeLeft(u.start - now)} · {formatLength(u.end - u.start)}</span>
