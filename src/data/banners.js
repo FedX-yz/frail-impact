@@ -22,6 +22,7 @@ export const DEFAULT_SCHEDULE = {
 };
 
 // Every banner. Which ones are live is decided by the schedule above.
+// uiAssets: the four layers of the banner art, as paths inside public/ (see README).
 export const BANNERS = [
     {
       id: 'standard',
@@ -32,10 +33,10 @@ export const BANNERS = [
       boostedRarity: null,
       boostedChance: 0,
       uiAssets: {
-        bg:    null,   // falls back to a gradient
-        char1: null,
-        char2: null,
-        text:  null,
+        bg:    'ui/ui_standardbannerbg.png',
+        char1: 'ui/ui_standardbannerchar1.png',
+        char2: 'ui/ui_standardbannerchar2.png',
+        text:  'ui/ui_standardbannertext.png',
       },
     },
     {
@@ -47,10 +48,10 @@ export const BANNERS = [
         boostedRarity: 5,
         boostedChance: 0.5,
         uiAssets: {
-          bg:    'ui_retirementbannerbg',
-          char1: 'ui_retirementbannerchar1',
-          char2: 'ui_retirementbannerchar2',
-          text:  'ui_retirementbannertext',
+          bg:    'ui/ui_retirementbannerbg.png',
+          char1: 'ui/ui_retirementbannerchar1.png',
+          char2: 'ui/ui_retirementbannerchar2.png',
+          text:  'ui/ui_retirementbannertext.png',
         },
       },
     {
@@ -62,10 +63,10 @@ export const BANNERS = [
       boostedRarity: 5,
       boostedChance: 0.5,
       uiAssets: {
-        bg:    'ui_anemicbannerbg',
-        char1: 'ui_anemicbannerchar1',
-        char2: 'ui_anemicbannerchar2',
-        text:  'ui_anemicbannertext',
+        bg:    'ui/ui_anemicbannerbg.png',
+        char1: 'ui/ui_anemicbannerchar1.png',
+        char2: 'ui/ui_anemicbannerchar2.png',
+        text:  'ui/ui_anemicbannertext.png',
       },
     },
     {

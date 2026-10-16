@@ -38,6 +38,10 @@ const isHighRarity = card => card && card.rarity >= 5;
 const pickVideo = v => (!v ? null : typeof v === 'string' ? v
   : (window.innerHeight > window.innerWidth ? v.tall ?? v.wide : v.wide ?? v.tall) ?? null);
 
+// Banner art layer: a path inside public/ (written out in full so the build can turn it into a
+// light WebP), or just a file name in public/ui/ without .png
+const uiArt = p => (p.includes('/') ? `${BASE}${p}` : `${BASE}ui/${p}.png`);
+
 const formatCoins = v => v >= 1000 ? `${Math.floor(v / 1000)}k` : String(v);
 
 const GemImg = ({ size = 22 }) => (
@@ -575,7 +579,7 @@ zIndex: 10,
     overflow: 'hidden',
   }}>
     {activeBanner.uiAssets?.bg
-      ? <img src={`${BASE}ui/${activeBanner.uiAssets.bg}.png`} alt="" draggable={false}
+      ? <img src={uiArt(activeBanner.uiAssets.bg)} alt="" draggable={false}
           style={{
             position: 'absolute',
             top: '-30%', left: 0,
@@ -606,7 +610,7 @@ zIndex: 10,
     })()}
 
     {activeBanner.uiAssets?.text && (
-      <img src={`${BASE}ui/${activeBanner.uiAssets.text}.png`} alt="" draggable={false}
+      <img src={uiArt(activeBanner.uiAssets.text)} alt="" draggable={false}
         style={{
           position: 'absolute',
           top: '-30%', left: 0,
@@ -617,7 +621,8 @@ zIndex: 10,
         }} />
     )}
 
-    {activeBanner.uiAssets?.text && (
+    {/* countdown (banners that are always available have none) */}
+    {activeBanner.uiAssets?.text && !isPermanent(activeBanner) && (
       <div style={{
         position: 'absolute', bottom: '9%', right: '4%',
         zIndex: 3, pointerEvents: 'none',
@@ -641,7 +646,7 @@ zIndex: 10,
 
   {/* Characters — outside clip so they pop above, bottom anchored to card bottom */}
   {activeBanner.uiAssets?.char2 && (
-    <img src={`${BASE}ui/${activeBanner.uiAssets.char2}.png`} alt="" draggable={false}
+    <img src={uiArt(activeBanner.uiAssets.char2)} alt="" draggable={false}
       style={{
         position: 'absolute',
         left: '0%', bottom: 1.5,
@@ -654,7 +659,7 @@ zIndex: 10,
   )}
 
   {activeBanner.uiAssets?.char1 && (
-    <img src={`${BASE}ui/${activeBanner.uiAssets.char1}.png`} alt="" draggable={false}
+    <img src={uiArt(activeBanner.uiAssets.char1)} alt="" draggable={false}
       style={{
         position: 'absolute',
         right: '0%', bottom: 1.5,

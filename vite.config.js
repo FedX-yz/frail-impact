@@ -13,7 +13,7 @@ import ffmpegPath from 'ffmpeg-static'
 // Your original art, video and sound in public/ are NEVER touched. After the
 // build, the copies in dist/ are shrunk for the website:
 //   • images the code names directly → resized WebP, code pointed at .webp
-//   • images whose names are built up in code (banner art), the cursor and the
+//   • images whose names are built up in code, the cursor and the
 //     favicon → resized, same name and format
 //   • characters/thumb/*.webp → 320px thumbnails for grids (src/utils/assets.js)
 //   • videos → 720p H.264; music/voices → lower bitrate MP3 (same names)
