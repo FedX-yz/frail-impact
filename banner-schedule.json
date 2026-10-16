@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "revision": 1,
+  "savedAt": "2026-10-16T05:57:17.070Z",
+  "permanent": [
+    "standard"
+  ],
+  "entries": [
+    {
+      "id": "ak1",
+      "banner": "anemic-kaisen",
+      "start": "2026-10-16T00:00:00.000Z",
+      "end": "2026-11-06T00:00:00.000Z"
+    },
+    {
+      "id": "rh1",
+      "banner": "retirement-home",
+      "start": "2026-11-06T00:00:00.000Z",
+      "end": "2026-11-27T00:00:00.000Z"
+    },
+    {
+      "id": "uh1",
+      "banner": "unending-hunger",
+      "start": "2026-11-27T00:00:00.000Z",
+      "end": "2026-12-04T00:00:00.000Z"
+    }
+  ]
+}
