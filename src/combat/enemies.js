@@ -98,14 +98,19 @@ export const ENEMY_TYPES = {
   },
   // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN
   // for 5s. Get all three down at the same time or the downed ones regrow
-  // at half HP.
+  // at half HP. The heads hang from long necks that come down from the top
+  // of the arena (drawn in BattleArena.jsx from stacked neckImg segments).
+  //   headImgs:   left, middle, right head
+  //   neckAttach: where each head's neck meets it, as a fraction of its picture (x, y)
   hydra: {
     name: 'HYDRA', tier: 'boss', kind: 'hydra',
-    img: `${BASE}enemies/hoxboss.jpg`, size: 100,
+    img: `${BASE}enemies/hydra_head_front.png`, size: 112, drawScale: 1.75,
+    headImgs: [`${BASE}enemies/hydra_head_sting.png`, `${BASE}enemies/hydra_head_front.png`, `${BASE}enemies/hydra_head_eyes.png`],
+    neckImg: `${BASE}enemies/hydra_neck.png`,
+    neckAttach: [[0.4, 0.2], [0.5, 0.17], [0.47, 0.16]],
     hp: 300, coin: 0, xp: 40, speed: 0,
     heads: 3, downTime: 5, regrowPct: 0.5,
     attacks: ['shot', 'circle'], cooldown: [2.4, 3.6],
-    headTints: ['hue-rotate(0deg)', 'hue-rotate(110deg)', 'hue-rotate(230deg)'],
     groupReward: { coin: 450, gems: 10, xp: 1000 },
   },
   treasure: {

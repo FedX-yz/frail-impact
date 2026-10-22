@@ -319,7 +319,8 @@ export default function GachaScreen({
   }, [phase, queueIdx]);
 
   const startPulls = cnt => {
-    if (phase !== 'idle' || currency < cnt) return;
+    if ((phase !== 'idle' && phase !== 'results') || currency < cnt) return;
+    setSummaryBatch([]); setS5CoinsEarned(0);
     setCurrency(c => c - cnt);
     const { results, newPity4, newPity5 } = doPulls(cnt, pity4, pity5, activeBanner, force5);
     setPity4(newPity4);
@@ -327,6 +328,10 @@ export default function GachaScreen({
 
     const S5_COIN_VALUES = { 6: 5000, 5: 2500, 4: 500, 3: 100 };
     let coinsFromS5 = 0;
+
+    // for the results screen: NEW the first time you ever get a card, "maxed" when it turned into coins
+    const owned = new Set(collection.map(c => c.id));
+    results.forEach(r => { r.isNew = !owned.has(r.id); owned.add(r.id); r.maxed = (cardInventory[r.id]?.si ?? 0) >= 4; });
 
     const collectionResults = results.filter(pulled => {
       const si = cardInventory[pulled.id]?.si ?? 0;
@@ -470,6 +475,68 @@ export default function GachaScreen({
         @keyframes buildTremble    { ${TREMBLE} }
         @keyframes dropFlash       { 0%{opacity:0.95} 100%{opacity:0} }
         @keyframes dropJolt        { 0%{transform:scale(1.18)} 25%{transform:scale(0.96) translate(-6px,4px)} 45%{transform:scale(1.03) translate(5px,-3px)} 70%{transform:scale(0.99) translate(-2px,1px)} 100%{transform:scale(1)} }
+        /* wish results */
+        .wr-screen { position:absolute; inset:0; z-index:60; overflow:auto; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:safe center;
+          padding:22px 12px 32px; background:#06040d; }
+        .wr-sky { position:fixed; inset:0; pointer-events:none; z-index:-1;
+          background: radial-gradient(ellipse 70% 45% at 50% 42%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
+                      radial-gradient(circle at 20% 15%, rgba(255,255,255,0.08) 0 1px, transparent 2px) 0 0/90px 90px,
+                      radial-gradient(circle at 70% 60%, rgba(255,255,255,0.06) 0 1px, transparent 2px) 0 0/130px 130px,
+                      linear-gradient(180deg,#0a0618 0%,#06040d 60%,#020104 100%); }
+        .wr-head { text-align:center; margin-bottom:18px; animation: wrFade .5s ease both; }
+        .wr-kicker { font-size:12px; letter-spacing:4px; text-transform:uppercase; color:var(--accent); opacity:.85; }
+        .wr-title { font-size:clamp(26px,4.4vw,42px); font-weight:800; letter-spacing:3px; line-height:1.1;
+          background:linear-gradient(180deg,#fff 30%,#e9d5ff); -webkit-background-clip:text; background-clip:text; color:transparent;
+          filter:drop-shadow(0 2px 10px rgba(0,0,0,.6)); }
+        .wr-title::before, .wr-title::after { content:'✦'; font-size:.45em; vertical-align:middle; margin:0 14px; color:#f0c040; -webkit-text-fill-color:#f0c040; }
+        .wr-tally { display:flex; gap:14px; justify-content:center; margin-top:6px; font-size:13px; flex-wrap:wrap; }
+        .wr-tally b { color:#fff; margin-left:4px; font-weight:700; }
+        .wr-row { display:grid; grid-template-columns:repeat(10, 1fr); gap:8px; width:100%; max-width:1060px; padding:0 10px; }
+        .wr-row.single { grid-template-columns:1fr; max-width:190px; }
+        @media (max-width: 760px) { .wr-row { grid-template-columns:repeat(5, 1fr); gap:6px 5px; } }
+        .wr-pillar { position:relative; padding:0; border:none; background:none; cursor:pointer; aspect-ratio: 1 / 3.1;
+          transform:skewX(-7deg); animation: wrIn .55s cubic-bezier(.2,.9,.25,1.15) both; }
+        .wr-row.single .wr-pillar { aspect-ratio: 1 / 1.9; }
+        @media (max-width: 760px) { .wr-pillar { aspect-ratio: 1 / 2.35; } }
+        .wr-face { position:absolute; inset:0; overflow:hidden; border-radius:4px; display:block;
+          background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 55%, #120a24) 0%, #120a24 55%, #07040d 100%);
+          border:1px solid color-mix(in srgb, var(--rc) 70%, transparent);
+          box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 8px 22px rgba(0,0,0,.55), inset 0 0 18px color-mix(in srgb, var(--rc) 25%, transparent); transition: transform .15s, box-shadow .15s; }
+        .wr-pillar:hover .wr-face { transform: translateY(-4px); box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 0 22px var(--rg), inset 0 0 18px color-mix(in srgb, var(--rc) 30%, transparent); }
+        .wr-pillar.r5 .wr-face, .wr-pillar.r6 .wr-face { box-shadow: 0 0 18px var(--rg), 0 8px 22px rgba(0,0,0,.55), inset 0 0 22px color-mix(in srgb, var(--rc) 35%, transparent); }
+        .wr-face img { position:absolute; left:-25%; width:150%; height:100%; transform:skewX(7deg); }
+        .wr-face img.framed { top:-5%; height:150%; }
+        .wr-fade { position:absolute; inset:0; background:linear-gradient(180deg, transparent 50%, rgba(5,3,10,.92) 88%); }
+        .wr-rays { position:absolute; left:50%; top:30%; width:300%; aspect-ratio:1; transform:translate(-50%,-50%); opacity:.55;
+          background:repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--rc) 60%, transparent) 0 6deg, transparent 6deg 18deg);
+          animation: wrSpin 14s linear infinite; }
+        .wr-shine { position:absolute; inset:-20% -60%; background:linear-gradient(105deg, transparent 40%, rgba(255,255,255,.35) 50%, transparent 60%);
+          animation: wrShine 2.6s ease-in-out infinite; animation-delay: inherit; }
+        .wr-foot { position:absolute; left:0; right:0; bottom:6px; transform:skewX(7deg); display:flex; flex-direction:column; align-items:center; gap:1px; padding:0 4px; }
+        .wr-stars { color:var(--rc); font-size:9px; letter-spacing:-.5px; text-shadow:0 0 6px var(--rg); }
+        .wr-name { font-size:10px; font-weight:700; line-height:1.15; text-align:center; max-width:100%; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+          text-shadow:0 1px 3px #000; word-break:break-word; }
+        .wr-row.single .wr-stars { font-size:15px; } .wr-row.single .wr-name { font-size:14px; }
+        .wr-new { position:absolute; top:6px; left:50%; transform:translateX(-50%) skewX(7deg); font-size:9px; font-weight:800; letter-spacing:1px;
+          background:#f0c040; color:#1a1000; padding:1px 6px; border-radius:3px; box-shadow:0 0 10px rgba(240,192,64,.7); }
+        .wr-maxed { position:absolute; top:6px; left:50%; transform:translateX(-50%) skewX(7deg); font-size:8px; white-space:nowrap;
+          background:rgba(0,0,0,.7); color:#f0c040; padding:1px 5px; border-radius:3px; border:1px solid #f0c04088; }
+        .wr-coins { display:flex; align-items:center; gap:8px; margin-top:16px; color:#f0c040; font-size:14px; font-weight:700;
+          background:rgba(240,192,64,.08); border:1px solid rgba(240,192,64,.35); border-radius:999px; padding:6px 14px; animation: wrFade .5s .8s ease both; }
+        .wr-coins img { width:18px; height:18px; image-rendering:pixelated; }
+        .wr-buttons { display:flex; gap:12px; margin-top:24px; flex-wrap:wrap; justify-content:center; animation: wrFade .5s .9s ease both; }
+        .wr-btn { font-family:inherit; font-size:15px; font-weight:800; letter-spacing:1px; padding:11px 22px; border-radius:999px; cursor:pointer; color:#1a1000;
+          background:linear-gradient(180deg,#ffd76a,#e29a1e); border:1px solid #fff2b0; box-shadow:0 0 18px rgba(240,170,40,.45), inset 0 -2px 0 rgba(0,0,0,.2);
+          display:inline-flex; align-items:center; gap:10px; transition: transform .12s; }
+        .wr-btn:hover:not(:disabled) { transform: scale(1.05); }
+        .wr-btn:disabled { filter:grayscale(.8) brightness(.6); cursor:default; }
+        .wr-btn.ghost { background:rgba(255,255,255,.04); color:#fff; border:1px solid rgba(255,255,255,.35); box-shadow:none; }
+        .wr-cost { display:inline-flex; align-items:center; gap:4px; background:rgba(0,0,0,.18); border-radius:999px; padding:1px 8px 1px 4px; font-size:13px; }
+        .wr-hint { margin-top:12px; font-size:11px; color:rgba(255,255,255,.3); letter-spacing:1px; }
+        @keyframes wrIn { from { opacity:0; transform:skewX(-7deg) translateX(40px) scaleY(.85); filter:brightness(3); } to { opacity:1; transform:skewX(-7deg); filter:none; } }
+        @keyframes wrFade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+        @keyframes wrSpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+        @keyframes wrShine { 0%,55% { transform:translateX(-60%); } 100% { transform:translateX(60%); } }
         .result-tile {
           display:flex; flex-direction:column; align-items:center;
           justify-content:flex-end; gap:6px;
@@ -882,94 +949,69 @@ zIndex: 10,
       })()}
 
       {/* ── RESULTS SUMMARY ──────────────────────────────────── */}
-      {phase === 'results' && (summaryBatch.length > 0 || s5CoinsEarned > 0) && (
-        <div style={{
-          position:'absolute', inset:0, zIndex:60, overflow:'auto',
-          background:'linear-gradient(160deg,#07000f 0%,#120020 60%,#07000f 100%)',
-          display:'flex', flexDirection:'column', alignItems:'center',
-          padding:'24px 16px 40px', color:'#fff',
-          zoom: 0.9,
-        }}>
-          <div style={{ fontSize:'clamp(20px,4vw,36px)', fontWeight:900, letterSpacing:2, marginBottom:4,
-            background:'linear-gradient(90deg,#f0c040,#ec4899,#a855f7)',
-            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
-          }}>
-            Pull Results
-          </div>
-          <div style={{ color:'rgba(255,255,255,0.35)', fontSize:14, marginBottom:20 }}>
-            {summaryBatch.length + (s5CoinsEarned > 0 ? 1 : 0)} reward{summaryBatch.length + (s5CoinsEarned > 0 ? 1 : 0) !== 1 ? 's' : ''}
-          </div>
+      {/* A row of tall slanted pillars, one per card, in its rarity's colour (like a gacha wish
+          result). Tap one for its details. Two rows of five on narrow screens. */}
+      {phase === 'results' && (summaryBatch.length > 0 || s5CoinsEarned > 0) && (() => {
+        const n = summaryBatch.length;
+        const tally = [6, 5, 4, 3].map(r => [r, summaryBatch.filter(c => c.rarity === r).length]).filter(([, k]) => k > 0);
+        const again = n >= 10 ? 10 : 1;
+        const accent = activeBanner.accentColor;
+        return (
+          <div className="wr-screen" style={{ '--accent': accent }}>
+            <div className="wr-sky" />
+            <div className="wr-head">
+              <div className="wr-kicker">{activeBanner.name}</div>
+              <div className="wr-title">Wish Results</div>
+              <div className="wr-tally">
+                {tally.map(([r, k]) => <span key={r} style={{ color: rc(r) }}>{'★'.repeat(Math.min(r, 6))}<b>×{k}</b></span>)}
+              </div>
+            </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(min(110px, 30%), 1fr))', gap:10, width:'100%', maxWidth:680 }}>
-            {summaryBatch.map((c, i) => {
-              const isHigh = isHighRarity(c);
-              return (
-                <div
-                  key={c.instanceId || i}
-                  className={`result-tile${isHigh ? ' tile-high' : ''}`}
-                  onClick={() => setSelectedResult(c)}
-                  style={{
-                    cursor:'pointer',
-                    background:'linear-gradient(175deg,#1a0030,#08000e)',
-                    border:`2px solid ${rc(c.rarity)}`,
-                    boxShadow:`0 0 ${isHigh ? 18 : 8}px ${rg(c.rarity)}, inset 0 0 ${isHigh ? 12 : 4}px ${rg(c.rarity)}`,
-                  }}
-                >
-                  <img
-                    src={thumb(c.characterImage || c.image)}
-                    alt={c.name}
-                    draggable={false}
-                    style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'contain', objectPosition:'center center', filter:`brightness(${isHigh ? 1.05 : 0.85})` }}
-                    onError={e => { const fb = c.characterImage||c.image; if (fb && e.target.src !== fb) e.target.src = fb; }}
-                  />
-                  <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top,rgba(0,0,0,0.82) 0%,transparent 55%)', zIndex:1 }} />
-                  <div style={{ position:'relative', zIndex:2, textAlign:'center', padding:'0 4px 8px', width:'100%' }}>
-                    <div style={{ display:'flex', justifyContent:'center', gap:1, marginBottom:2 }}>
-                      {[...Array(Math.min(c.rarity, 6))].map((_, si) => (
-                        <span key={si} style={{ fontSize:9, color:rc(c.rarity), filter:`drop-shadow(0 0 3px ${rc(c.rarity)})` }}>★</span>
-                      ))}
-                    </div>
-                    <div style={{ fontSize:11, fontWeight:700, color:'#fff', textShadow:'0 1px 4px rgba(0,0,0,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>
-                      {c.name}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            <div className={`wr-row${n === 1 ? ' single' : ''}`}>
+              {summaryBatch.map((c, i) => {
+                const art = c.sprite || c.cardArt || c.image;
+                const f = c.portraitFocus;
+                const pos = f && (c.sprite || c.cardArt) ? `${f[0]}% ${Math.max(0, f[1] - 8)}%` : '50% 30%';
+                const framed = !c.sprite && !c.cardArt;   // only the framed card: show its picture, not its stars and name
+                return (
+                  <button key={c.instanceId || i} className={`wr-pillar r${Math.min(c.rarity, 6)}`} onClick={() => setSelectedResult(c)}
+                    style={{ '--rc': rc(c.rarity), '--rg': rg(c.rarity), animationDelay: `${0.08 + i * 0.07}s` }}>
+                    <span className="wr-face">
+                      {c.rarity >= 5 && <span className="wr-rays" />}
+                      <img src={art} alt="" draggable={false} className={framed ? 'framed' : undefined}
+                        style={{ objectPosition: framed ? '50% 0%' : pos, objectFit: c.sprite ? 'contain' : 'cover' }}
+                        onError={e => { if (c.image && !e.target.src.endsWith(c.image)) e.target.src = c.image; }} />
+                      <span className="wr-fade" />
+                      {c.rarity >= 5 && <span className="wr-shine" />}
+                      {c.isNew && <span className="wr-new">NEW</span>}
+                      {c.maxed && <span className="wr-maxed">MAX · +coins</span>}
+                      <span className="wr-foot">
+                        <span className="wr-stars">{'★'.repeat(Math.min(c.rarity, 6))}</span>
+                        <span className="wr-name">{c.name}</span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
             {s5CoinsEarned > 0 && (
-              <div style={{
-                display:'flex', flexDirection:'column', alignItems:'center',
-                justifyContent:'flex-end', gap:6,
-                width:'100%', aspectRatio:'3/4',
-                borderRadius:12, overflow:'hidden',
-                position:'relative', cursor:'default',
-                background:'linear-gradient(175deg,#1a1500,#0a0a00)',
-                border:`2px solid #f0c040`,
-                boxShadow:`0 0 18px rgba(240,192,64,0.6), inset 0 0 12px rgba(240,192,64,0.3)`,
-              }}>
-                <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:`url(${BASE}ui/ui_cucoin.png)`, backgroundSize:'60%', backgroundPosition:'center', backgroundRepeat:'no-repeat', opacity:0.1 }} />
-                <div style={{ position:'relative', zIndex:2, textAlign:'center', padding:'0 4px 8px', width:'100%' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>💰</div>
-                  <div style={{ fontSize:14, fontWeight:700, color:'#f0c040', textShadow:'0 1px 4px rgba(0,0,0,0.9)' }}>
-                    +{formatCoins(s5CoinsEarned)}
-                  </div>
-                  <div style={{ fontSize:11, color:'rgba(240,192,64,0.7)', marginTop:4 }}>S5 Dupes</div>
-                </div>
+              <div className="wr-coins">
+                <img src={`${BASE}ui/ui_cucoin.png`} alt="" draggable={false} />
+                <span>+{formatCoins(s5CoinsEarned)} coins from maxed cards</span>
               </div>
             )}
-          </div>
 
-          <button
-            onClick={() => { setSummaryBatch([]); setPhase('idle'); setS5CoinsEarned(0); }}
-            style={{ marginTop:32, padding:'14px 52px', borderRadius:14, background:'linear-gradient(135deg,#7c3aed,#db2777)', boxShadow:'0 0 28px rgba(124,58,237,0.55)', border:'none', color:'#fff', fontSize:17, fontWeight:800, cursor:'pointer', letterSpacing:1 }}
-            onMouseEnter={e => e.currentTarget.style.transform='scale(1.06)'}
-            onMouseLeave={e => e.currentTarget.style.transform='scale(1)'}
-          >
-            Close
-          </button>
-        </div>
-      )}
+            <div className="wr-buttons">
+              <button className="wr-btn ghost" onClick={() => { setSummaryBatch([]); setPhase('idle'); setS5CoinsEarned(0); }}>Close</button>
+              <button className="wr-btn" disabled={currency < again} onClick={() => startPulls(again)}>
+                Pull ×{again} again <span className="wr-cost"><GemImg size={16} />{again}</span>
+              </button>
+            </div>
+            <div className="wr-hint">tap a card for details</div>
+          </div>
+        );
+      })()}
 
       {/* ── CARD ART LIGHTBOX ────────────────────────────────── */}
       {showArt && (

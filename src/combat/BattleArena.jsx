@@ -245,6 +245,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             return null;
           })}
 
+          {/* ── Hydra necks, behind its heads ─────────────────────────── */}
+          <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} />
+
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
             const isWormHead = e.move === 'worm' && e.role === 'head';
@@ -257,6 +260,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 hpPct={Math.max(0, Math.round(e.hp / e.maxHp * 200) / 2)}
                 shieldR={e.shield ? e.shieldCfg.radius * k : 0}
                 affix={e.affix} pose={poseOf(e)} poses={e.type.poses} drawScale={e.drawScale} turns={e.facing != null}
+                sway={e.role === 'hydra' ? e.segIndex : null}
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
                 weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
             );
@@ -552,8 +556,29 @@ const StageBarView = memo(function StageBarView({ label, ratio, color, boss }) {
 
 // One enemy. Only re-renders when how it LOOKS changes; its position is set
 // directly on the DOM node by BattleArena every frame.
+// The hydra's heads hang from long necks that come down from the top of the
+// arena: a column of neck segments above each head, lower ones in front.
+// The heads never move, so this is worked out from where they are.
+function HydraNecks({ heads, k }) {
+  if (!heads.length) return null;
+  const t = heads[0].type;
+  return heads.flatMap(h => {
+    const box = h.size * k * h.drawScale;
+    const [fx, fy] = t.neckAttach?.[h.segIndex] ?? [0.5, 0.2];
+    const ax = h.x - box / 2 + fx * box, ay = h.y - box / 2 + fy * box;     // where the neck meets the head
+    const bw = box * 0.6, bh = bw * 856 / 715, step = bh * 0.56;
+    const ys = [];
+    for (let y = ay - bh * 0.3; y > -bh * 0.6; y -= step) ys.push(y);
+    return ys.reverse().map((y, i) => (
+      <img key={`${h.id}-${i}`} src={t.neckImg} alt="" draggable={false} className="hydra-neck"
+        style={{ position: 'absolute', left: ax - bw / 2, top: y - bh / 2, width: bw, height: bh, zIndex: 5, pointerEvents: 'none',
+          filter: h.down > 0 ? 'grayscale(1) brightness(0.5)' : undefined }} />
+    ));
+  });
+}
+
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = 'grayscale(1) brightness(0.5)';
@@ -592,8 +617,9 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         ))}</div>
       ) : (
         <img src={img} alt="" draggable={false} decoding="async"
-          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}${poses ? ' smooth' : ''}`}
-          style={{ width: '100%', height: '100%', objectFit: isWormHead && !turns ? 'cover' : 'contain', filter: turns && filter === 'none' ? undefined : filter, animationPlayState: frozen || down || paused ? 'paused' : 'running' }} />
+          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}${poses ? ' smooth' : ''}${sway != null ? ' hydra-head' : ''}`}
+          style={{ width: '100%', height: '100%', objectFit: isWormHead && !turns ? 'cover' : 'contain', filter: turns && filter === 'none' ? undefined : filter, animationPlayState: frozen || down || paused ? 'paused' : 'running',
+            animationDelay: sway != null ? `${-sway * 1.1}s` : undefined }} />
       )}
       </div>
       </div>
@@ -609,7 +635,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         return <div key={wid} className="weak-pt" style={{ left: `${50 + rx * 100}%`, top: `${50 + ry * 100}%`, width: 30 * k, height: 30 * k }} />;
       })}
       {showBar && (
-        <div style={{ position: 'absolute', left: '10%', right: '10%', top: '100%', height: role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
+        <div style={{ position: 'absolute', left: '10%', right: '10%', top: role === 'hydra' ? `${50 + drawScale * 48}%` : '100%', height: role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
           <div style={{ width: `${hpPct}%`, height: '100%', borderRadius: 3, background: role === 'hydra' ? '#ff4400' : tier === 'elite' ? '#c084fc' : tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
         </div>
       )}
@@ -743,6 +769,10 @@ const ARENA_CSS = `
   .enemy-img.worm-head:not(.turns) { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
   .enemy-img.turns { animation:none; image-rendering:auto; }
   .enemy-img.smooth { image-rendering:auto; }
+  .enemy-img.hydra-head { image-rendering:auto; transform-origin: 50% 15%; animation: hydraSway 3.3s ease-in-out infinite;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45)); }
+  @keyframes hydraSway { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+  .hydra-neck { image-rendering:auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
   .pose-aim { position:absolute; inset:0; transform: rotate(var(--aim-rot, 0deg)) scaleX(var(--aim-flip, 1)); transition: transform 0.08s ease-out; }
   .enemy-img.worm-head.turns { filter: drop-shadow(0 0 10px rgba(255,40,120,0.75)); }
   .enemy-img.pose { animation:none; image-rendering:auto; }

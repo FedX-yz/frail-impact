@@ -160,10 +160,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const chain = uid++;
       parts.forEach(p => { p.groupType = typeId; p.chain = chain; });
     } else if (t.kind === 'hydra') {
-      const cx = s.W * 0.62, cy = s.H * 0.44;
+      const cx = s.W * 0.55, cy = s.H * 0.5;
       for (let i = 0; i < t.heads; i++) {
         const off = i - (t.heads - 1) / 2;
-        const h = spawnEnemy(typeId, { pos: { x: cx + off * K(130), y: cy + (off === 0 ? -K(45) : K(15)) }, role: 'hydra', group, segIndex: i, tint: t.headTints?.[i] });
+        const h = spawnEnemy(typeId, { pos: { x: cx + off * Math.min(K(200), s.W * 0.28), y: cy + (off === 0 ? -K(30) : K(10)) }, role: 'hydra', group, segIndex: i });
+        if (t.headImgs?.[i]) h.img = t.headImgs[i];   // each head has its own picture
         h.cd = 1 + i * 0.9;          // stagger their first attacks
         h.groupType = typeId;
         parts.push(h);
