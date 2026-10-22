@@ -161,6 +161,13 @@ A cutscene is a list of steps:
 ],
 ```
 
+**The opening:** the first time someone plays, the `intro` scene in `scenes.js` plays: an
+anonymous figure hires you as the Frail Initiative's new rookie manager, then a job application
+comes up (`{ application: true }`) where you type your name and sign by hand with the mouse or a
+finger. The name and signature are saved; `{manager}` in any line becomes the name, and the
+signature signs off every pull report. The terms on the form are at the top of
+`src/story/JobApplication.jsx`. Settings → Manager shows them and lets you sign again.
+
 Flags set by choices are saved, and can change later scenes (`{ if: 'helped', goto: ... }`),
 codec lines (`if: 'helped'`) and even which map nodes exist (`if:` on a node) — that's
 where "your choices have consequences" plugs in. The full list of steps and options is

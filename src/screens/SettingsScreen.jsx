@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { playClose, sfx, playPress } from '../utils/sfx';
 import { getSettings, setSetting } from '../utils/settings';
+import JobApplication from '../story/JobApplication';
 
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
 
-export default function SettingsScreen({ navigate, devMode, toggleDev }) {
+export default function SettingsScreen({ navigate, devMode, toggleDev, profile, setProfile }) {
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resign,       setResign]       = useState(false);
   const [scare,        setScare]        = useState(false);
   const [prefs,        setPrefs]        = useState(getSettings);
   const change = (key, value) => { setSetting(key, value); setPrefs(getSettings()); };
@@ -147,6 +149,20 @@ export default function SettingsScreen({ navigate, devMode, toggleDev }) {
               onChange={v => { change('combatSfx', v); if (v) setTimeout(() => sfx('crit'), 30); }} />
             <Toggle label="Screen shake" sub="When you get hit, crit or kill something big" on={prefs.shake} onChange={v => change('shake', v)} />
           </div>
+
+          {/* You, the manager */}
+          <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>MANAGER</div>
+          <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+            <div style={{ flex:'1 1 200px' }}>
+              <div style={{ fontWeight:700 }}>{profile?.name || 'No name yet'}</div>
+              <div style={{ color:'#778', fontSize:13 }}>Field Manager (probation), Frail Initiative</div>
+            </div>
+            {profile?.signature && <img src={profile.signature} alt="your signature" style={{ height:44, maxWidth:200, background:'#e7dcc2', borderRadius:4, padding:'4px 10px' }} />}
+            <button onClick={() => { playPress(); setResign(true); }} style={{ background:'#1a2035', border:'1px solid #ff8c00', color:'#ff8c00', padding:'8px 16px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700 }}>
+              Sign again
+            </button>
+          </div>
+          {resign && <JobApplication initialName={profile?.name ?? ''} onSigned={p => { setProfile?.(p); setResign(false); }} />}
 
           {/* Save Section */}
           <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>SAVE DATA</div>

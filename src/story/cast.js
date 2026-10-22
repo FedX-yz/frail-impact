@@ -18,6 +18,8 @@
 export const CAST = {
   // The guy with the hat from the codec mockup — placeholder until the art is in
   handler: { name: 'Handler',  color: '#facc15', portrait: null, sprite: null },
+  // The anonymous figure who hires you in the intro — placeholder
+  stranger: { name: '???',     color: '#9ca3af', portrait: null, sprite: null },
 
   // Playable cards (using their card art until story sprites exist)
   astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'characters/astrec.png',  sprite: 'characters/astrec.png' },

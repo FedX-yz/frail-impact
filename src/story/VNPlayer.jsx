@@ -6,6 +6,7 @@ import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
 import { playSFX, playPress } from '../utils/sfx';
 import TapButton from '../components/TapButton';
+import JobApplication from './JobApplication';
 
 const BASE = import.meta.env.BASE_URL;
 const NO_STEPS = [];
@@ -14,7 +15,7 @@ const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90 };
 // Plays steps from `i` until one needs the player (a line, a choice, a wait)
 // and returns the new state. Nothing here touches the screen directly.
 function run(steps, from, prev) {
-  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [] };
+  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false };
   const labelAt = (name) => steps.findIndex(x => x?.label === name);
   let i = from;
   for (let guard = 0; i < steps.length && guard < 2000; guard++) {
@@ -23,6 +24,7 @@ function run(steps, from, prev) {
     if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? '') }, choice: null, wait: 0 };
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
+    if (step.application) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx)
     if (step.if !== undefined) {   // conditional jump
       if (testFlag(s.flags, step.if) && step.goto) { const j = labelAt(step.goto); if (j >= 0) { i = j; continue; } }
       i++; continue;
@@ -51,13 +53,15 @@ function run(steps, from, prev) {
 }
 
 // Full-screen cutscene. Calls onEnd(flags) when it finishes.
-export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
+// profile: the player's { name, signature } — {manager} in a line becomes their name.
+// onSign(profile): called when they sign the job application.
+export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, profile = null, onSign }) {
   const steps = SCENES[sceneId] ?? NO_STEPS;
   const [st, setSt] = useState(() => run(steps, 0, { bg: undefined, actors: [], flags: { ...flags }, line: null, log: [] }));
   const [auto, setAuto] = useState(false);
   const [skip, setSkip] = useState(false);
   const [showLog, setShowLog] = useState(false);
-  const text = st.line?.text ?? '';
+  const text = (st.line?.text ?? '').replaceAll('{manager}', profile?.name || 'Manager');
   const [shown, finish] = useTypewriter(text, 44, skip);
   const typed = shown >= text.length;
   const ended = useRef(false);
@@ -69,7 +73,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
   }, [st.done, st.flags, onEnd]);
 
   const next = useCallback(() => {
-    if (st.done || st.choice || showLog) return;
+    if (st.done || st.choice || st.application || showLog) return;
     if (st.line && !typed) { finish(); return; }
     setSt(prev => {
       const log = prev.line ? [...prev.log, prev.line] : prev.log;
@@ -89,7 +93,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
 
   // waits, auto-play and skip
   useEffect(() => {
-    if (st.done || st.choice) { if (st.choice) setSkip(false); return; }
+    if (st.done || st.choice || st.application) { if (st.choice || st.application) setSkip(false); return; }
     let ms = null;
     if (st.wait) ms = st.wait * 1000;
     else if (skip) ms = 70;
@@ -204,6 +208,9 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
             {!st.log.length && !st.line && <div style={{ color: '#667' }}>Nothing yet.</div>}
           </div>
         </div>
+      )}
+      {st.application && (
+        <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev)); }} />
       )}
     </div>
   );

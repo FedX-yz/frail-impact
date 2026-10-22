@@ -14,6 +14,8 @@ import { createBattle } from './combat/engine';
 import { computePlayerStats } from './combat/stats';
 import { SKILL_UNLOCK, ULT_UNLOCK } from './combat/kits';
 import { trainCost } from './combat/balance';
+import VNPlayer from './story/VNPlayer';
+import useIsMobile from './hooks/useIsMobile';
 
 const DEV_KEY = 'frail_dev';
 const devFromStorage = () => {
@@ -98,6 +100,11 @@ export default function App() {
   const [devMode,       setDevMode]       = useState(devFromStorage);
   const [pity4,         setPity4]         = useState(s.pity4         ?? 0);
   const [pity5,         setPity5]         = useState(s.pity5         ?? 0);
+  // You, the manager: { name, signature (PNG data URL), signedAt } from the job application
+  const [profile,       setProfile]       = useState(s.profile ?? null);
+  // the intro (and the application) plays until you've signed
+  const [intro,         setIntro]         = useState(() => !s.profile?.signature);
+  const { mobile, portrait } = useIsMobile();
   // Story mode (Tower): cleared nodes, choice flags, where you are on the map
   const [story,         setStory]         = useState(() => normalizeStory(s.story));
 
@@ -130,7 +137,7 @@ export default function App() {
   useSave({
     pullCurrency, coins, collection, cardInventory,
     trainLevel, multiplier, totalEarned,
-    deck, pity4, pity5, killCount, stage, stageKills, story,
+    deck, pity4, pity5, killCount, stage, stageKills, story, profile,
   });
 
   const buyUpgrade = () => {
@@ -206,6 +213,11 @@ export default function App() {
   const navigate = (sc) => setScreen(sc);
   const common   = { navigate, pullCurrency, setPullCurrency, coins, setCoins, collection, setCollection };
 
+  if (intro) return (
+    <VNPlayer sceneId="intro" flags={{}} mobile={mobile} portrait={portrait} profile={profile}
+      onSign={setProfile} onEnd={() => setIntro(false)} />
+  );
+
   if (screen === 'tower') return (
     <TowerScreen navigate={navigate} story={story} setStory={setStory} stats={stats} deck={deck}
       devMode={devMode} onReward={giveRewards} coins={coins} pullCurrency={pullCurrency} />
@@ -213,7 +225,7 @@ export default function App() {
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
   if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} />;
-  if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} />;
+  if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} profile={profile} setProfile={setProfile} />;
 
   if (screen === 'gacha' || screen === 'gamble') return (
     <GachaScreen {...common}
@@ -223,6 +235,7 @@ export default function App() {
       cardInventory={cardInventory}
       setCoins={setCoins}
       devMode={devMode}
+      profile={profile}
     />
   );
 

@@ -134,6 +134,7 @@ export default function GachaScreen({
   cardInventory = {},
   setCoins,
   devMode = false,
+  profile = null,
 }) {
   const [phase,           setPhase]           = useState('idle');
   const [batch,           setBatch]           = useState([]);
@@ -535,9 +536,12 @@ export default function GachaScreen({
           background: rgba(231,220,194,.07); border:1px dashed rgba(231,220,194,.35); padding:6px 12px; border-radius:4px; }
         .pr-note img { width:18px; height:18px; image-rendering:pixelated; }
         .pr-note b { color:#f0c040; font-weight:400; }
-        .pr-sign { display:flex; flex-direction:column; align-items:center; margin-top:14px; animation: prFade .5s ease both; }
-        .pr-sig { font-family:var(--font-narration); font-size:30px; color:#cfc6ff; line-height:1; transform: rotate(-3deg); text-shadow:0 0 10px rgba(160,140,255,.25); }
-        .pr-line { border-top:1px solid #6e6352; padding-top:4px; margin-top:2px; font-size:9.5px; letter-spacing:2px; color:#8a7d66; min-width:260px; text-align:center; }
+        .pr-sign { display:flex; flex-direction:column; align-items:center; margin-top:16px; padding:8px 22px 8px; background:#e7dcc2; border-radius:2px; color:#2a2219;
+          box-shadow: 0 8px 18px rgba(0,0,0,.55); transform: rotate(-1deg); animation: prFade .5s ease both; }
+        .pr-sig { height:46px; display:flex; align-items:flex-end; justify-content:center; font-family:var(--font-narration); font-size:28px; color:#1d2a6b; line-height:1; }
+        .pr-sig img { max-height:46px; max-width:240px; transform: rotate(-3deg); }
+        .pr-sig i { font-style:normal; transform: rotate(-3deg); }
+        .pr-line { border-top:1px solid #2a2219; padding-top:4px; margin-top:2px; font-size:9.5px; letter-spacing:2px; color:#5e5140; min-width:240px; text-align:center; }
         .pr-bar { position:sticky; bottom:0; width:100%; display:flex; gap:10px; justify-content:center; padding:16px 12px calc(16px + env(safe-area-inset-bottom));
           margin-top:auto; padding-top:24px; background: linear-gradient(180deg, transparent, rgba(8,6,6,.92) 35%); }
         .pr-btn { font-family:var(--font-dialogue); font-size:15px; letter-spacing:1px; padding:10px 20px; border-radius:4px; cursor:pointer; color:#1a0505;
@@ -985,7 +989,8 @@ zIndex: 10,
       })()}
 
       {/* ── RESULTS: INTAKE REPORT ───────────────────────────── */}
-      {/* You run the Frail Initiative, so a pull is an intake on your desk, highest rarity first:
+      {/* You're the Frail Initiative's new rookie manager, so a pull is an intake on your desk,
+          signed off with the signature from your job application, highest rarity first:
           • 5★/6★ are people → personnel files: ID photo, typed details, a stamp
             (HIRED = new, PROMOTED = a copy you already had, SURPLUS = maxed, paid out in coins)
           • 3★/4★ are moments → evidence: a taped-on Polaroid with a handwritten caption
@@ -1005,7 +1010,7 @@ zIndex: 10,
           <div className="pr-screen">
             <div className="pr-desk" />
             <div className="pr-head">
-              <div className="pr-org">FRAIL INITIATIVE <span>·</span> ADMINISTRATION</div>
+              <div className="pr-org">FRAIL INITIATIVE <span>·</span> FIELD OFFICE</div>
               <div className="pr-title">INTAKE REPORT</div>
               <div className="pr-meta">
                 <span>REQ. Nº {reqNo}</span><span>{today}</span><span>DRIVE: {activeBanner.name.toUpperCase()}</span>
@@ -1083,8 +1088,10 @@ zIndex: 10,
             )}
 
             <div className="pr-sign" style={{ animationDelay: `${STAMP_IN + 0.2}s` }}>
-              <span className="pr-sig">the Administrator</span>
-              <span className="pr-line">APPROVED BY · ADMINISTRATOR, FRAIL INITIATIVE</span>
+              <span className="pr-sig">
+                {profile?.signature ? <img src={profile.signature} alt="your signature" draggable={false} /> : <i>{profile?.name || 'the Manager'}</i>}
+              </span>
+              <span className="pr-line">REVIEWED BY · {(profile?.name || 'MANAGER').toUpperCase()} · FIELD MANAGER (PROBATION)</span>
             </div>
 
             <div className="pr-bar">
