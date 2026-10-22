@@ -68,7 +68,7 @@ export default function MainScreen({
 
   // ── Pieces shared by both layouts ─────────────────────────────────────────
   const topBar = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 8 : 12, padding: mobile ? '6px 10px' : '8px 16px', background: '#141928', borderBottom: '2px solid #ff8c00', flexShrink: 0, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 8 : 12, padding: mobile ? '6px 10px' : '8px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink: 0, flexWrap: 'wrap' }}>
       <div className="pill" style={{ borderColor: '#5588ff' }}><GemIcon size={mobile ? 20 : 26} /><span style={{ color: '#fff' }}>{pullCurrency}</span></div>
       <div className="pill" style={{ borderColor: '#cc8800' }}><CoinIcon size={mobile ? 20 : 26} /><span style={{ color: '#f0c040' }}>{fmt(coins)}</span></div>
       <div style={{ fontSize: mobile ? 11 : 13, color: '#778', lineHeight: 1.3 }}>
@@ -113,9 +113,9 @@ export default function MainScreen({
   );
 
   const heroBar = (
-    <div style={{ background: '#0f1625', border: '2px solid #334', borderRadius: 6, padding: mobile ? '8px 8px' : '10px 14px', display: 'flex', flexDirection: mobile && portrait ? 'column' : 'row', alignItems: mobile && portrait ? 'stretch' : 'center', justifyContent: 'center', gap: mobile ? 8 : 12, flex: mobile && portrait ? 1 : undefined, flexShrink: 0, flexWrap: mobile && !portrait ? 'wrap' : 'nowrap' }}>
+    <div style={{ background:'var(--panel-deep)', border: '2px solid var(--line)', borderRadius: 6, padding: mobile ? '8px 8px' : '10px 14px', display: 'flex', flexDirection: mobile && portrait ? 'column' : 'row', alignItems: mobile && portrait ? 'stretch' : 'center', justifyContent: 'center', gap: mobile ? 8 : 12, flex: mobile && portrait ? 1 : undefined, flexShrink: 0, flexWrap: mobile && !portrait ? 'wrap' : 'nowrap' }}>
       {(
-        <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, overflow: 'hidden', border: `2px solid ${mainCard ? '#f0c040' : '#334'}`, background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 4, overflow: 'hidden', border: `2px solid ${mainCard ? '#f0c040' : 'var(--line)'}`, background:'var(--desk)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {mainCard ? <img src={thumb(mainCard.image)} alt={mainCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span style={{ fontSize: 9, color: '#445', textAlign: 'center' }}>NO CARD</span>}
         </div>
@@ -213,7 +213,7 @@ export default function MainScreen({
   );
 
   return (
-    <div style={{ width: '100%', height: '100dvh', background: '#1a2035', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-ui)', userSelect: 'none', cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
+    <div style={{ width: '100%', height: '100dvh', background:'var(--desk)', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-ui)', userSelect: 'none', cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
       <style>{`
         ${mobile ? '' : `* { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }`}
         img { -webkit-user-drag:none; user-select:none; }
@@ -221,7 +221,7 @@ export default function MainScreen({
         .train-btn { border:2px solid #f0c040; background:#2a2000; color:#f0c040; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; padding:7px 12px; white-space:nowrap; display:flex; gap:6px; align-items:center; flex-shrink:0; touch-action:manipulation; }
         .train-btn:disabled { opacity:0.4; cursor:not-allowed; }
         .train-btn:hover:not(:disabled) { background:#3a2c00; }
-        .m-panel { flex:1; display:flex; flex-direction:column; gap:7px; background:#0f1625; border:2px solid #334; border-radius:6px; padding:8px; min-height:0; }
+        .m-panel { flex:1; display:flex; flex-direction:column; gap:7px; background:var(--panel-deep); border:2px solid var(--line); border-radius:6px; padding:8px; min-height:0; }
         ${mobile ? '.train-btn { justify-content:center; padding:9px 6px; width:100%; }' : ''}
       `}</style>
 

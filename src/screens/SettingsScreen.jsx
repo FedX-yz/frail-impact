@@ -39,7 +39,7 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
   };
 
   return (
-    <div style={{ width:'100%', height:"100dvh", background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#eee', position:'relative' }}>
+    <div style={{ width:'100%', height:"100dvh", background:'var(--desk)', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#eee', position:'relative' }}>
 
       <style>{`
         @keyframes phantomVisibleSnap {
@@ -101,8 +101,7 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
         alignItems:'center', 
         justifyContent: 'space-between', 
         padding:'10px 16px', 
-        background:'#141928', 
-        borderBottom:'2px solid #ff8c00', 
+        background:'var(--bar)', borderBottom:'2px solid #ff8c00', 
         flexShrink:0 
       }}>
         {/* FAKE BACK BUTTON (Top Left) */}
@@ -135,8 +134,8 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           )}
 
           {/* Sound & feel */}
-          <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>SOUND &amp; FEEL</div>
-          <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16, display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ color:'#8a7a63', fontSize:11, letterSpacing:2, fontFamily:'var(--label)' }}>SOUND &amp; FEEL</div>
+          <div style={{ background:'var(--panel)', border:'1px solid var(--line)', borderRadius:8, padding:16, display:'flex', flexDirection:'column', gap:14 }}>
             <label style={{ display:'flex', alignItems:'center', gap:12 }}>
               <span style={{ width:110, fontWeight:700 }}>Volume</span>
               <input id="set-volume" type="range" min={0} max={1} step={0.05} value={prefs.volume}
@@ -152,15 +151,15 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           </div>
 
           {/* You, the manager */}
-          <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>MANAGER</div>
-          <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+          <div style={{ color:'#8a7a63', fontSize:11, letterSpacing:2, fontFamily:'var(--label)' }}>MANAGER</div>
+          <div style={{ background:'var(--panel)', border:'1px solid var(--line)', borderRadius:8, padding:16, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
             <div style={{ flex:'1 1 200px' }}>
               <div style={{ fontWeight:700 }}>{profile?.name || 'Not hired yet'}</div>
               <div style={{ color:'#778', fontSize:13 }}>{profile?.signature ? 'Field Manager (probation), Frail Initiative' : 'No signed application on file'}</div>
             </div>
             {profile?.signature && <img src={profile.signature} alt="your signature" style={{ height:44, maxWidth:200, background:'#e7dcc2', borderRadius:4, padding:'4px 10px' }} />}
             {profile?.signature ? (
-              <button onClick={() => { playPress(); setResign(true); }} style={{ background:'#1a2035', border:'1px solid #ff8c00', color:'#ff8c00', padding:'8px 16px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700 }}>
+              <button onClick={() => { playPress(); setResign(true); }} style={{ background:'var(--desk)', border:'1px solid #ff8c00', color:'#ff8c00', padding:'8px 16px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700 }}>
                 Sign again
               </button>
             ) : <div style={{ color:'#889', fontSize:13 }}>Sign your job application in story mode: Tower → Briefing.</div>}
@@ -168,13 +167,13 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           {resign && <JobApplication initialName={profile?.name ?? ''} onSigned={p => { setProfile?.(p); setResign(false); }} />}
 
           {/* Save Section */}
-          <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>SAVE DATA</div>
-          <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16 }}>
+          <div style={{ color:'#8a7a63', fontSize:11, letterSpacing:2, fontFamily:'var(--label)' }}>SAVE DATA</div>
+          <div style={{ background:'var(--panel)', border:'1px solid var(--line)', borderRadius:8, padding:16 }}>
             <div style={{ fontWeight:700, marginBottom:4 }}>Reset All Progress</div>
             <div style={{ color:'#778', fontSize:13, marginBottom:12 }}>Deletes everything. Cannot be undone.</div>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={handleReset} style={{
-                background:confirmReset?'#cc0000':'#1a2035',
+                background:confirmReset?'#cc0000':'var(--panel-deep)',
                 border:`2px solid ${confirmReset?'#ff4444':'#cc3300'}`,
                 color:confirmReset?'#fff':'#cc3300',
                 padding:'8px 20px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700,
@@ -202,7 +201,7 @@ function Toggle({ label, sub, on, onChange }) {
         <span style={{ display:'block', fontWeight:700 }}>{label}</span>
         <span style={{ display:'block', color:'#778', fontSize:12 }}>{sub}</span>
       </span>
-      <span style={{ width:44, height:24, borderRadius:12, background: on ? '#ff8c00' : '#2a2a3a', position:'relative', transition:'background 0.15s', flexShrink:0 }}>
+      <span style={{ width:44, height:24, borderRadius:12, background: on ? '#ff8c00' : 'var(--line)', position:'relative', transition:'background 0.15s', flexShrink:0 }}>
         <span style={{ position:'absolute', top:3, left: on ? 23 : 3, width:18, height:18, borderRadius:9, background:'#fff', transition:'left 0.15s' }} />
       </span>
     </button>

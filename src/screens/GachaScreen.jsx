@@ -712,7 +712,7 @@ export default function GachaScreen({
       {phase === 'idle' && (
         <div style={{
   width: '100%', height: '100%',
-  background: '#1a1a2e',
+  background: 'var(--desk)',
   display: 'flex', flexDirection: 'column',
   alignItems: 'center', overflow: 'hidden',
   zoom: 0.9,

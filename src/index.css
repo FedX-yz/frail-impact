@@ -7,12 +7,25 @@
   --font-dramatic: 'Grenze Gotisch', Georgia, serif;             /* stage and boss announcements, names on pull reveals */
   --font-hit: 'Rubik Distressed', Impact, sans-serif;            /* damage numbers and the combo counter */
   --font-glitch: 'Rubik Glitch', Impact, sans-serif;             /* things breaking: the crash screen, story defeats */
+
+  /* Menu look: the Frail Initiative office at night (warm desk, dark folders).
+     To go back to the old navy look, swap these for the values in the comments. */
+  --bg-solid: #120e0c;                                                   /* was #1a2035 */
+  --desk: radial-gradient(ellipse 70% 55% at 50% -8%, rgba(255,190,110,0.13), transparent 70%),
+          repeating-linear-gradient(92deg, rgba(255,255,255,0.016) 0 2px, transparent 2px 7px),
+          repeating-linear-gradient(88deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 13px),
+          linear-gradient(180deg, #1c1612 0%, #130f0c 60%, #0c0a08 100%);   /* was #1a2035 */
+  --bar: linear-gradient(180deg, #241c16, #18130f);                      /* top bars, was #141928 */
+  --panel: #1e1813;                                                      /* panels, was #141928 */
+  --panel-deep: #16120f;                                                 /* inner panels, was #0f1625 */
+  --line: #3d3127;                                                       /* panel borders, was #2a2a3a / #334 */
+  --label: 'Special Elite', 'Courier New', monospace;                    /* small section labels */
   font-family: var(--font-ui);
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #1a2035;
+  background-color: var(--bg-solid);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -25,7 +38,7 @@ html, body, #root { height: 100%; }
 body {
   margin: 0;
   min-width: 320px;
-  background-color: #1a2035;
+  background-color: var(--bg-solid);
   overscroll-behavior: none;   /* no rubber-band / pull-to-refresh while playing */
 }
 

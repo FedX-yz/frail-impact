@@ -136,7 +136,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
       </div>
 
       {/* TABS */}
-      <div style={{ display: 'flex', flexShrink: 0, borderBottom: '2px solid #1a2a40', background: '#0d1220' }}>
+      <div style={{ display: 'flex', flexShrink: 0, borderBottom: '2px solid var(--line)', background: 'var(--bar)' }}>
         {[
           { key: 'exchange', content: <><CoinIcon size={14} /> EXCHANGE</> },
           { key: 'fusion',   content: <>⚡ FUSION</>                        },
@@ -222,7 +222,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
             <div style={{ textAlign: 'center', color: '#445', marginTop: 60 }}>
               <div style={{ fontSize: 44 }}>🃏</div>
               <div style={{ marginTop: 10, fontSize: 16 }}>You don't own any cards yet.</div>
-              <div style={{ fontSize: 13, marginTop: 6, color: '#334' }}>Buy cards in Exchange, or pull from the gacha.</div>
+              <div style={{ fontSize: 13, marginTop: 6, color: 'var(--line)' }}>Buy cards in Exchange, or pull from the gacha.</div>
             </div>
           ) : (
             <>
@@ -335,7 +335,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
               <span style={{ color: '#f0c040', fontWeight: 700, fontSize: 20 }}>{fmt(RARITY_PRICE[pendingCard.rarity])}</span>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setConfirmBuy(null)} style={{ flex: 1, padding: '9px 0', border: '1px solid #334', background: 'transparent', color: '#778', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
+              <button onClick={() => setConfirmBuy(null)} style={{ flex: 1, padding: '9px 0', border: '1px solid var(--line)', background: 'transparent', color: '#778', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
                 Cancel
               </button>
               <button onClick={() => handleBuy(pendingCard)} style={{ flex: 2, padding: '9px 0', border: 'none', background: `linear-gradient(90deg,${RARITY_COLOR[pendingCard.rarity]}88,${RARITY_COLOR[pendingCard.rarity]})`, color: '#fff', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
@@ -371,7 +371,7 @@ function SiPips({ si, color, glow = false }) {
 }
 
 // ─── Static styles ────────────────────────────────────────────────────────────
-const ROOT       = { width: '100%', height: '100dvh', background: '#0d1220', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-ui)', userSelect: 'none', overflow: 'hidden' };
+const ROOT       = { width: '100%', height: '100dvh', background: 'var(--desk)', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-ui)', userSelect: 'none', overflow: 'hidden' };
 const TOP_BAR    = { display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', background: '#090e1a', borderBottom: '2px solid #ff8c00', flexShrink: 0 };
 const COIN_BADGE = { display: 'flex', alignItems: 'center', gap: 6, background: '#0f1420', border: '2px solid #cc8800', borderRadius: 20, padding: '4px 14px 4px 8px' };
 const GRID       = { flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 44vw), 1fr))', gap: 12, alignContent: 'start' };
@@ -383,7 +383,7 @@ const CSS = `
   @keyframes cs-fadeUp  { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
   @keyframes cs-modalIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.88)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
   ::-webkit-scrollbar{width:6px}
-  ::-webkit-scrollbar-track{background:#0d1220}
+  ::-webkit-scrollbar-track{background:var(--bg-solid)}
   ::-webkit-scrollbar-thumb{background:#1a2a40;border-radius:3px}
 
   .cs-card {
@@ -421,5 +421,5 @@ const CSS = `
   .cs-fuse-btn{border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px;padding:7px 0;width:100%;background:linear-gradient(90deg,#4400aa,#aa44ff);color:#fff;transition:filter 0.15s}
   .cs-fuse-btn:hover:not(:disabled){filter:brightness(1.2)}
   .cs-fuse-btn:disabled{opacity:0.35;cursor:not-allowed}
-  .cs-owned-badge{position:absolute;top:7px;right:9px;background:#0f1420;border:1px solid #334;border-radius:10px;padding:2px 8px;font-size:11px;color:#aaa;font-weight:700}
+  .cs-owned-badge{position:absolute;top:7px;right:9px;background:#0f1420;border:1px solid var(--line);border-radius:10px;padding:2px 8px;font-size:11px;color:#aaa;font-weight:700}
 `;

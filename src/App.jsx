@@ -265,7 +265,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ width:'100%', height:'100vh', background:'#1a2035', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-ui)' }}>
+    <div style={{ width:'100%', height:'100vh', background:'var(--desk)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-ui)' }}>
       <div style={{ color:'#ff8c00', fontSize:34, fontWeight:700, letterSpacing:3, marginBottom:16 }}>{screen.toUpperCase()}</div>
       <div style={{ color:'#445', marginBottom:32, fontSize:15 }}>coming soon</div>
       <button onClick={() => navigate('main')} style={{ background:'none', border:'2px solid #ff8c00', color:'#ff8c00', padding:'10px 28px', borderRadius:6, cursor:'pointer', fontSize:15 }}>← back</button>

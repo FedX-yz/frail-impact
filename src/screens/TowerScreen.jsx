@@ -131,12 +131,12 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
   const mc = deck?.main;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#070b14', fontFamily: 'var(--font-ui)', userSelect: 'none', color: '#ddd',
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--desk)', fontFamily: 'var(--font-ui)', userSelect: 'none', color: '#ddd',
       cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
       <style>{STORY_CSS + TOWER_CSS}</style>
 
       {/* top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 6 : 12, padding: mobile ? '6px 8px' : '8px 16px', background: '#141928', borderBottom: '2px solid #ff8c00', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 6 : 12, padding: mobile ? '6px 8px' : '8px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink: 0 }}>
         <button className="tw-back" onPointerDown={() => playClose()} onClick={() => navigate('main')}>← back</button>
         {!mobile && <div style={{ color: '#ff8c00', fontWeight: 800, letterSpacing: 3, fontSize: 18 }}>TOWER</div>}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 0 }}>
@@ -198,7 +198,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
 
             {/* you */}
             <div className="tw-marker" style={{ left: `${selNode.x}%`, top: `${selNode.y}%`, transform: `translate(-50%, calc(-100% - ${nodeSize * (kindOf(selNode) === 'boss' ? 0.62 : 0.5) + 4}px))` }}>
-              <div style={{ width: mobile ? 34 : 42, height: mobile ? 34 : 42, borderRadius: '50%', border: `3px solid ${CODEC.yellow}`, overflow: 'hidden', background: '#1a2035', boxShadow: '0 4px 10px rgba(0,0,0,0.6)' }}>
+              <div style={{ width: mobile ? 34 : 42, height: mobile ? 34 : 42, borderRadius: '50%', border: `3px solid ${CODEC.yellow}`, overflow: 'hidden', background:'var(--desk)', boxShadow: '0 4px 10px rgba(0,0,0,0.6)' }}>
                 {mc ? <img src={thumb(mc.image)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', background: '#ff8c00' }} />}
               </div>
               <div style={{ width: 0, height: 0, margin: '-1px auto 0', borderLeft: '7px solid transparent', borderRight: '7px solid transparent', borderTop: `9px solid ${CODEC.yellow}` }} />
@@ -295,7 +295,7 @@ const TOWER_CSS = `
   .tw-arrow:disabled { opacity:0.2; cursor:default; }
   .tw-pill { display:flex; align-items:center; gap:5px; background:#0f1420; border:2px solid; border-radius:20px; padding:2px 10px 2px 4px; font-weight:700; font-size:14px; color:#fff; flex-shrink:0; }
   .tw-pill img { width:20px; height:20px; object-fit:contain; image-rendering:pixelated; }
-  .tw-view { scrollbar-width: thin; scrollbar-color: #334 transparent; }
+  .tw-view { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
   .tw-node { position:absolute; transform:translate(-50%,-50%); border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center;
              border:4px solid #4b5568; background:radial-gradient(circle at 40% 35%, #2a3550, #121a2c); box-shadow:0 5px 0 rgba(0,0,0,0.45), 0 8px 18px rgba(0,0,0,0.4);
              cursor:pointer; transition:transform 0.12s, border-color 0.2s; z-index:2; touch-action:manipulation; }

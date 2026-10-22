@@ -206,6 +206,13 @@ and the Room 16 skill picker.
 | Boiyoujustgotoofed | 7:3 ratio bar: time the click for a big guaranteed crit | Overtime: every click is a ratio hit, then Collapse |
 | Astrec (Heavenly Restriction) | enemies aim where you were 0.5s ago; fast auto-attacks | Sorcerer Killer: charges from kills; faster autos + executes |
 
+### Menu look
+
+The menu colors (desk background, top bars, panels, borders) are a handful of settings at the
+top of `src/index.css` (`--desk`, `--bar`, `--panel`, `--panel-deep`, `--line`). Each one notes
+the old navy value, so switching back is changing those lines. The hand-drawn menu buttons,
+coins and gems aren't touched by it.
+
 ### Fonts
 
 The fonts load from Google Fonts in `index.html`, and each kind of text has its own setting at

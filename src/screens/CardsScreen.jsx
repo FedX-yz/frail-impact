@@ -28,7 +28,7 @@ const CardTile = memo(({ card, isSelected, count, onSelect }) => {
     <div onClick={() => onSelect(card)} style={{
       border: `2px solid ${isSelected ? '#ff8c00' : RARITY_COLOR[card.rarity]}`,
       borderRadius:8, padding:8,
-      background: isSelected ? '#2a1f00' : '#141928',
+      background: isSelected ? '#2a1f00' : 'var(--panel)',
       cursor:'pointer', textAlign:'center', transition:'all 0.15s', position:'relative',
       display: 'flex',
       flexDirection: 'column',
@@ -66,7 +66,7 @@ const CardTile = memo(({ card, isSelected, count, onSelect }) => {
 // tiles are much taller on wide screens, so the last rows could never be
 // scrolled into view. A few dozen cards with lazy thumbnails don't need it.)
 const FastVirtualGrid = memo(({ cards, counts, selected, onSelect, cols = 5 }) => (
-  <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 12, background: '#1a2035' }}>
+  <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 12, background:'var(--desk)' }}>
     {cards.length === 0 ? (
       <div style={{ color: '#445', textAlign: 'center', fontSize: 14, marginTop: 40 }}>no cards yet — go pull!</div>
     ) : (
@@ -120,14 +120,14 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
   }, []);
 
   return (
-    <div style={{ width:'100%', height:"100dvh", background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#eee' }}>
+    <div style={{ width:'100%', height:"100dvh", background:'var(--desk)', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#eee' }}>
       <style>{`
         img { -webkit-user-drag:none; user-select:none; -webkit-touch-callout: none; }
         body { -webkit-font-smoothing: antialiased; }
       `}</style>
 
       {/* Top bar */}
-      <div style={{ display:'flex', alignItems:'center', padding:'10px 16px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0, gap:12 }}>
+      <div style={{ display:'flex', alignItems:'center', padding:'10px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink:0, gap:12 }}>
         <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
         <span style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2 }}>CODEX</span>
         {!mobile && <span style={{ color:'#445', fontSize:12 }}>{Object.values(counts).reduce((a, b) => a + b, 0)} total · {unique.length} unique</span>}
@@ -143,11 +143,11 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
         <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
           {/* Filter bar */}
-          <div style={{ display:'flex', gap:8, padding:'10px 14px', borderBottom:'1px solid #2a2a3a', flexShrink:0, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:8, padding:'10px 14px', borderBottom:'1px solid var(--line)', flexShrink:0, flexWrap:'wrap' }}>
             {[['all','ALL'],['6','6★'],['5','5★'],['4','4★'],['3','3★'],['sets','◆ SETS']].map(([val, label]) => (
               <button key={val} onClick={() => setFilter(val)} style={{
                 background: filter===val ? '#ff8c0022' : 'none',
-                border: `1px solid ${filter===val ? '#ff8c00' : '#334'}`,
+                border: `1px solid ${filter===val ? '#ff8c00' : 'var(--line)'}`,
                 color: filter===val ? '#ff8c00' : '#556',
                 padding:'4px 14px', borderRadius:4, cursor:'pointer', fontSize:12,
               }}>
@@ -190,8 +190,8 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
         {/* Detail panel — side column on PC, bottom sheet on phones */}
         {mobile && selected && <div onClick={() => setSelected(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40 }} />}
         <div style={mobile
-          ? { display: selected ? 'block' : 'none', position:'fixed', left:0, right:0, bottom:0, maxHeight:'78dvh', zIndex:41, borderTop:'2px solid #ff8c00', borderRadius:'14px 14px 0 0', padding:16, overflowY:'auto', background:'#141928' }
-          : { width:260, flexShrink:0, borderLeft:'1px solid #2a2a3a', padding:16, overflowY:'auto', background:'#141928' }}>
+          ? { display: selected ? 'block' : 'none', position:'fixed', left:0, right:0, bottom:0, maxHeight:'78dvh', zIndex:41, borderTop:'2px solid #ff8c00', borderRadius:'14px 14px 0 0', padding:16, overflowY:'auto', background:'var(--panel)' }
+          : { width:260, flexShrink:0, borderLeft:'1px solid var(--line)', padding:16, overflowY:'auto', background:'var(--panel)' }}>
           {mobile && selected && (
             <button onClick={() => setSelected(null)} style={{ float:'right', background:'none', border:'1px solid #445', color:'#aaa', borderRadius:6, padding:'2px 10px', fontSize:16 }}>×</button>
           )}
@@ -299,7 +299,7 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
               )}
             </>
           ) : (
-            <div style={{ color:'#334', fontSize:13, textAlign:'center', marginTop:60 }}>click a card to view details</div>
+            <div style={{ color:'var(--line)', fontSize:13, textAlign:'center', marginTop:60 }}>click a card to view details</div>
           )}
         </div>
       </div>

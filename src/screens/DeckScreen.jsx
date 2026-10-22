@@ -105,7 +105,7 @@ const pool = CHARACTERS
     .filter(x => x.have > 0);
 
   return (
-    <div style={{ width:'100%', height:'100dvh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#fff' }}>
+    <div style={{ width:'100%', height:'100dvh', background:'var(--desk)', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#fff' }}>
 
       <style>{`
         img { -webkit-user-drag:none; user-select:none; }
@@ -113,12 +113,12 @@ const pool = CHARACTERS
         .slot-card:hover { filter:brightness(1.1); }
         .card-tile { transition:transform 0.12s; cursor:pointer; }
         .card-tile:hover { transform:translateY(-3px) scale(1.03); }
-        .filter-btn { background:#0f1625;border:2px solid #334;color:#667;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:all 0.12s; }
+        .filter-btn { background:var(--panel-deep);border:2px solid var(--line);color:#667;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:all 0.12s; }
         .filter-btn.on { border-color:#ff8c00;color:#ff8c00;background:rgba(255,140,0,0.1); }
       `}</style>
 
       {/* Top bar */}
-      <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 18px', background:'#141928', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 18px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
       <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
         <div style={{ fontSize:18, fontWeight:700, color:'#ff8c00', letterSpacing:1 }}>DECK</div>
         {!mobile && <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★ · 3 of a set in supports = set bonus</div>}
@@ -155,10 +155,10 @@ const pool = CHARACTERS
       }}
     >
       {/* Avatar */}
-      <div style={{ width: isMain ? 56 : 44, height: isMain ? 56 : 44, flexShrink:0, borderRadius:6, overflow:'hidden', background:'#0f1625', border:`1px solid ${card ? rc(card.rarity)+'55' : '#223'}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ width: isMain ? 56 : 44, height: isMain ? 56 : 44, flexShrink:0, borderRadius:6, overflow:'hidden', background:'var(--panel-deep)', border:`1px solid ${card ? rc(card.rarity)+'55' : '#223'}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
         {card
           ? <img src={thumb(card.characterImage || card.image)} alt={card.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { e.target.style.display='none'; }} />
-          : <span style={{ color:'#334', fontSize:20 }}>+</span>}
+          : <span style={{ color:'var(--line)', fontSize:20 }}>+</span>}
       </div>
       {/* Info */}
       <div style={{ minWidth:0, flex:1 }}>
@@ -290,9 +290,9 @@ const pool = CHARACTERS
           {/* Grid */}
           <div style={{ flex:1, overflowY:'auto', padding:12 }}>
             {CHARACTERS.every(c => !cardCounts[c.id]) ? (
-              <div style={{ textAlign:'center', color:'#334', marginTop:60, fontSize:15 }}>No cards yet. Go pull!</div>
+              <div style={{ textAlign:'center', color:'var(--line)', marginTop:60, fontSize:15 }}>No cards yet. Go pull!</div>
             ) : pool.length === 0 ? (
-              <div style={{ textAlign:'center', color:'#334', marginTop:60, fontSize:14 }}>
+              <div style={{ textAlign:'center', color:'var(--line)', marginTop:60, fontSize:14 }}>
                 {activeSlot === 'main' ? 'No 5★/6★ cards yet' : `No ${filter}★ cards`}
               </div>
             ) : (

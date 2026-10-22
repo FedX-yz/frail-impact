@@ -124,7 +124,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
     body = (
       <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#0b0f1c', fontFamily: 'var(--font-ui)', userSelect: 'none',
         cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: mobile ? '6px 8px' : '8px 14px', background: '#141928', borderBottom: `2px solid ${CODEC.yellow}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: mobile ? '6px 8px' : '8px 14px', background:'var(--bar)', borderBottom: `2px solid ${CODEC.yellow}`, flexShrink: 0 }}>
           <button className="vn-btn" onClick={() => { playPress(); setMenu(true); }} title="Pause (Esc)">❚❚ PAUSE</button>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: CODEC.yellow, fontFamily: CODEC.font, fontWeight: 900, letterSpacing: 1, fontSize: mobile ? 13 : 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
