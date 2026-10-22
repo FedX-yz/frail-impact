@@ -14,7 +14,7 @@ const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90 };
 
 // Plays steps from `i` until one needs the player (a line, a choice, a wait)
 // and returns the new state. Nothing here touches the screen directly.
-function run(steps, from, prev) {
+function run(steps, from, prev, signed = false) {
   const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false };
   const labelAt = (name) => steps.findIndex(x => x?.label === name);
   let i = from;
@@ -24,7 +24,7 @@ function run(steps, from, prev) {
     if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? '') }, choice: null, wait: 0 };
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
-    if (step.application) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx)
+    if (step.application && !signed) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx), once
     if (step.if !== undefined) {   // conditional jump
       if (testFlag(s.flags, step.if) && step.goto) { const j = labelAt(step.goto); if (j >= 0) { i = j; continue; } }
       i++; continue;
@@ -57,7 +57,8 @@ function run(steps, from, prev) {
 // onSign(profile): called when they sign the job application.
 export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, profile = null, onSign }) {
   const steps = SCENES[sceneId] ?? NO_STEPS;
-  const [st, setSt] = useState(() => run(steps, 0, { bg: undefined, actors: [], flags: { ...flags }, line: null, log: [] }));
+  const signedRef = useRef(!!profile?.signature);   // already signed → skip the application step
+  const [st, setSt] = useState(() => run(steps, 0, { bg: undefined, actors: [], flags: { ...flags }, line: null, log: [] }, signedRef.current));
   const [auto, setAuto] = useState(false);
   const [skip, setSkip] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -77,7 +78,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
     if (st.line && !typed) { finish(); return; }
     setSt(prev => {
       const log = prev.line ? [...prev.log, prev.line] : prev.log;
-      return run(steps, prev.i + 1, { ...prev, log });
+      return run(steps, prev.i + 1, { ...prev, log }, signedRef.current);
     });
   }, [st, typed, finish, steps, showLog]);
 
@@ -86,7 +87,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
     setSt(prev => {
       const p = { ...prev, flags: { ...prev.flags, ...(c.set ?? {}) }, log: [...prev.log, ...(prev.line ? [prev.line] : []), { who: 'choice', text: `▸ ${c.text}` }], line: null };
       const j = c.goto ? steps.findIndex(x => x?.label === c.goto) : -1;
-      return run(steps, j >= 0 ? j : prev.i + 1, p);
+      return run(steps, j >= 0 ? j : prev.i + 1, p, signedRef.current);
     });
     setSkip(false);
   };
@@ -99,7 +100,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
     else if (skip) ms = 70;
     else if (auto && typed) ms = 900 + text.length * 28;
     if (ms == null) return;
-    const id = setTimeout(() => setSt(prev => run(steps, prev.i + 1, { ...prev, log: prev.line ? [...prev.log, prev.line] : prev.log })), ms);
+    const id = setTimeout(() => setSt(prev => run(steps, prev.i + 1, { ...prev, log: prev.line ? [...prev.log, prev.line] : prev.log }, signedRef.current)), ms);
     return () => clearTimeout(id);
   }, [st, skip, auto, typed, text, steps]);
 
@@ -210,7 +211,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
         </div>
       )}
       {st.application && (
-        <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev)); }} />
+        <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)); }} />
       )}
     </div>
   );

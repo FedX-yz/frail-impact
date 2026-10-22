@@ -29,12 +29,12 @@
 //                                       signs by hand (JobApplication.jsx; edit the terms there)
 //   {manager} inside a line           becomes the player's name from the application
 //
-// 'intro' plays the first time someone opens the game (before they've signed).
 // Everything below is SAMPLE content to show the format. Replace it freely.
 // ─────────────────────────────────────────────────────────────────────────────
 export const SCENES = {
-  // First launch. PLACEHOLDER lines — rewrite them; keep the { application: true } step.
-  intro: [
+  // Story mode's first level: you get hired. PLACEHOLDER lines — rewrite them; keep the
+  // { application: true } step (it's skipped on replays once you've signed).
+  'c1-briefing': [
     { bg: null },
     'A phone buzzes in the dark. Unknown number.',
     { show: 'stranger', at: 'center' },
@@ -45,12 +45,8 @@ export const SCENES = {
     ['stranger', 'Why you? You\'ll find out. Probably.'],
     ['stranger', 'There\'s an application on your desk. Sign it.'],
     { application: true },
-    ['stranger', 'Welcome to the Frail Initiative, Manager {manager}.'],
-    ['stranger', 'Your first recruits are waiting. Try not to get them eaten on day one.'],
+    ['stranger', 'Welcome to the Frail Initiative, Manager {manager}. Your handler will take it from here.'],
     { hide: 'all' },
-  ],
-
-  'c1-briefing': [
     { bg: 'backgrounds/bg2.png' },
     'Somewhere above the city, a signal comes through.',
     { show: 'handler', at: 'right' },

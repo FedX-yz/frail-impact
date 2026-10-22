@@ -189,3 +189,74 @@ export function sfx(name, arg) {
   if (file && ready.has(`${BASE}sounds/${file}`)) { start(ready.get(`${BASE}sounds/${file}`), 1, vary(1, 0.06)); return; }
   try { SYNTH[name]?.(arg); } catch { /* audio not available */ }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Paper sounds: the pen while you sign, rubber stamps, a pencil scribble.
+// Generated in code. To use a real recording, put it in public/sounds/ and
+// write its name in PAPER_FILES (the pen file should be a loop of scratching).
+// ─────────────────────────────────────────────────────────────────────────────
+const PAPER_FILES = { stamp: null, scribble: null, pen: null };
+Object.values(PAPER_FILES).filter(Boolean).forEach(f => loadBuffer(`${BASE}sounds/${f}`).catch(() => {}));
+const paperFile = name => { const f = PAPER_FILES[name]; return f && ready.get(`${BASE}sounds/${f}`); };
+let lastStamp = -1;
+
+// A rubber stamp hitting paper: a low thud, a slap, a little paper rattle.
+export function playStamp(vol = 1) {
+  if (getSettings().volume <= 0) return;
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  if (now() - lastStamp < 0.06) return;   // a pile of stamps at once stays a pile, not a roar
+  lastStamp = now();
+  const file = paperFile('stamp');
+  if (file) { start(file, vol, vary(1, 0.05)); return; }
+  try {
+    tone('sine', vary(150, 0.06), 45, 0.16, 0.55 * vol);
+    crunch(vary(1100), 0.05, 0.6 * vol, 0.9);
+    crunch(vary(3200), 0.09, 0.18 * vol, 1.2, 0.012);
+  } catch { /* audio not available */ }
+}
+
+// A quick pencil scribble (a handwritten caption).
+export function playScribble(dur = 0.7, vol = 1) {
+  if (getSettings().volume <= 0) return;
+  const file = paperFile('scribble');
+  if (file) { start(file, vol); return; }
+  try {
+    const t = now(), src = _audioCtx.createBufferSource(), f = _audioCtx.createBiquadFilter(), g = _audioCtx.createGain();
+    src.buffer = noise(); src.loop = true;
+    f.type = 'bandpass'; f.frequency.value = 3800; f.Q.value = 0.9;
+    g.gain.setValueAtTime(0, t);
+    for (let k = 0; k < dur / 0.09; k++) {   // short strokes
+      const s = t + k * 0.09;
+      g.gain.linearRampToValueAtTime(vary(0.13, 0.4) * vol, s + 0.03);
+      g.gain.linearRampToValueAtTime(0.02 * vol, s + 0.08);
+      f.frequency.setValueAtTime(vary(3800, 0.25), s);
+    }
+    g.gain.linearRampToValueAtTime(0, t + dur + 0.05);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t); src.stop(t + dur + 0.1);
+  } catch { /* audio not available */ }
+}
+
+// The pen while you sign: starts silent, gets louder and brighter the faster
+// the pen moves (setPenSpeed), and fades when it stops.
+export function penStart() {
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  try {
+    const src = _audioCtx.createBufferSource(), f = _audioCtx.createBiquadFilter(), g = _audioCtx.createGain();
+    const file = paperFile('pen');
+    src.buffer = file ?? noise(); src.loop = true;
+    f.type = file ? 'allpass' : 'bandpass'; f.frequency.value = 3000; f.Q.value = 0.8;
+    g.gain.value = 0;
+    src.connect(f); f.connect(g); g.connect(master); src.start();
+    return {
+      speed(v) {   // v: px per ms
+        const t = now(), amt = Math.min(1, v / 1.6);
+        g.gain.cancelScheduledValues(t);
+        g.gain.setTargetAtTime(amt * 0.32, t, 0.03);
+        g.gain.setTargetAtTime(0, t + 0.09, 0.05);   // pen held still → quiet
+        if (!file) f.frequency.setTargetAtTime(2200 + amt * 3200, t, 0.05);
+      },
+      stop() { const t = now(); g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, 0.04); src.stop(t + 0.25); },
+    };
+  } catch { return { speed() {}, stop() {} }; }
+}

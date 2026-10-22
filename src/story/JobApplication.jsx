@@ -3,9 +3,7 @@
 // onSigned({ name, signature }) gets the name and the signature as a PNG data URL;
 // the game keeps both and shows the signature on every intake report (pull results).
 import { useEffect, useRef, useState } from 'react';
-import { playPress, playSFX } from '../utils/sfx';
-
-const BASE = import.meta.env.BASE_URL;
+import { playPress, playStamp, penStart } from '../utils/sfx';
 
 // The fine print. Edit freely.
 const APPLICATION_TERMS = [
@@ -25,6 +23,8 @@ export default function JobApplication({ onSigned, initialName = '' }) {
   const [stamped, setStamped] = useState(false);
   const canvasRef = useRef(null);
   const pen = useRef(null);       // the stroke being drawn: last points and width
+  const scratch = useRef(null);   // the pen sound
+  useEffect(() => () => scratch.current?.stop(), []);
   const inkRef = useRef(0);
 
   // size the canvas to its box (sharp on high-DPI screens)
@@ -41,6 +41,7 @@ export default function JobApplication({ onSigned, initialName = '' }) {
     try { canvasRef.current.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
     const p = local(e);
     pen.current = { pts: [p, p], w: 2.6 };
+    scratch.current?.stop(); scratch.current = penStart();
     const ctx = canvasRef.current.getContext('2d');
     ctx.beginPath(); ctx.arc(p.x, p.y, 1.3, 0, Math.PI * 2); ctx.fill();   // a dot for a tap
   };
@@ -55,6 +56,7 @@ export default function JobApplication({ onSigned, initialName = '' }) {
       if (d < 0.8) continue;
       // faster = thinner, like a real pen; eased so the line doesn't jump
       const speed = d / Math.max(1, p.t - b.t);
+      scratch.current?.speed(speed);
       s.w += (Math.max(1.3, Math.min(3.4, 3.6 - speed * 1.1)) - s.w) * 0.35;
       // smooth curve through the midpoints
       const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, m2 = { x: (b.x + p.x) / 2, y: (b.y + p.y) / 2 };
@@ -65,7 +67,7 @@ export default function JobApplication({ onSigned, initialName = '' }) {
     }
     if (inkRef.current >= MIN_INK && ink < MIN_INK) setInk(inkRef.current);
   };
-  const up = () => { pen.current = null; setInk(inkRef.current); };
+  const up = () => { pen.current = null; scratch.current?.stop(); scratch.current = null; setInk(inkRef.current); };
 
   const clear = () => {
     if (stamped) return;
@@ -97,7 +99,7 @@ export default function JobApplication({ onSigned, initialName = '' }) {
     const signature = exportSignature();
     if (!signature) return;
     setStamped(true);
-    playSFX(`${BASE}sounds/ui_warp.mp3`);
+    setTimeout(() => playStamp(1.2), 220);   // when the stamp lands
     setTimeout(() => onSigned({ name: name.trim().slice(0, 20), signature, signedAt: new Date().toISOString() }), 1500);
   };
 

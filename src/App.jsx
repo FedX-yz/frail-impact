@@ -14,8 +14,6 @@ import { createBattle } from './combat/engine';
 import { computePlayerStats } from './combat/stats';
 import { SKILL_UNLOCK, ULT_UNLOCK } from './combat/kits';
 import { trainCost } from './combat/balance';
-import VNPlayer from './story/VNPlayer';
-import useIsMobile from './hooks/useIsMobile';
 
 const DEV_KEY = 'frail_dev';
 const devFromStorage = () => {
@@ -101,10 +99,8 @@ export default function App() {
   const [pity4,         setPity4]         = useState(s.pity4         ?? 0);
   const [pity5,         setPity5]         = useState(s.pity5         ?? 0);
   // You, the manager: { name, signature (PNG data URL), signedAt } from the job application
+  // you sign in story mode's first level (Briefing)
   const [profile,       setProfile]       = useState(s.profile ?? null);
-  // the intro (and the application) plays until you've signed
-  const [intro,         setIntro]         = useState(() => !s.profile?.signature);
-  const { mobile, portrait } = useIsMobile();
   // Story mode (Tower): cleared nodes, choice flags, where you are on the map
   const [story,         setStory]         = useState(() => normalizeStory(s.story));
 
@@ -213,13 +209,8 @@ export default function App() {
   const navigate = (sc) => setScreen(sc);
   const common   = { navigate, pullCurrency, setPullCurrency, coins, setCoins, collection, setCollection };
 
-  if (intro) return (
-    <VNPlayer sceneId="intro" flags={{}} mobile={mobile} portrait={portrait} profile={profile}
-      onSign={setProfile} onEnd={() => setIntro(false)} />
-  );
-
   if (screen === 'tower') return (
-    <TowerScreen navigate={navigate} story={story} setStory={setStory} stats={stats} deck={deck}
+    <TowerScreen navigate={navigate} story={story} setStory={setStory} stats={stats} deck={deck} profile={profile} setProfile={setProfile}
       devMode={devMode} onReward={giveRewards} coins={coins} pullCurrency={pullCurrency} />
   );
 

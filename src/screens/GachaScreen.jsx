@@ -3,7 +3,7 @@ import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
 import { bannerStatus, formatTimeLeft, formatLength } from '../utils/bannerSchedule';
 import { useLiveSchedule } from '../utils/liveSchedule';
-import { playClose, preloadSound, playMusic, stopMusic, musicElapsed } from '../utils/sfx';
+import { playClose, preloadSound, playMusic, stopMusic, musicElapsed, playStamp, playScribble } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import FocusImg from '../components/FocusImg';
 import { getSettings } from '../utils/settings';
@@ -184,6 +184,23 @@ export default function GachaScreen({
   useEffect(() => { batchRef.current = batch; }, [batch]);
 
   const currentCard = batch[queueIdx] ?? null;
+
+  // Paper sounds, timed to the animations: a scribble as a Polaroid's caption is
+  // written, a thud when each stamp lands (reveal: one card; report: every file)
+  useEffect(() => {
+    if (phase !== 'reveal-queue' || !currentCard) return;
+    const high = currentCard.rarity >= 5;
+    const rowCount = 2 + (currentCard.element ? 1 : 0) + (currentCard.skill ? 1 : 0) + (currentCard.ult ? 1 : 0);
+    const timers = [setTimeout(() => playStamp(), (high ? 0.75 + rowCount * 0.16 + 0.2 : 1.3) * 1000)];
+    if (!high) timers.push(setTimeout(() => playScribble(0.8, 0.8), 700));
+    return () => timers.forEach(clearTimeout);
+  }, [phase, currentCard]);
+  useEffect(() => {
+    if (phase !== 'results' || !summaryBatch.length) return;
+    const n = summaryBatch.length, first = 0.35 + n * 0.08;
+    const timers = summaryBatch.map((_, i) => setTimeout(() => playStamp(0.55), (first + i * 0.07 + 0.18) * 1000));
+    return () => timers.forEach(clearTimeout);
+  }, [phase, summaryBatch]);
 
   // Pull music build-up: { lead, key } once the track is fading in; flash = the drop just hit
   const [build, setBuild] = useState(null);
@@ -477,6 +494,87 @@ export default function GachaScreen({
         @keyframes buildTremble    { ${TREMBLE} }
         @keyframes dropFlash       { 0%{opacity:0.95} 100%{opacity:0} }
         @keyframes dropJolt        { 0%{transform:scale(1.18)} 25%{transform:scale(0.96) translate(-6px,4px)} 45%{transform:scale(1.03) translate(5px,-3px)} 70%{transform:scale(0.99) translate(-2px,1px)} 100%{transform:scale(1)} }
+        /* reveal queue (one card at a time) */
+        .rv-screen { position:absolute; inset:0; z-index:52; cursor:pointer; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center;
+          font-family:var(--font-dialogue); color:#e9e1cc; padding:56px 16px 44px; }
+        .rv-desk { position:absolute; inset:0; z-index:-2;
+          background: radial-gradient(ellipse 55% 45% at 50% 45%, color-mix(in srgb, var(--rg) 70%, transparent), transparent 70%),
+                      radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255,196,110,0.16), transparent 70%),
+                      repeating-linear-gradient(92deg, rgba(255,255,255,0.018) 0 2px, transparent 2px 7px),
+                      linear-gradient(180deg, #1d1612 0%, #120d0b 55%, #070506 100%); }
+        .rv-screen.agent .rv-desk { background: radial-gradient(ellipse 50% 60% at 35% 50%, color-mix(in srgb, var(--rg) 90%, transparent), transparent 70%),
+                      radial-gradient(circle, rgba(0,0,0,.35) 30%, transparent 34%) 0 0/14px 14px, linear-gradient(160deg, #0d0a14 0%, #070509 100%); }
+        .rv-band { position:absolute; left:-20%; width:140%; z-index:-1; transform:rotate(-12deg); }
+        .rv-band.b1 { top:58%; height:22%; background: color-mix(in srgb, var(--rc) 85%, #000); animation: rvBandL .45s cubic-bezier(.2,.9,.2,1) both; }
+        .rv-band.b2 { top:18%; height:5%; background:#f4f1ea; opacity:.85; animation: rvBandR .45s .12s cubic-bezier(.2,.9,.2,1) both; }
+        .rv-top { position:absolute; top:16px; left:20px; right:20px; display:flex; justify-content:space-between; align-items:center; font-size:13px; letter-spacing:2px; color:#b9ab8c; z-index:5; }
+        .rv-skip { font-family:var(--font-dialogue); font-size:13px; letter-spacing:1px; padding:7px 14px; border-radius:4px; cursor:pointer; color:#2a2219; background:#e7dcc2; border:2px solid #000; box-shadow:3px 3px 0 #000; }
+        .rv-flash { position:absolute; inset:0; z-index:20; background:#fff; pointer-events:none; animation: dropFlash 0.8s ease-out forwards; }
+        .rv-tap { position:absolute; bottom:16px; left:0; right:0; text-align:center; font-size:12px; letter-spacing:2px; color:rgba(233,225,204,.4); animation: tapHint 2s infinite; }
+        /* 5★/6★ agent */
+        .rv-agent { display:flex; align-items:center; justify-content:center; gap:clamp(12px,3vw,40px); width:100%; max-width:1000px; height:100%; }
+        .rv-art { flex:1 1 55%; height:100%; display:flex; align-items:center; justify-content:center; min-width:0; }
+        .rv-cutout { max-width:100%; max-height:min(72vh, 620px); object-fit:contain; filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 24px var(--rc)) drop-shadow(0 12px 30px rgba(0,0,0,.6));
+          animation: rvArtIn .6s cubic-bezier(.2,.9,.25,1.1) both; }
+        .rv-photo { position:relative; display:block; height:min(66vh, 560px); aspect-ratio: 2424 / 3552; max-width:100%; padding:10px; background:#f4f1ea; transform:rotate(-3deg);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--rc) 70%, transparent), 0 0 40px var(--rg), 0 16px 40px rgba(0,0,0,.7); animation: rvArtIn .6s cubic-bezier(.2,.9,.25,1.1) both; }
+        .rv-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+        .rv-clip { position:absolute; top:-12px; left:18%; width:20px; height:50px; border:4px solid #e7b94a; border-radius:10px; z-index:2; }
+        .rv-dossier { position:relative; flex:0 1 360px; min-width:0; padding:16px 18px 18px; color:#211a12; border-radius:3px; border-top:5px solid var(--rc);
+          background: radial-gradient(ellipse at 30% 15%, rgba(255,255,255,.45), transparent 60%), repeating-linear-gradient(0deg, rgba(120,95,60,.05) 0 1px, transparent 1px 3px), #ece2c9;
+          box-shadow: 0 16px 40px rgba(0,0,0,.7); transform: rotate(1.5deg); animation: rvDossIn .5s .2s cubic-bezier(.2,.9,.25,1.1) both; }
+        .rv-dhead { display:flex; justify-content:space-between; gap:8px; font-size:9.5px; letter-spacing:1.5px; color:#6f6150; border-bottom:1.5px solid #211a12; padding-bottom:5px; }
+        .rv-stars { color:var(--rc); letter-spacing:0; font-size:12px; text-shadow:0 0 6px var(--rg); }
+        .rv-name { font-family:var(--font-dramatic); font-size:clamp(30px,4vw,46px); line-height:1.05; margin:8px 0 6px; color:#160f08; }
+        .rv-row { display:flex; gap:10px; align-items:baseline; border-bottom:1px dotted rgba(40,30,20,.35); padding:3px 0; animation: rvType .5s steps(24) both; }
+        .rv-row i { font-style:normal; font-size:9.5px; letter-spacing:1.5px; color:#6f6150; width:76px; flex-shrink:0; }
+        .rv-row b { font-weight:400; font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .rv-stamp { position:absolute; right:10px; top:26px; font-family:var(--font-hit); font-size:34px; letter-spacing:2px; padding:0 10px; border:4px solid currentColor; border-radius:7px;
+          transform:rotate(-14deg); opacity:.88; mix-blend-mode:multiply; animation: prStamp .3s cubic-bezier(.3,1.4,.5,1) both; pointer-events:none; }
+        .rv-stamp.hired { color:#b3121b; } .rv-stamp.promoted { color:#1f5fa8; font-size:26px; } .rv-stamp.surplus { color:#5b4a2a; font-size:28px; }
+        .rv-approve { display:flex; align-items:flex-end; gap:10px; margin-top:10px; border-bottom:1.5px solid #211a12; padding-bottom:2px; animation: rvWrite .6s steps(14) both; }
+        .rv-approve span { font-size:9.5px; letter-spacing:1.5px; color:#6f6150; padding-bottom:4px; }
+        .rv-approve img { height:40px; max-width:220px; object-fit:contain; transform:rotate(-3deg); }
+        .pr-approve { display:flex; align-items:flex-end; gap:6px; margin-top:2px; }
+        .pr-approve i { font-style:normal; font-size:8px; letter-spacing:1px; color:#7a6a50; padding-bottom:3px; }
+        .pr-approve img { height:22px; max-width:70%; object-fit:contain; transform:rotate(-3deg); }
+        .rv-coins { display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:#5b4a2a; animation: prFade .4s ease both; }
+        .rv-coins img { width:20px; height:20px; image-rendering:pixelated; }
+        .rv-coins b { color:#9a6b00; font-weight:400; font-size:16px; }
+        .rv-coins.solo { color:#d9cba8; margin-top:14px; } .rv-coins.solo b { color:#f0c040; }
+        @media (max-width: 760px) {
+          .rv-approve img { height:32px; }
+          .rv-agent { flex-direction:column; gap:10px; }
+          .rv-art { flex:1 1 auto; height:auto; max-height:46vh; }
+          .rv-cutout { max-height:44vh; } .rv-photo { height:40vh; }
+          .rv-dossier { flex:0 0 auto; width:min(100%, 380px); padding:12px 14px 14px; transform:rotate(1deg); }
+          .rv-name { font-size:30px; margin:4px 0 2px; } .rv-row b { font-size:13px; } .rv-stamp { font-size:26px; top:20px; }
+        }
+        /* 3★/4★ evidence */
+        .rv-evidence { display:flex; flex-direction:column; align-items:center; }
+        .rv-pol { position:relative; display:flex; flex-direction:column; width:min(76vw, 330px); padding:12px 12px 10px; background:#f3efe6; border-radius:2px; transform:rotate(-3deg);
+          box-shadow: 0 18px 40px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.06); animation: rvPolIn .55s cubic-bezier(.2,.9,.25,1.1) both; }
+        .rv-screen.r4 .rv-pol { box-shadow: 0 18px 40px rgba(0,0,0,.65), 0 0 30px rgba(168,85,247,.45); }
+        .rv-tape { position:absolute; top:-12px; left:50%; width:44%; height:24px; transform:translateX(-50%) rotate(-3deg); z-index:2; background: rgba(235,225,190,.75);
+          clip-path: polygon(3% 0, 97% 4%, 100% 50%, 96% 100%, 2% 96%, 0 45%); }
+        .rv-screen.r4 .rv-tape { background: rgba(178,130,240,.65); }
+        .rv-pol-photo { position:relative; display:block; aspect-ratio:1/1; overflow:hidden; background:#111; }
+        .rv-pol-photo img { width:100%; height:100%; object-fit:cover; object-position:50% 30%; animation: rvDevelop 1.3s ease-out both; }
+        .rv-pol-photo img.framed { position:absolute; width:132.4%; height:auto; left:-16.2%; top:-13.2%; max-width:none; object-fit:initial; }
+        .rv-caption { font-family:var(--font-narration); font-size:28px; color:#22306e; text-align:center; margin-top:8px; line-height:1.1; animation: rvWrite .9s .7s steps(18) both; }
+        .rv-pstars { text-align:center; font-size:13px; color:var(--rc); }
+        .rv-pstamp { position:absolute; right:10px; top:14%; font-family:var(--font-hit); font-size:24px; letter-spacing:1px; padding:0 8px; border:3px solid currentColor; border-radius:5px;
+          transform:rotate(-12deg); background:rgba(243,239,230,.85); opacity:.93; animation: prStamp .28s 1.1s cubic-bezier(.3,1.4,.5,1) both; }
+        .rv-pstamp.logged { color:#2f6b3a; } .rv-pstamp.duplicate { color:#1f5fa8; } .rv-pstamp.surplus { color:#5b4a2a; }
+        .rv-note { margin-top:18px; font-size:14px; color:#cfc3a6; text-align:center; max-width:340px; animation: prFade .4s 1s ease both; }
+        @keyframes rvBandL { from { transform: rotate(-12deg) translateX(-100%); } to { transform: rotate(-12deg) translateX(0); } }
+        @keyframes rvBandR { from { transform: rotate(-12deg) translateX(100%); } to { transform: rotate(-12deg) translateX(0); } }
+        @keyframes rvArtIn { from { opacity:0; transform: translateX(-60px) scale(.94); filter: brightness(3); } to { opacity:1; } }
+        @keyframes rvDossIn { from { opacity:0; transform: translateX(60px) rotate(8deg); } to { opacity:1; transform: rotate(1.5deg); } }
+        @keyframes rvType { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+        @keyframes rvPolIn { from { opacity:0; transform: translateY(-70px) rotate(-14deg) scale(1.1); } to { opacity:1; transform: rotate(-3deg); } }
+        @keyframes rvDevelop { 0% { filter: brightness(2.6) contrast(.4) sepia(.6) blur(3px); } 100% { filter: none; } }
+        @keyframes rvWrite { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
         /* personnel report (pull results) */
         .pr-screen { position:absolute; inset:0; z-index:60; overflow:auto; color:#e9e1cc; display:flex; flex-direction:column; align-items:center;
           padding:20px 12px 0; font-family:var(--font-dialogue); background:#0b0a0d; }
@@ -891,7 +989,10 @@ zIndex: 10,
         </div>
       )}
 
-      {/* ── REVEAL QUEUE ─────────────────────────────────────── */}
+      {/* ── REVEAL QUEUE: one card at a time, on your desk ───── */}
+      {/* 5★/6★ = a new agent: big art, a personnel dossier typing itself out, then a stamp.
+          3★/4★ = evidence: a Polaroid that develops on the desk, with a handwritten caption.
+          Maxed cards get SURPLUS and show the coins they turned into. */}
       {phase === 'reveal-queue' && batch.length > 0 && currentCard && (() => {
         const c            = currentCard;
         const isHigh       = isHighRarity(c);
@@ -900,97 +1001,70 @@ zIndex: 10,
         const isS5Dupe     = si >= 4;
         const S5_COIN_VALUES = { 6: 5000, 5: 2500, 4: 500, 3: 100 };
         const coinValue    = S5_COIN_VALUES[c.rarity] || 0;
-
+        const stamp = isS5Dupe ? 'SURPLUS' : c.isNew === false ? (isHigh ? 'PROMOTED' : 'DUPLICATE') : (isHigh ? 'HIRED' : 'LOGGED');
+        const fileNo = `${String(queueIdx + 1).padStart(2, '0')} / ${String(batch.length).padStart(2, '0')}`;
+        const CLEAR = { 3: 'C', 4: 'B', 5: 'A', 6: 'Ω' };
+        const rows = [
+          ['TITLE', c.subtitle], ['CLEARANCE', `LVL ${CLEAR[Math.min(c.rarity, 6)] ?? '?'}`],
+          c.element && ['ELEMENT', c.element], c.skill && ['SKILL', c.skill.name], c.ult && ['ULT', c.ult.name],
+        ].filter(Boolean);
+        const tapLine = isLast ? 'tap to see the report' : 'tap for the next file';
         return (
-          <div
-            onClick={advanceQueue}
-            style={{
-              position:'absolute', inset:0, zIndex:52, cursor:'pointer', overflow:'hidden',
-              background:`radial-gradient(ellipse at 50% 55%,${rg(c.rarity)} 0%,#05000f 65%)`,
-              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            }}
-          >
-            {(c.characterImage || c.image) && (
-              <div style={{ position:'absolute', inset:0, zIndex:0, backgroundImage:`url(${c.characterImage||c.image})`, backgroundSize:'cover', backgroundPosition:'center top', filter:'blur(32px) brightness(0.2)', transform:'scale(1.1)' }} />
-            )}
+          <div key={c.instanceId} onClick={advanceQueue} className={`rv-screen ${isHigh ? 'agent' : 'evidence'} r${Math.min(c.rarity, 6)}`}
+            style={{ '--rc': rc(c.rarity), '--rg': rg(c.rarity) }}>
+            <div className="rv-desk" />
+            {isHigh && <><div className="rv-band b1" /><div className="rv-band b2" /></>}
 
-            <div style={{ position:'absolute', top:20, left:24, color:'rgba(255,255,255,0.4)', fontSize:14, zIndex:2 }}>{queueIdx+1} / {batch.length}</div>
-            {flash && <div key={`flash${queueIdx}`} onAnimationEnd={() => setFlash(false)}
-              style={{ position:'absolute', inset:0, zIndex:20, background:'#fff', pointerEvents:'none', animation:'dropFlash 0.8s ease-out forwards' }} />}
-
-            {!isHigh && !isLast && (
-              <button
-                onClick={handleSmartSkip}
-                style={{
-                  position:'absolute', top:20, right:20, zIndex:10,
-                  background:'rgba(255,255,255,0.12)', backdropFilter:'blur(8px)',
-                  border:'1px solid rgba(255,255,255,0.2)',
-                  borderRadius:10, color:'#fff',
-                  fontSize:14, padding:'10px 24px', cursor:'pointer',
-                }}
-              >
-                Skip all →
-              </button>
-            )}
-
-            <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:18, padding:'20px 32px', textAlign:'center',
-              animation: flash ? 'dropJolt 0.5s ease-out' : 'none' }}>
-              <div style={{ position:'relative' }}>
-                <img
-                  key={c.instanceId}
-                  src={c.characterImage || c.image}
-                  alt={c.name}
-                  draggable={false}
-                  style={{ maxHeight:'50vh', maxWidth:'80vw', objectFit:'contain', filter:`drop-shadow(0 0 40px ${rg(c.rarity)})`, animation:'revealUp 0.6s cubic-bezier(0.34,1.56,0.64,1)', display:'block', opacity: isS5Dupe ? 0.5 : 1 }}
-                  onError={e => { const fb = c.characterImage||c.image; if (fb && e.target.src !== fb) e.target.src = fb; }}
-                />
-
-                {isS5Dupe && (
-                  <div style={{
-                    position:'absolute', inset:0, zIndex:3,
-                    display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-                    gap:16,
-                    background:'radial-gradient(ellipse at 50% 52%, rgba(240,192,64,0.22) 0%, rgba(0,0,0,0.55) 65%)',
-                    animation:'convertOverlay 0.3s ease both',
-                  }}>
-                    <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      <div style={{ position:'absolute', width:90, height:90, borderRadius:'50%', border:'3px solid rgba(240,192,64,0.6)', animation:'ringPulse 1s cubic-bezier(0,0,0.2,1) 0.55s both', pointerEvents:'none' }} />
-                      <div style={{ position:'absolute', width:90, height:90, borderRadius:'50%', border:'2px solid rgba(240,192,64,0.35)', animation:'ringPulse 1s cubic-bezier(0,0,0.2,1) 0.75s both', pointerEvents:'none' }} />
-                      <img src={`${BASE}ui/ui_cucoin.png`} alt="coin" draggable={false} style={{ width:90, height:90, objectFit:'contain', imageRendering:'pixelated', animation:'coinEntry 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.1s both, coinIdle 2.4s ease-in-out 0.9s infinite, coinShine 2s ease-in-out 1s infinite' }} />
-                    </div>
-                    <div style={{ fontSize:38, fontWeight:900, color:'#f0c040', textShadow:'0 0 28px rgba(240,192,64,0.95), 0 2px 8px rgba(0,0,0,0.8)', letterSpacing:1, lineHeight:1, animation:'amountPop 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.45s both' }}>
-                      +{formatCoins(coinValue)}
-                    </div>
-                    <div style={{ color:'#f0c040', fontSize:13, fontWeight:800, letterSpacing:4, textShadow:'0 0 14px rgba(240,192,64,0.6)', background:'rgba(0,0,0,0.45)', border:'1px solid rgba(240,192,64,0.4)', borderRadius:20, padding:'5px 20px', animation:'badgeSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.65s both' }}>
-                      CONVERTED
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display:'flex', gap:8 }}>
-                {[...Array(Math.min(c.rarity,6))].map((_,i) => (
-                  <span key={i} style={{ fontSize:28, color:rc(c.rarity), filter:`drop-shadow(0 0 8px ${rc(c.rarity)})`, animation:`starPop 0.45s ${0.1+i*0.07}s cubic-bezier(0.34,1.56,0.64,1) both` }}>★</span>
-                ))}
-              </div>
-
-              <div>
-                <div style={{ fontFamily:'var(--font-dramatic)', fontSize:'clamp(26px,4.6vw,52px)', fontWeight:800, letterSpacing:1, color:rc(c.rarity), animation:isHigh?'highPulse 2s ease-in-out infinite':'none', opacity: isS5Dupe ? 0.6 : 1 }}>{c.name}</div>
-                <div style={{ color:'rgba(255,255,255,0.55)', fontSize:16, marginTop:4, opacity: isS5Dupe ? 0.6 : 1 }}>{c.subtitle}</div>
-                {c.skill && <div style={{ color:'rgba(196,181,253,0.7)', fontSize:13, marginTop:6, opacity: isS5Dupe ? 0.6 : 1 }}>✦ {c.skill.name}{c.ult ? ` · ⚡ ${c.ult.name}` : ''}</div>}
-              </div>
-
-              <div style={{ color:'rgba(255,255,255,0.2)', fontSize:13, animation:'tapHint 2s infinite' }}>
-                {isLast ? 'tap to finish' : 'tap anywhere for next'}
-              </div>
+            <div className="rv-top">
+              <span>FILE {fileNo}</span>
+              {!isHigh && !isLast && <button className="rv-skip" onClick={handleSmartSkip}>Skip to {batch.slice(queueIdx + 1).some(isHighRarity) ? 'next agent' : 'report'} →</button>}
             </div>
+            {flash && <div key={`flash${queueIdx}`} onAnimationEnd={() => setFlash(false)} className="rv-flash" />}
+
+            {isHigh ? (
+              <div className="rv-agent" style={{ animation: flash ? 'dropJolt 0.5s ease-out' : undefined }}>
+                <div className="rv-art">
+                  {c.sprite ? <img src={c.sprite} alt={c.name} draggable={false} className="rv-cutout" />
+                    : <span className="rv-photo"><span className="rv-clip" /><img src={c.cardArt || c.characterImage || c.image} alt={c.name} draggable={false} /></span>}
+                </div>
+                <div className="rv-dossier">
+                  <div className="rv-dhead"><span>FRAIL INITIATIVE · PERSONNEL</span><span className="rv-stars">{'★'.repeat(Math.min(c.rarity, 6))}</span></div>
+                  <div className="rv-name">{c.name}</div>
+                  {rows.map(([k, v], i) => (
+                    <div key={k} className="rv-row" style={{ animationDelay: `${0.55 + i * 0.16}s` }}><i>{k}</i><b>{v}</b></div>
+                  ))}
+                  <span className={`rv-stamp ${stamp.toLowerCase()}`} style={{ animationDelay: `${0.75 + rows.length * 0.16}s` }}>{stamp}</span>
+                  {isS5Dupe && <div className="rv-coins" style={{ animationDelay: `${1 + rows.length * 0.16}s` }}>
+                    <img src={`${BASE}ui/ui_cucoin.png`} alt="" draggable={false} /> refunded <b>+{formatCoins(coinValue)}</b> coins</div>}
+                  {profile?.signature && <div className="rv-approve" style={{ animationDelay: `${0.85 + rows.length * 0.16}s` }}>
+                    <span>APPROVED</span><img src={profile.signature} alt="your signature" draggable={false} /></div>}
+                </div>
+              </div>
+            ) : (
+              <div className="rv-evidence" style={{ animation: flash ? 'dropJolt 0.5s ease-out' : undefined }}>
+                <div className="rv-pol">
+                  <span className="rv-tape" />
+                  <span className="rv-pol-photo">
+                    <img src={c.cardArt || c.characterImage || c.image} alt={c.name} draggable={false} className={c.cardArt ? undefined : 'framed'} />
+                  </span>
+                  <span className="rv-caption">{c.name}</span>
+                  <span className="rv-pstars">{'★'.repeat(c.rarity)}</span>
+                  <span className={`rv-pstamp ${stamp.toLowerCase()}`}>{stamp}</span>
+                </div>
+                {c.subtitle && <div className="rv-note">“{c.subtitle}”</div>}
+                {isS5Dupe && <div className="rv-coins solo"><img src={`${BASE}ui/ui_cucoin.png`} alt="" draggable={false} /> refunded <b>+{formatCoins(coinValue)}</b> coins</div>}
+              </div>
+            )}
+
+            <div className="rv-tap">{tapLine}</div>
           </div>
         );
       })()}
 
       {/* ── RESULTS: INTAKE REPORT ───────────────────────────── */}
       {/* You're the Frail Initiative's new rookie manager, so a pull is an intake on your desk,
-          signed off with the signature from your job application, highest rarity first:
+          highest rarity first (once you've signed your job application in story mode, the
+          personnel files carry your signature):
           • 5★/6★ are people → personnel files: ID photo, typed details, a stamp
             (HIRED = new, PROMOTED = a copy you already had, SURPLUS = maxed, paid out in coins)
           • 3★/4★ are moments → evidence: a taped-on Polaroid with a handwritten caption
@@ -1073,6 +1147,7 @@ zIndex: 10,
                         {c.subtitle && <span className="pr-row pr-sub"><i>TITLE</i><b>{c.subtitle}</b></span>}
                         <span className="pr-row"><i>CLEARANCE</i><b style={{ color: 'var(--rc)' }}>LVL {CLEAR[Math.min(c.rarity, 6)] ?? '?'}</b></span>
                         <span className="pr-row pr-id"><i>FILE</i><b>FI-{String(c.id).padStart(4, '0')}</b></span>
+                        {profile?.signature && <span className="pr-approve"><i>APPROVED</i><img src={profile.signature} alt="" draggable={false} /></span>}
                       </span>
                     </span>
                   </button>
@@ -1086,13 +1161,6 @@ zIndex: 10,
                 Surplus personnel refunded: <b>+{formatCoins(s5CoinsEarned)} coins</b>
               </div>
             )}
-
-            <div className="pr-sign" style={{ animationDelay: `${STAMP_IN + 0.2}s` }}>
-              <span className="pr-sig">
-                {profile?.signature ? <img src={profile.signature} alt="your signature" draggable={false} /> : <i>{profile?.name || 'the Manager'}</i>}
-              </span>
-              <span className="pr-line">REVIEWED BY · {(profile?.name || 'MANAGER').toUpperCase()} · FIELD MANAGER (PROBATION)</span>
-            </div>
 
             <div className="pr-bar">
               <button className="pr-btn ghost" onClick={() => { setSummaryBatch([]); setPhase('idle'); setS5CoinsEarned(0); }}>File report</button>

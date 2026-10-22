@@ -33,7 +33,7 @@ function triggered(w, s, ev) {
 }
 
 // One story level: intro cutscene → battle (with codec lines) → outro cutscene → results.
-export default function StoryLevel({ node, story, stats, mainCard, mobile, portrait, devMode, onReward, onComplete, onLeave }) {
+export default function StoryLevel({ node, story, stats, mainCard, mobile, portrait, devMode, onReward, onComplete, onLeave, profile, onSign }) {
   const firstClear = useRef(!story.cleared[node.id]).current;
   const first = node.intro ? 'intro' : node.battle ? 'battle' : node.outro ? 'outro' : 'result';
   const [phase, setPhase] = useState(first);
@@ -117,7 +117,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
   // ── Screens ───────────────────────────────────────────────────────────────
   let body = null;
   if (phase === 'intro' || phase === 'outro') {
-    body = <VNPlayer key={phase} sceneId={node[phase]} flags={flags} onEnd={afterScene(phase)} mobile={mobile} portrait={portrait} />;
+    body = <VNPlayer key={phase} sceneId={node[phase]} flags={flags} onEnd={afterScene(phase)} mobile={mobile} portrait={portrait} profile={profile} onSign={onSign} />;
   } else if (phase === 'battle' && engine) {
     const codecH = current ? (mobile ? 54 : 78) + 8 : 0;
     const boss = node.battle?.boss ? ENEMY_TYPES[node.battle.boss]?.name : null;

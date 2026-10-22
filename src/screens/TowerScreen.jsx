@@ -17,7 +17,7 @@ const kindOf = (n) => (!n.battle ? 'story' : n.battle.boss ? 'boss' : 'battle');
 const ICON = { story: '📖', battle: '⚔', boss: '💀' };
 
 // The Tower: chapter maps made of nodes. Pick a node → play its level.
-export default function TowerScreen({ navigate, story, setStory, stats, deck, devMode, onReward, coins, pullCurrency }) {
+export default function TowerScreen({ navigate, story, setStory, stats, deck, devMode, onReward, coins, pullCurrency, profile, setProfile }) {
   const { mobile, portrait } = useIsMobile();
   const [unlockAll, setUnlockAll] = useState(false);
   const [playing, setPlaying] = useState(null);       // node id being played
@@ -117,7 +117,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
 
   if (playingNode) {
     return (
-      <StoryLevel key={playing} node={playingNode} story={story} stats={stats} mainCard={deck?.main ?? null}
+      <StoryLevel key={playing} node={playingNode} story={story} stats={stats} mainCard={deck?.main ?? null} profile={profile} onSign={setProfile}
         mobile={mobile} portrait={portrait} devMode={devMode} onReward={onReward}
         onComplete={complete} onLeave={() => setPlaying(null)} />
     );

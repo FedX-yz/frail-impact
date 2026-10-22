@@ -154,13 +154,15 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           <div style={{ color:'#556', fontSize:11, letterSpacing:2 }}>MANAGER</div>
           <div style={{ background:'#141928', border:'1px solid #2a2a3a', borderRadius:8, padding:16, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
             <div style={{ flex:'1 1 200px' }}>
-              <div style={{ fontWeight:700 }}>{profile?.name || 'No name yet'}</div>
-              <div style={{ color:'#778', fontSize:13 }}>Field Manager (probation), Frail Initiative</div>
+              <div style={{ fontWeight:700 }}>{profile?.name || 'Not hired yet'}</div>
+              <div style={{ color:'#778', fontSize:13 }}>{profile?.signature ? 'Field Manager (probation), Frail Initiative' : 'No signed application on file'}</div>
             </div>
             {profile?.signature && <img src={profile.signature} alt="your signature" style={{ height:44, maxWidth:200, background:'#e7dcc2', borderRadius:4, padding:'4px 10px' }} />}
-            <button onClick={() => { playPress(); setResign(true); }} style={{ background:'#1a2035', border:'1px solid #ff8c00', color:'#ff8c00', padding:'8px 16px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700 }}>
-              Sign again
-            </button>
+            {profile?.signature ? (
+              <button onClick={() => { playPress(); setResign(true); }} style={{ background:'#1a2035', border:'1px solid #ff8c00', color:'#ff8c00', padding:'8px 16px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700 }}>
+                Sign again
+              </button>
+            ) : <div style={{ color:'#889', fontSize:13 }}>Sign your job application in story mode: Tower → Briefing.</div>}
           </div>
           {resign && <JobApplication initialName={profile?.name ?? ''} onSigned={p => { setProfile?.(p); setResign(false); }} />}
 

@@ -161,12 +161,14 @@ A cutscene is a list of steps:
 ],
 ```
 
-**The opening:** the first time someone plays, the `intro` scene in `scenes.js` plays: an
-anonymous figure hires you as the Frail Initiative's new rookie manager, then a job application
-comes up (`{ application: true }`) where you type your name and sign by hand with the mouse or a
-finger. The name and signature are saved; `{manager}` in any line becomes the name, and the
-signature signs off every pull report. The terms on the form are at the top of
-`src/story/JobApplication.jsx`. Settings → Manager shows them and lets you sign again.
+**Getting hired:** story mode's first level (Briefing) opens with an anonymous figure hiring
+you as the Frail Initiative's new rookie manager, then a job application comes up
+(`{ application: true }`) where you type your name and sign by hand with the mouse or a finger
+(with a pen sound, and a HIRED stamp). The name and signature are saved: `{manager}` in any line
+becomes the name, and from then on 5★/6★ personnel files (the pull reveal and the pull report)
+carry your signature. The application only shows once; Settings → Manager can sign again. The
+terms on the form are at the top of `src/story/JobApplication.jsx`; the pen, stamp and pencil
+sounds can be swapped for real recordings in `PAPER_FILES` in `src/utils/sfx.js`.
 
 Flags set by choices are saved, and can change later scenes (`{ if: 'helped', goto: ... }`),
 codec lines (`if: 'helped'`) and even which map nodes exist (`if:` on a node) — that's
