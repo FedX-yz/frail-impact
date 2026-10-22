@@ -5,6 +5,7 @@ import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
 import FocusImg from '../components/FocusImg';
+import CctvOverlay from './CctvOverlay';
 import TapButton from '../components/TapButton';
 
 const BASE = import.meta.env.BASE_URL;
@@ -109,6 +110,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const k = s.k;
   const pl = s.player;
   const shakeOn = getSettings().shake;
+  const cctvOn = getSettings().cctv;
   const shakeX = shakeOn && s.shake > 0 ? (Math.random() - 0.5) * 22 * s.shake : 0;
   const shakeY = shakeOn && s.shake > 0 ? (Math.random() - 0.5) * 22 * s.shake : 0;
   const bossParts = s.enemies.filter(e => e.tier === 'boss');
@@ -417,6 +419,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             ))}
           </div>
         )}
+
+        {/* Security-camera look (Settings → CCTV battle camera) */}
+        {cctvOn && <CctvOverlay cam={((s.stageNum - 1) % 12) + 1} place={s.stage.label ? null : `SECTOR ${s.stageNum}`} hurt={pl.hitT > 0.2} mobile={mobile} />}
 
         {/* Extra layers from the screen using the arena (story mode: codec popups) */}
         {children}

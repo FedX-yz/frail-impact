@@ -1,7 +1,7 @@
 // Player settings (per device). Separate from the save, so "Reset Save"
 // doesn't reset your volume.
 const KEY = 'frail_settings';
-const DEFAULTS = { volume: 1, combatSfx: true, shake: true };
+const DEFAULTS = { volume: 1, combatSfx: true, shake: true, cctv: true };
 
 let current = { ...DEFAULTS };
 try { current = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { /* use defaults */ }
