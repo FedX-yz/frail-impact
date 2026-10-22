@@ -68,6 +68,10 @@ files and finish in seconds.
   `text` (title, drawn on top). Put their paths (e.g. `'ui/ui_standardbannerbg.png'`) in `uiAssets` in `src/data/banners.js`. Only the
   bottom ~77% of `bg`/`text` shows inside the card; the characters can stick out over its top edge.
   The timer goes bottom-right, under an "ends in:" drawn in the `text` layer.
+  Or draw the art on any canvas you like (the Anemic Kaisen banner is 4412×2310): keep all four
+  layers the same size, and add `uiFrame: { size: [width, height], card: [x, y, w, h] }` where
+  `card` is the rectangle the banner card covers (the background's edges). Characters can then
+  stick out on every side, and the game adds the "ends in:" timer itself.
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
   cards with neither use their card art.

@@ -23,6 +23,8 @@ export const DEFAULT_SCHEDULE = {
 
 // Every banner. Which ones are live is decided by the schedule above.
 // uiAssets: the four layers of the banner art, as paths inside public/ (see README).
+// uiFrame (optional): the layers are pictures of any size, all the same, with the banner card
+// at `card` inside them; everything outside the card (characters sticking out) shows too.
 export const BANNERS = [
     {
       id: 'standard',
@@ -63,11 +65,13 @@ export const BANNERS = [
       boostedRarity: 5,
       boostedChance: 0.5,
       uiAssets: {
-        bg:    'ui/ui_anemicbannerbg.png',
-        char1: 'ui/ui_anemicbannerchar1.png',
-        char2: 'ui/ui_anemicbannerchar2.png',
-        text:  'ui/ui_anemicbannertext.png',
+        bg:    'ui/ui_jjkbannerbg.png',
+        char1: 'ui/ui_jjkbannerchar1.png',    // right: Tyran, Boi, Bio
+        char2: 'ui/ui_jjkbannerchar2.png',    // left: Ice, Doro (in front)
+        text:  'ui/ui_jjkbannertext.png',
       },
+      // all four layers are 4412×2310 and the banner card is this rectangle in them (x, y, w, h)
+      uiFrame: { size: [4412, 2310], card: [690, 357, 3139, 1932] },
     },
     {
       id: 'unending-hunger',

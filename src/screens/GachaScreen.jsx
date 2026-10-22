@@ -41,6 +41,22 @@ const pickVideo = v => (!v ? null : typeof v === 'string' ? v
 // Banner art layer: a path inside public/ (written out in full so the build can turn it into a
 // light WebP), or just a file name in public/ui/ without .png
 const uiArt = p => (p.includes('/') ? `${BASE}${p}` : `${BASE}ui/${p}.png`);
+// Where a banner art layer goes on the 16:10 banner card.
+//  • with uiFrame: every layer is the same picture size and the card is the rectangle `card`
+//    in it, so each layer is scaled and shifted until that rectangle covers the card
+//  • without (Retirement Home layout, 3183×2447): bg/text at 130% height shifted up 30%,
+//    characters at 120% height standing on the card's bottom edge, char2 left, char1 right
+const artStyle = (banner, kind) => {
+  const z = { bg: 0, char1: 0, char2: 1, text: 2 }[kind];
+  const f = banner.uiFrame;
+  if (f) {
+    const [W, H] = f.size, [x, y, w, h] = f.card;
+    return { position: 'absolute', left: `${-x / w * 100}%`, top: `${-y / h * 100}%`, width: `${W / w * 100}%`, height: `${H / h * 100}%`,
+      maxWidth: 'none', objectFit: 'fill', zIndex: z, pointerEvents: 'none' };
+  }
+  if (kind === 'bg' || kind === 'text') return { position: 'absolute', top: '-30%', left: 0, width: '100%', height: '130%', objectFit: 'fill', zIndex: z, pointerEvents: 'none' };
+  return { position: 'absolute', [kind === 'char2' ? 'left' : 'right']: '0%', bottom: 1.5, height: '120%', objectFit: 'contain', objectPosition: 'bottom center', zIndex: z, pointerEvents: 'none' };
+};
 
 const formatCoins = v => v >= 1000 ? `${Math.floor(v / 1000)}k` : String(v);
 
@@ -579,14 +595,7 @@ zIndex: 10,
     overflow: 'hidden',
   }}>
     {activeBanner.uiAssets?.bg
-      ? <img src={uiArt(activeBanner.uiAssets.bg)} alt="" draggable={false}
-          style={{
-            position: 'absolute',
-            top: '-30%', left: 0,
-            width: '100%', height: '130%',
-            objectFit: 'fill',
-            zIndex: 0,
-          }} />
+      ? <img src={uiArt(activeBanner.uiAssets.bg)} alt="" draggable={false} style={artStyle(activeBanner, 'bg')} />
       : <div style={{ position:'absolute', inset:0, zIndex:0, background:`radial-gradient(ellipse at 30% 60%, ${activeBanner.accentColor}22 0%, #07000f 70%)` }} />
     }
 
@@ -610,19 +619,22 @@ zIndex: 10,
     })()}
 
     {activeBanner.uiAssets?.text && (
-      <img src={uiArt(activeBanner.uiAssets.text)} alt="" draggable={false}
-        style={{
-          position: 'absolute',
-          top: '-30%', left: 0,
-          width: '100%', height: '130%',
-          objectFit: 'fill',
-          zIndex: 2,
-          pointerEvents: 'none',
-        }} />
+      <img src={uiArt(activeBanner.uiAssets.text)} alt="" draggable={false} style={artStyle(activeBanner, 'text')} />
     )}
 
-    {/* countdown (banners that are always available have none) */}
-    {activeBanner.uiAssets?.text && !isPermanent(activeBanner) && (
+    {/* countdown (banners that are always available have none). Art made on its own canvas
+        (uiFrame) has no "ends in:" drawn in, so it gets a small label of its own. */}
+    {activeBanner.uiFrame && activeBanner.uiAssets?.text && !isPermanent(activeBanner) && (
+      <div style={{
+        position: 'absolute', bottom: '4%', right: '2.5%', zIndex: 3, pointerEvents: 'none',
+        background: 'rgba(8,4,12,0.72)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 6, padding: '3px 8px',
+        color: '#fff', fontSize: 'clamp(10px, 1.3vw, 14px)', fontFamily: "'Courier New', monospace", fontWeight: 700, letterSpacing: '0.06em',
+        textShadow: '0 1px 3px rgba(0,0,0,0.9)', whiteSpace: 'nowrap',
+      }}>
+        <span style={{ fontStyle: 'italic', opacity: 0.8 }}>ends in:</span> {timeLeft}
+      </div>
+    )}
+    {!activeBanner.uiFrame && activeBanner.uiAssets?.text && !isPermanent(activeBanner) && (
       <div style={{
         position: 'absolute', bottom: '9%', right: '4%',
         zIndex: 3, pointerEvents: 'none',
@@ -646,29 +658,11 @@ zIndex: 10,
 
   {/* Characters — outside clip so they pop above, bottom anchored to card bottom */}
   {activeBanner.uiAssets?.char2 && (
-    <img src={uiArt(activeBanner.uiAssets.char2)} alt="" draggable={false}
-      style={{
-        position: 'absolute',
-        left: '0%', bottom: 1.5,
-        height: '120%',
-        objectFit: 'contain',
-        objectPosition: 'bottom center',
-        zIndex: 1,
-        pointerEvents: 'none',
-      }} />
+    <img src={uiArt(activeBanner.uiAssets.char2)} alt="" draggable={false} style={artStyle(activeBanner, 'char2')} />
   )}
 
   {activeBanner.uiAssets?.char1 && (
-    <img src={uiArt(activeBanner.uiAssets.char1)} alt="" draggable={false}
-      style={{
-        position: 'absolute',
-        right: '0%', bottom: 1.5,
-        height: '120%',
-        objectFit: 'contain',
-        objectPosition: 'bottom center',
-        zIndex: 0,
-        pointerEvents: 'none',
-      }} />
+    <img src={uiArt(activeBanner.uiAssets.char1)} alt="" draggable={false} style={artStyle(activeBanner, 'char1')} />
   )}
 </div>
     {/* What's coming after the current limited banner */}
