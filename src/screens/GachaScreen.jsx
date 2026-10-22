@@ -492,7 +492,7 @@ export default function GachaScreen({
         .pr-meta { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; font-size:11px; color:#9c8f74; letter-spacing:1px; }
         .pr-tally { margin-top:6px; font-size:13px; color:#cfc3a6; }
         .pr-tally b { color:#efe6cf; font-weight:400; margin-left:3px; }
-        .pr-files { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:18px 14px; width:100%; max-width:880px; padding:8px 8px 0; }
+        .pr-files { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:18px 14px; width:100%; max-width:880px; padding:8px 8px 0; align-items:start; }
         .pr-files.single { grid-template-columns:minmax(0,1fr); max-width:250px; }
         @media (max-width: 760px) { .pr-files { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px 10px; } }
         .pr-file { position:relative; padding:0; border:none; background:none; cursor:pointer; text-align:left; font-family:inherit;
@@ -549,6 +549,27 @@ export default function GachaScreen({
         .pr-btn.ghost { background:#e7dcc2; color:#2a2219; box-shadow: 3px 3px 0 #000; border-color:#000; }
         @media (max-width: 760px) { .pr-btn { font-size:13px; padding:9px 12px; gap:7px; white-space:nowrap; } }
         .pr-cost { display:inline-flex; align-items:center; gap:4px; background:rgba(0,0,0,.18); border-radius:3px; padding:1px 7px 1px 4px; font-size:13px; }
+        /* evidence Polaroids (3★/4★) */
+        .pr-pol { position:relative; display:flex; flex-direction:column; padding:8px 8px 6px; border:none; cursor:pointer; text-align:center; font-family:inherit;
+          background:#f3efe6; border-radius:2px; margin-top:10px;
+          box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 2px 3px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.06);
+          transform: rotate(var(--tilt)); animation: prDrop .5s cubic-bezier(.2,.8,.25,1.1) both; transition: transform .15s; }
+        .pr-pol:hover { transform: rotate(0deg) translateY(-4px) scale(1.04); z-index:3; }
+        .pr-tape { position:absolute; top:-9px; left:50%; width:46%; height:18px; transform: translateX(-50%) rotate(-3deg); z-index:2;
+          background: rgba(235,225,190,.72); box-shadow: 0 1px 2px rgba(0,0,0,.25);
+          clip-path: polygon(3% 0, 97% 4%, 100% 50%, 96% 100%, 2% 96%, 0 45%); }
+        .pr-pol.r4 .pr-tape { background: rgba(178,130,240,.62); }
+        .pr-pol-photo { position:relative; display:block; aspect-ratio: 1 / 1; overflow:hidden; background:#222; filter: sepia(.15) saturate(.9) contrast(1.05); }
+        .pr-pol.r4 .pr-pol-photo { box-shadow: 0 0 0 2px rgba(168,85,247,.55); }
+        .pr-exhibit { position:absolute; left:4px; bottom:4px; font-size:8px; letter-spacing:1px; color:#fff; background:rgba(0,0,0,.6); padding:1px 4px; font-family:var(--font-dialogue); }
+        .pr-caption { font-family:var(--font-narration); font-size:15px; line-height:1.15; color:#22306e; margin-top:6px; min-height:18px;
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .pr-pol-stars { font-size:8px; color:var(--rc); letter-spacing:-.5px; margin-top:1px; }
+        .pr-files.single .pr-caption { font-size:22px; } .pr-files.single .pr-pol-stars { font-size:12px; }
+        .pr-ev { position:absolute; right:6px; top:18%; font-family:var(--font-hit); font-size:13px; letter-spacing:1px; padding:0 5px; border:2px solid currentColor;
+          border-radius:4px; transform: rotate(-12deg); background:rgba(243,239,230,.85); opacity:.92; animation: prStamp .28s cubic-bezier(.3,1.4,.5,1) both; pointer-events:none; }
+        .pr-ev.logged { color:#2f6b3a; } .pr-ev.duplicate { color:#1f5fa8; } .pr-ev.surplus { color:#5b4a2a; }
+        .pr-files.single .pr-ev { font-size:20px; }
         @keyframes prDrop { from { opacity:0; transform: translateY(-60px) rotate(calc(var(--tilt) * 4)) scale(1.08); } to { opacity:1; transform: rotate(var(--tilt)); } }
         @keyframes prStamp { from { opacity:0; transform: rotate(-14deg) scale(2.6); } to { opacity:.93; transform: rotate(-14deg) scale(1); } }
         @keyframes prFade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
@@ -963,12 +984,17 @@ zIndex: 10,
         );
       })()}
 
-      {/* ── RESULTS: PERSONNEL REPORT ────────────────────────── */}
-      {/* You run the Frail Initiative, so a pull is a recruitment: every card comes back as a
-          personnel file on your desk, with an ID photo, typed details and a stamp
-          (HIRED = new, PROMOTED = a copy you already had, SURPLUS = maxed, paid out in coins). */}
+      {/* ── RESULTS: INTAKE REPORT ───────────────────────────── */}
+      {/* You run the Frail Initiative, so a pull is an intake on your desk, highest rarity first:
+          • 5★/6★ are people → personnel files: ID photo, typed details, a stamp
+            (HIRED = new, PROMOTED = a copy you already had, SURPLUS = maxed, paid out in coins)
+          • 3★/4★ are moments → evidence: a taped-on Polaroid with a handwritten caption
+            (LOGGED = new, DUPLICATE = a copy, SURPLUS = maxed) */}
       {phase === 'results' && (summaryBatch.length > 0 || s5CoinsEarned > 0) && (() => {
         const n = summaryBatch.length;
+        const sorted = summaryBatch.map((c, i) => ({ c, i })).sort((a, b) => b.c.rarity - a.c.rarity || a.i - b.i);
+        const people = summaryBatch.filter(c => c.rarity >= 5).length, items = n - people;
+        let exhibit = 0;
         const tally = [6, 5, 4, 3].map(r => [r, summaryBatch.filter(c => c.rarity === r).length]).filter(([, k]) => k > 0);
         const again = n >= 10 ? 10 : 1;
         const reqNo = String((pity5 * 7919 + n * 104729 + summaryBatch.reduce((a, c) => a + c.id * 31, 0)) % 100000).padStart(5, '0');
@@ -979,20 +1005,42 @@ zIndex: 10,
           <div className="pr-screen">
             <div className="pr-desk" />
             <div className="pr-head">
-              <div className="pr-org">FRAIL INITIATIVE <span>·</span> RECRUITMENT DIVISION</div>
-              <div className="pr-title">PERSONNEL REPORT</div>
+              <div className="pr-org">FRAIL INITIATIVE <span>·</span> ADMINISTRATION</div>
+              <div className="pr-title">INTAKE REPORT</div>
               <div className="pr-meta">
                 <span>REQ. Nº {reqNo}</span><span>{today}</span><span>DRIVE: {activeBanner.name.toUpperCase()}</span>
               </div>
               <div className="pr-tally">
-                {n} recruit{n !== 1 ? 's' : ''} processed{tally.length ? ' —' : ''}
+                {[people && `${people} recruit${people !== 1 ? 's' : ''}`, items && `${items} item${items !== 1 ? 's' : ''} of evidence`].filter(Boolean).join(' · ')}{tally.length ? ' —' : ''}
                 {tally.map(([r, k]) => <span key={r} style={{ color: rc(r) }}> {'★'.repeat(Math.min(r, 6))}<b>×{k}</b></span>)}
               </div>
             </div>
 
             <div className={`pr-files${n === 1 ? ' single' : ''}`}>
-              {summaryBatch.map((c, i) => {
+              {sorted.map(({ c }, i) => {
                 const tilt = ((c.id * 37 + i * 53) % 9 - 4) * 0.55;
+                if (c.rarity < 5) {
+                  // evidence: a Polaroid taped to the report
+                  const ev = c.maxed ? 'surplus' : c.isNew ? 'logged' : 'duplicate';
+                  exhibit++;
+                  return (
+                    <button key={c.instanceId || i} className={`pr-pol r${c.rarity}`} onClick={() => setSelectedResult(c)}
+                      style={{ '--rc': rc(c.rarity), '--tilt': `${tilt * 2.2}deg`, animationDelay: `${0.1 + i * 0.08}s` }}>
+                      <span className="pr-tape" />
+                      <span className="pr-pol-photo">
+                        {c.cardArt ? <img src={c.cardArt} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 30%' }} />
+                          : <img src={thumb(c.characterImage || c.image)} alt="" draggable={false} className="pr-framed"
+                              onError={e => { const fb = c.characterImage || c.image; if (fb && e.target.src !== fb) e.target.src = fb; }} />}
+                        <span className="pr-exhibit">EXHIBIT {String.fromCharCode(64 + exhibit)}</span>
+                      </span>
+                      <span className="pr-caption">{c.name}</span>
+                      <span className="pr-pol-stars">{'★'.repeat(c.rarity)}</span>
+                      <span className={`pr-ev ${ev}`} style={{ animationDelay: `${STAMP_IN + i * 0.07}s` }}>
+                        {ev === 'logged' ? 'LOGGED' : ev === 'duplicate' ? 'DUPLICATE' : 'SURPLUS'}
+                      </span>
+                    </button>
+                  );
+                }
                 const focus = c.portraitFocus && (c.sprite || c.cardArt)
                   ? [c.portraitFocus[0], c.portraitFocus[1], Math.max(1, c.portraitFocus[2] * 0.62)] : null;
                 const stamp = c.maxed ? 'surplus' : c.isNew ? 'hired' : 'promoted';
