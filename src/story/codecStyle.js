@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 // Codec look from the mockup: green panel, yellow frame, bold mono text
 export const CODEC = {
   green: '#1d6b4c', greenDark: '#124a35', yellow: '#f2ea5c', text: '#f6ef6a',
-  font: "'Courier New', Courier, monospace",
+  font: 'var(--font-dialogue)',
 };
 
 // Typewriter: how many characters of `text` are showing. `instant` shows all.

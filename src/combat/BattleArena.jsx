@@ -384,7 +384,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {s.banner && (
           <div className="stage-banner" key={s.banner.text}>
-            <div style={{ fontSize: `clamp(26px, ${7 * k}vmin, 54px)`, fontWeight: 900, letterSpacing: 4,
+            <div style={{ fontFamily: 'var(--font-dramatic)', fontSize: `clamp(30px, ${8 * k}vmin, 62px)`, fontWeight: 800, letterSpacing: 3,
               color: s.banner.boss || s.banner.bad ? '#ff4400' : s.banner.good ? '#4ade80' : '#ffb347',
               textShadow: `0 0 28px ${s.banner.boss || s.banner.bad ? '#ff2200' : s.banner.good ? '#16a34a' : '#ff8c00'}` }}>
               {s.banner.text}
@@ -623,8 +623,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
 const FloaterLayer = memo(function FloaterLayer({ floaters, k }) {
   return floaters.map(f => (
     <div key={f.id} className={`dmg-float${f.kind === 'crit' ? ' crit' : ''}`} style={{
-      left: f.x, top: f.y, color: f.color,
-      fontSize: (f.kind === 'crit' ? 24 : f.big ? 20 : 15) * Math.max(0.8, k), fontWeight: f.big ? 900 : 700,
+      left: f.x, top: f.y, color: f.color, fontFamily: 'var(--font-hit)', fontWeight: 400,
+      fontSize: (f.kind === 'crit' ? 26 : f.big ? 22 : 17) * Math.max(0.8, k),
     }}>
       {f.text}
       {f.icon === 'coin' && <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
@@ -640,7 +640,7 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
   const hot = n >= BAL.COMBO_MAX ? '#f43f5e' : n >= 25 ? '#fb923c' : '#facc15';
   return (
     <div style={{ position: 'absolute', left: 12, top, zIndex: 13, pointerEvents: 'none', textAlign: 'left', transition: 'top 0.2s' }}>
-      <div key={n} className="combo-num" style={{ color: hot, fontSize: 30 * Math.max(0.75, k), fontWeight: 900, lineHeight: 1, textShadow: `0 0 12px ${hot}, 0 2px 4px #000` }}>
+      <div key={n} className="combo-num" style={{ color: hot, fontFamily: 'var(--font-hit)', fontSize: 32 * Math.max(0.75, k), fontWeight: 400, lineHeight: 1, textShadow: `0 0 12px ${hot}, 0 2px 4px #000` }}>
         {n}<span style={{ fontSize: '0.45em', marginLeft: 4, letterSpacing: 1 }}>COMBO</span>
       </div>
       <div style={{ color: '#fde68a', fontSize: 11, fontWeight: 800, textShadow: '0 1px 3px #000' }}>+{pct}% DMG</div>

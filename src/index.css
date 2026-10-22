@@ -1,6 +1,13 @@
 /* Global styles. The game is always dark, whatever the device's light/dark setting. */
 :root {
-  font-family: 'Segoe UI', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* The game's fonts (loaded in index.html). Change one here and it changes everywhere. */
+  --font-ui: 'Cinzel', Georgia, serif;                           /* menus, buttons, labels, cards: everything by default */
+  --font-dialogue: 'Special Elite', 'Courier New', monospace;    /* story dialogue, codec calls, story menus, timers */
+  --font-narration: 'Nothing You Could Do', cursive;             /* story narration (lines nobody says) */
+  --font-dramatic: 'Grenze Gotisch', Georgia, serif;             /* stage and boss announcements, names on pull reveals */
+  --font-hit: 'Rubik Distressed', Impact, sans-serif;            /* damage numbers and the combo counter */
+  --font-glitch: 'Rubik Glitch', Impact, sans-serif;             /* things breaking: the crash screen, story defeats */
+  font-family: var(--font-ui);
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;

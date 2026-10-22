@@ -414,7 +414,7 @@ export default function GachaScreen({
 
   // ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ position:'fixed', inset:0, fontFamily:"'Segoe UI',sans-serif", userSelect:'none' }}>
+    <div style={{ position:'fixed', inset:0, fontFamily:'var(--font-ui)', userSelect:'none' }}>
 
       <audio ref={audioRef} style={{ display:'none' }} />
 
@@ -628,7 +628,7 @@ zIndex: 10,
       <div style={{
         position: 'absolute', bottom: '4%', right: '2.5%', zIndex: 3, pointerEvents: 'none',
         background: 'rgba(8,4,12,0.72)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 6, padding: '3px 8px',
-        color: '#fff', fontSize: 'clamp(10px, 1.3vw, 14px)', fontFamily: "'Courier New', monospace", fontWeight: 700, letterSpacing: '0.06em',
+        color: '#fff', fontSize: 'clamp(10px, 1.3vw, 14px)', fontFamily: 'var(--font-dialogue)', fontWeight: 700, letterSpacing: '0.06em',
         textShadow: '0 1px 3px rgba(0,0,0,0.9)', whiteSpace: 'nowrap',
       }}>
         <span style={{ fontStyle: 'italic', opacity: 0.8 }}>ends in:</span> {timeLeft}
@@ -639,7 +639,7 @@ zIndex: 10,
         position: 'absolute', bottom: '9%', right: '4%',
         zIndex: 3, pointerEvents: 'none',
         color: '#e0e8ff', fontSize: 'clamp(10px, 1.2vw, 14px)',
-        fontFamily: "'Courier New', monospace", fontWeight: 700,
+        fontFamily: 'var(--font-dialogue)', fontWeight: 700,
         letterSpacing: '0.1em',
         textShadow: '0 0 14px rgba(120,180,255,0.9), 0 1px 4px rgba(0,0,0,0.9)',
       }}>
@@ -752,7 +752,7 @@ zIndex: 10,
         <div onClick={() => onCardVideoEnd(true)} style={{ position:'absolute', inset:0, zIndex:51, cursor:'pointer' }}>
           <div style={{ position:'absolute', top:20, right:20, color:'rgba(255,255,255,0.5)', fontSize:13 }}>tap to skip</div>
           {typeof currentCard.resultVideo === 'string' && <div style={{ position:'absolute', bottom:32, left:0, right:0, textAlign:'center' }}>
-            <div style={{ color:rc(currentCard.rarity), fontSize:18, fontWeight:700, textShadow:'0 0 20px rgba(0,0,0,0.8)' }}>
+            <div style={{ color:rc(currentCard.rarity), fontFamily:'var(--font-dramatic)', fontSize:22, fontWeight:700, textShadow:'0 0 20px rgba(0,0,0,0.8)' }}>
               {'★'.repeat(Math.min(currentCard.rarity,6))} {currentCard.name}
             </div>
           </div>}
@@ -868,7 +868,7 @@ zIndex: 10,
               </div>
 
               <div>
-                <div style={{ fontSize:'clamp(22px,4vw,44px)', fontWeight:900, letterSpacing:1, color:rc(c.rarity), animation:isHigh?'highPulse 2s ease-in-out infinite':'none', opacity: isS5Dupe ? 0.6 : 1 }}>{c.name}</div>
+                <div style={{ fontFamily:'var(--font-dramatic)', fontSize:'clamp(26px,4.6vw,52px)', fontWeight:800, letterSpacing:1, color:rc(c.rarity), animation:isHigh?'highPulse 2s ease-in-out infinite':'none', opacity: isS5Dupe ? 0.6 : 1 }}>{c.name}</div>
                 <div style={{ color:'rgba(255,255,255,0.55)', fontSize:16, marginTop:4, opacity: isS5Dupe ? 0.6 : 1 }}>{c.subtitle}</div>
                 {c.skill && <div style={{ color:'rgba(196,181,253,0.7)', fontSize:13, marginTop:6, opacity: isS5Dupe ? 0.6 : 1 }}>✦ {c.skill.name}{c.ult ? ` · ⚡ ${c.ult.name}` : ''}</div>}
               </div>
@@ -1009,7 +1009,7 @@ zIndex: 10,
                 <span key={i} style={{ fontSize:16, color:rc(selectedResult.rarity), filter:`drop-shadow(0 0 4px ${rc(selectedResult.rarity)})` }}>★</span>
               ))}
             </div>
-            <div style={{ fontSize:22, fontWeight:900, color:rc(selectedResult.rarity), textAlign:'center', marginBottom:2 }}>{selectedResult.name}</div>
+            <div style={{ fontFamily:'var(--font-dramatic)', fontSize:25, fontWeight:800, color:rc(selectedResult.rarity), textAlign:'center', marginBottom:2 }}>{selectedResult.name}</div>
             <div style={{ color:'rgba(255,255,255,0.45)', fontSize:13, textAlign:'center', marginBottom:14 }}>{selectedResult.subtitle}</div>
 
             {selectedResult.stats && (

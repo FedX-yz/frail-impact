@@ -105,7 +105,7 @@ const pool = CHARACTERS
     .filter(x => x.have > 0);
 
   return (
-    <div style={{ width:'100%', height:'100dvh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:"'Segoe UI',sans-serif", color:'#fff' }}>
+    <div style={{ width:'100%', height:'100dvh', background:'#1a2035', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#fff' }}>
 
       <style>{`
         img { -webkit-user-drag:none; user-select:none; }

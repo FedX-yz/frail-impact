@@ -213,7 +213,7 @@ export default function MainScreen({
   );
 
   return (
-    <div style={{ width: '100%', height: '100dvh', background: '#1a2035', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none', cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
+    <div style={{ width: '100%', height: '100dvh', background: '#1a2035', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'var(--font-ui)', userSelect: 'none', cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
       <style>{`
         ${mobile ? '' : `* { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }`}
         img { -webkit-user-drag:none; user-select:none; }

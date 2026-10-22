@@ -164,7 +164,8 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
                 {speaker.name}
               </div>
             )}
-            <div style={{ fontWeight: 700, fontStyle: narr ? 'italic' : 'normal', fontSize: tall ? 16 : 21, lineHeight: 1.4, color: narr ? '#cbd5e1' : CODEC.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            <div style={{ fontWeight: narr ? 400 : 700, fontSize: (tall ? 16 : 21) + (narr ? 5 : 0), lineHeight: narr ? 1.3 : 1.4, color: narr ? '#e2e8f0' : CODEC.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              fontFamily: narr ? 'var(--font-narration)' : undefined, letterSpacing: narr ? 0.5 : undefined }}>
               {text.slice(0, shown)}<span style={{ opacity: 0 }}>{text.slice(shown)}</span>
             </div>
             {typed && !st.choice && <div className="vn-next" style={{ position: 'absolute', right: 12, bottom: 6, color: narr ? '#cbd5e1' : CODEC.yellow, fontSize: 14 }}>▼</div>}
@@ -195,7 +196,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait }) {
             {[...st.log, ...(st.line ? [st.line] : [])].map((l, n) => {
               const c = CAST[l.who];
               return (
-                <div key={n} style={{ color: l.who === 'choice' ? '#93c5fd' : l.who === 'narrator' ? '#94a3b8' : CODEC.text, fontSize: 15, lineHeight: 1.4, fontStyle: l.who === 'narrator' ? 'italic' : 'normal' }}>
+                <div key={n} style={{ color: l.who === 'choice' ? '#93c5fd' : l.who === 'narrator' ? '#94a3b8' : CODEC.text, fontSize: l.who === 'narrator' ? 19 : 15, lineHeight: 1.4, fontFamily: l.who === 'narrator' ? 'var(--font-narration)' : undefined }}>
                   {c?.name && <b style={{ color: c.color, marginRight: 8, textTransform: 'uppercase' }}>{c.name}</b>}{l.text}
                 </div>
               );

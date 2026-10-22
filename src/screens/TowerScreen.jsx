@@ -131,7 +131,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
   const mc = deck?.main;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#070b14', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none', color: '#ddd',
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#070b14', fontFamily: 'var(--font-ui)', userSelect: 'none', color: '#ddd',
       cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
       <style>{STORY_CSS + TOWER_CSS}</style>
 
@@ -142,7 +142,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 0 }}>
           <button className="tw-arrow" disabled={chIdx === 0} onClick={() => switchChapter(-1)} aria-label="Previous chapter">◀</button>
           <div style={{ textAlign: 'center', minWidth: 0 }}>
-            <div style={{ color: CODEC.yellow, fontFamily: CODEC.font, fontWeight: 900, fontSize: mobile ? 13 : 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ color: CODEC.yellow, fontFamily: CODEC.font, fontWeight: 900, fontSize: mobile ? 11.5 : 16, letterSpacing: mobile ? -0.3 : 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {open ? '' : '🔒 '}{ch.name}
             </div>
             <div style={{ color: '#667', fontSize: 11 }}>{clearedCount}/{ch.nodes.length} cleared</div>
@@ -255,14 +255,14 @@ function NodeCard({ node, story, mobile, onPlay, onClose }) {
         {kind === 'boss' ? 'BOSS' : kind === 'story' ? 'STORY' : 'BATTLE'}
       </div>
       <div style={{ color: CODEC.yellow, fontWeight: 900, fontSize: 22, lineHeight: 1.15, paddingRight: 24 }}>{node.name}</div>
-      {node.desc && <div style={{ color: '#d1fae5', fontSize: 13, fontFamily: "'Segoe UI',sans-serif" }}>{node.desc}</div>}
+      {node.desc && <div style={{ color: '#d1fae5', fontSize: 13, fontFamily: 'var(--font-ui)' }}>{node.desc}</div>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
         {b && <span className="tw-chip">LV {b.level ?? 1}</span>}
         {b?.boss && <span className="tw-chip" style={{ borderColor: '#ff6b4a', color: '#ffb4a2' }}>💀 {ENEMY_TYPES[b.boss]?.name}</span>}
         {mod && <span className="tw-chip" style={{ borderColor: mod.color, color: mod.color }} title={mod.desc}>◆ {mod.name}</span>}
         {(node.intro || node.outro) && <span className="tw-chip">📖 cutscene</span>}
       </div>
-      {mod && <div style={{ color: '#a7c4b5', fontSize: 12, fontFamily: "'Segoe UI',sans-serif" }}>{mod.desc}</div>}
+      {mod && <div style={{ color: '#a7c4b5', fontSize: 12, fontFamily: 'var(--font-ui)' }}>{mod.desc}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
         <div style={{ flex: 1, display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, fontWeight: 900 }}>
           {cleared ? <span style={{ color: '#4ade80' }}>✓ Cleared</span> : (

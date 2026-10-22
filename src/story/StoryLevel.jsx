@@ -122,7 +122,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
     const codecH = current ? (mobile ? 54 : 78) + 8 : 0;
     const boss = node.battle?.boss ? ENEMY_TYPES[node.battle.boss]?.name : null;
     body = (
-      <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#0b0f1c', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none',
+      <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#0b0f1c', fontFamily: 'var(--font-ui)', userSelect: 'none',
         cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: mobile ? '6px 8px' : '8px 14px', background: '#141928', borderBottom: `2px solid ${CODEC.yellow}`, flexShrink: 0 }}>
           <button className="vn-btn" onClick={() => { playPress(); setMenu(true); }} title="Pause (Esc)">❚❚ PAUSE</button>
@@ -142,7 +142,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
           <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(3,6,12,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
             <div style={{ width: 'min(360px, 100%)', background: `linear-gradient(${CODEC.green}, ${CODEC.greenDark})`, border: `3px solid ${CODEC.yellow}`, padding: 20,
               display: 'flex', flexDirection: 'column', gap: 10, fontFamily: CODEC.font, boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}>
-              <div style={{ color: lost ? '#ff6b4a' : CODEC.yellow, fontWeight: 900, fontSize: 26, letterSpacing: 3, textAlign: 'center' }}>{lost ? 'DEFEATED' : 'PAUSED'}</div>
+              <div style={{ color: lost ? '#ff6b4a' : CODEC.yellow, fontWeight: lost ? 400 : 900, fontSize: lost ? 34 : 26, letterSpacing: 3, textAlign: 'center', fontFamily: lost ? 'var(--font-glitch)' : undefined }}>{lost ? 'DEFEATED' : 'PAUSED'}</div>
               {lost && <div style={{ color: '#d1fae5', fontSize: 13, textAlign: 'center', marginBottom: 4 }}>Train or change your deck, then come back — or try again now.</div>}
               {!lost && <TapButton className="vn-choice" style={{ width: '100%' }} onClick={() => { playPress(); setMenu(false); }}>▶ Resume</TapButton>}
               <TapButton className="vn-choice" style={{ width: '100%' }} onClick={retry}>↻ Retry</TapButton>

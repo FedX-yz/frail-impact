@@ -197,6 +197,13 @@ and the Room 16 skill picker.
 | Boiyoujustgotoofed | 7:3 ratio bar: time the click for a big guaranteed crit | Overtime: every click is a ratio hit, then Collapse |
 | Astrec (Heavenly Restriction) | enemies aim where you were 0.5s ago; fast auto-attacks | Sorcerer Killer: charges from kills; faster autos + executes |
 
+### Fonts
+
+The fonts load from Google Fonts in `index.html`, and each kind of text has its own setting at
+the top of `src/index.css` (`--font-ui`, `--font-dialogue`, `--font-narration`, `--font-dramatic`,
+`--font-hit`, `--font-glitch`). To swap a font, add it to the link in `index.html` and change
+that one line.
+
 ### Sounds
 
 Combat sounds (hit, crit, kill, hurt, explosion…) are generated in code as

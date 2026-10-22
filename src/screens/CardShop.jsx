@@ -371,7 +371,7 @@ function SiPips({ si, color, glow = false }) {
 }
 
 // ─── Static styles ────────────────────────────────────────────────────────────
-const ROOT       = { width: '100%', height: '100dvh', background: '#0d1220', display: 'flex', flexDirection: 'column', fontFamily: "'Segoe UI',sans-serif", userSelect: 'none', overflow: 'hidden' };
+const ROOT       = { width: '100%', height: '100dvh', background: '#0d1220', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-ui)', userSelect: 'none', overflow: 'hidden' };
 const TOP_BAR    = { display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', background: '#090e1a', borderBottom: '2px solid #ff8c00', flexShrink: 0 };
 const COIN_BADGE = { display: 'flex', alignItems: 'center', gap: 6, background: '#0f1420', border: '2px solid #cc8800', borderRadius: 20, padding: '4px 14px 4px 8px' };
 const GRID       = { flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 44vw), 1fr))', gap: 12, alignContent: 'start' };
