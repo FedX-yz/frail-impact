@@ -804,10 +804,24 @@ zIndex: 10,
       : <div style={{ position:'absolute', inset:0, zIndex:0, background:`radial-gradient(ellipse at 30% 60%, ${activeBanner.accentColor}22 0%, #07000f 70%)` }} />
     }
 
-    {/* No banner art yet → fan out the featured cards */}
+    {/* No banner art yet → the featured characters' full-body sprites standing in a row
+        (or, if some have no sprite, their cards fanned out) */}
     {!activeBanner.uiAssets?.bg && activeBanner.featuredIds.length > 0 && (() => {
       const feat = activeBanner.featuredIds.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean);
       const n = feat.length;
+      if (feat.every(c => c.sprite)) return (
+        <>
+        <div style={{ position:'absolute', top:'4%', bottom:0, left:'44%', right:'0%', zIndex:1, pointerEvents:'none', display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+          {feat.map((c, i) => (
+            <img key={c.id} src={c.sprite} alt={c.name} draggable={false}
+              style={{ height: i === Math.floor(n / 2) ? '100%' : '92%', maxWidth: `${100 / n + 8}%`, objectFit:'contain', objectPosition:'bottom center',
+                margin:'0 -3%', zIndex: i === Math.floor(n / 2) ? n : i, filter:`drop-shadow(0 0 10px ${c.color}66) drop-shadow(0 8px 14px rgba(0,0,0,0.7))` }} />
+          ))}
+        </div>
+        {/* keeps the name/subtitle readable over them */}
+        <div style={{ position:'absolute', inset:0, zIndex:2, pointerEvents:'none', background:'linear-gradient(90deg, rgba(5,3,10,0.85) 0%, rgba(5,3,10,0.55) 38%, transparent 58%)' }} />
+        </>
+      );
       return (
         <div style={{ position:'absolute', top:'10%', bottom:'8%', left:'40%', right:'4%', zIndex:1, pointerEvents:'none' }}>
           {feat.map((c, i) => {

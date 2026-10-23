@@ -77,7 +77,7 @@ export const BANNERS = [
       // Placeholder until the Platinum cards have kits: shows as COMING SOON and can't be pulled on
       id: 'platinum-series',
       name: 'Platinum Series',
-      subtitle: 'Limited · 6★ Platinum Series · coming soon',
+      subtitle: 'Limited · 6★ Platinum',
       accentColor: '#e2e8f0',
       featuredIds: [37, 38, 39],
       boostedRarity: 6,

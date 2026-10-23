@@ -538,7 +538,7 @@ export const CHARACTERS = [
 
   // ── 6★ Platinum Series (the good guys; a Gold Series for the bad guys comes later).
   // Placeholders: no kits, no titles yet, and `unpullable` keeps them out of every pull.
-  // Bonk and Ramsf's framed cards are placeholders made from their full-body art.
+  // Bonk and Ramsf have no framed card yet, so their full-body art is used in its place.
   {
     id: 37,
     name: 'Ice',
@@ -570,8 +570,8 @@ export const CHARACTERS = [
     unpullable: true,                // not in any pull yet (remove when it's ready)
     element: null,
     color: '#f87171',
-    image:           `${BASE}characters/bonk-platinum.png`,
-    characterImage:  `${BASE}characters/bonk-platinum.png`,
+    image:           `${BASE}sprites/bonk-platinum.png`,   // no card art yet: the full-body art stands in
+    characterImage:  `${BASE}sprites/bonk-platinum.png`,
     cardArt:         `${BASE}sprites/bonk-platinum.png`,
     sprite:          `${BASE}sprites/bonk-platinum.png`,
     portraitFocus:   [41, 6, 3.2],
@@ -592,8 +592,8 @@ export const CHARACTERS = [
     unpullable: true,                // not in any pull yet (remove when it's ready)
     element: null,
     color: '#f472b6',
-    image:           `${BASE}characters/ramsf-platinum.png`,
-    characterImage:  `${BASE}characters/ramsf-platinum.png`,
+    image:           `${BASE}sprites/ramsf-platinum.png`,   // no card art yet: the full-body art stands in
+    characterImage:  `${BASE}sprites/ramsf-platinum.png`,
     cardArt:         `${BASE}sprites/ramsf-platinum.png`,
     sprite:          `${BASE}sprites/ramsf-platinum.png`,
     portraitFocus:   [50, 15, 3],
