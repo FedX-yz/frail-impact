@@ -7,8 +7,8 @@
 import { Fragment } from 'react';
 
 export const USE_EMOJI = false;
-// 'bold' = dark outline + tinted body + glow (sticker look); 'line' = the plain thin lines
-export const ICON_STYLE = 'bold';
+// 'detailed' = game-icons.net art (data/gameIcons.js); 'bold' = my simple drawings, sticker look; 'line' = thin lines
+export const ICON_STYLE = 'detailed';
 
 // n-pointed star / burst
 const star = (n, ro, ri, cx = 12, cy = 12, rot = -90) => Array.from({ length: n * 2 }, (_, i) => {

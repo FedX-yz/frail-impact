@@ -260,3 +260,12 @@ It changes your real save, so use Reset Save in Settings to start clean.
 Open the live site with `?debug` at the end of the URL (or run `npm run dev`) and
 the battle is available in the browser console as `window.__battle`, e.g.
 `__battle.dev.fillUlt()` to make the ult ready.
+
+### Icons
+
+Battle and story-map icons (shikigami, Mahoraga's wheel, damage labels, map nodes, locks)
+come from [game-icons.net](https://game-icons.net) by Lorc, Delapouite and contributors,
+licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) (credited in Settings too).
+The picks and colours are in `src/data/gameIcons.js`. Switches in `src/data/icons.jsx`:
+`ICON_STYLE = 'detailed'` (game-icons), `'bold'` / `'line'` (simple drawings),
+`USE_EMOJI = true` (the old emoji). Give an icon `img: 'ui/file.png'` to use your own art.

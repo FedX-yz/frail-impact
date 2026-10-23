@@ -192,6 +192,11 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
             </div>
           </div>
 
+          <div style={{ color:'#6f6150', fontSize:11, lineHeight:1.5 }}>
+            Battle and map icons from <a href="https://game-icons.net" target="_blank" rel="noreferrer" style={{ color:'#c27a33' }}>game-icons.net</a> (Lorc, Delapouite and contributors), licensed{' '}
+            <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noreferrer" style={{ color:'#c27a33' }}>CC BY 3.0</a>.
+          </div>
+
         </div>
       </div>
     </div>
