@@ -98,7 +98,7 @@ export default function CardsScreen({ navigate, collection, cardInventory = {}, 
       ? <CaseFile set={open.set} counts={counts} onOpen={c => pick({ kind: 'card', card: c })} />
       : owned(open.card)
         ? <CardFile card={open.card} entry={cardInventory[open.card.id] ?? {}} count={counts[open.card.id] ?? 0} active={open.card.id === mainCardId}
-            counts={counts} onArt={() => setShowArt(open.card)} onOpen={c => pick({ kind: 'card', card: c })} />
+            counts={counts} onArt={src => setShowArt({ card: open.card, src })} onOpen={c => pick({ kind: 'card', card: c })} />
         : <SealedFile card={open.card} />)
     : <div className="rc-empty">Open a drawer and pick a folder.</div>;
 
@@ -128,8 +128,8 @@ export default function CardsScreen({ navigate, collection, cardInventory = {}, 
 
       {showArt && (
         <div onClick={() => setShowArt(null)} className="rc-art">
-          <img src={photoOf(showArt)} alt={showArt.name} />
-          <div style={{ marginTop: 12, color: 'var(--amber)' }}>{showArt.name} · tap to close</div>
+          <img src={showArt.src || photoOf(showArt.card)} alt={showArt.card.name} />
+          <div style={{ marginTop: 12, color: 'var(--amber)' }}>{showArt.card.name} · tap to close</div>
         </div>
       )}
     </div>
@@ -153,21 +153,30 @@ function CardFile({ card, entry, count, active, counts, onArt, onOpen }) {
       <div className="rc-page">
         <div className="rc-hd"><span>{agent ? 'PERSONNEL FILE' : 'EVIDENCE LOG'} · {fileNo(card)}</span><span style={{ color: RC[card.rarity] }}>{'★'.repeat(Math.min(card.rarity, 6))}</span></div>
         {agent ? (
-          <button className="rc-photo" onClick={onArt} title="view full art">
+          <button className="rc-photo" onClick={() => onArt()} title="view full art">
             <span className="rc-clip" /><img src={photoOf(card)} alt={card.name} style={{ objectPosition: card.cardArt ? '50% 12%' : '50% 4%' }} />
           </button>
         ) : (
-          <button className="rc-pol" onClick={onArt} title="view full art">
+          <button className="rc-pol" onClick={() => onArt()} title="view full art">
             <span className="rc-tape" /><span className="rc-polimg"><img src={thumb(card.characterImage || card.image)} alt={card.name} className={card.cardArt ? '' : 'framed'} /></span>
             <span className="rc-cap">{card.name}</span>
+          </button>
+        )}
+        {agent && card.image && (
+          <button className="rc-badge" onClick={() => onArt(card.image)} title="Initiative ID card">
+            <span className="rc-lanyard" /><span className="rc-badgeclip keep-round" />
+            <img src={thumb(card.image)} alt={`${card.name} ID card`} />
+            <span className="rc-badgetag">ID · {fileNo(card)}</span>
           </button>
         )}
         {agent && <div className="rc-name">{card.name}</div>}
         {card.subtitle && <Row k="TITLE" v={card.subtitle} />}
         <Row k="CLEARANCE" v={`LVL ${CLEAR[Math.min(card.rarity, 6)]}${card.element ? ` · ${card.element}` : ''}${card.series === 'platinum' ? ' · Platinum Series' : ''}`} />
+        <Row k="ORIGIN" v={card.origin || <Blank />} />
+        {!agent && <Row k="OBJECT CLASS" v={card.objectClass || <Blank />} />}
         <Row k="ON FILE" v={`×${count} cop${count === 1 ? 'y' : 'ies'}${agent ? ` · LV ${entry.level ?? 1}` : ''}`} />
         <Row k="STATS" v={`ATK ${bs.atk} · HP ${bs.hp} · DEF ${bs.def}`} />
-        {active && <span className="rc-stamp" style={{ color: '#b3121b' }}>ACTIVE DUTY</span>}
+        {active && <span className="rc-stamp" style={{ color: '#b3121b', top: '46%', right: 10, zIndex: 4 }}>ACTIVE DUTY</span>}
       </div>
       <div className="rc-page">
         <div className="rc-hd"><span>{agent ? 'FIELD NOTES' : 'CASE NOTES'}</span><span>PAGE 2</span></div>
@@ -195,6 +204,8 @@ function CardFile({ card, entry, count, active, counts, onArt, onOpen }) {
         <div className="rc-sect">{agent ? 'COMMENDATIONS' : 'CONDITION'} (SUPERIMPOSITION)</div>
         <div className="rc-com">{[0, 1, 2, 3, 4].map(i => <span key={i} className={i <= si ? 'on' : ''}>{i <= si ? '★' : '☆'}</span>)}</div>
         <div className="rc-small">S{si + 1} · +{Math.round((siMult(si, card.rarity) - 1) * 100)}% ATK/HP/DEF{si < 4 ? ` · next at ${si + 2} copies` : ' · MAX'}</div>
+        <div className="rc-sect">{agent ? 'BACKGROUND' : 'INCIDENT REPORT'}</div>
+        <Ruled text={agent ? card.background : card.incident} />
         <div className="rc-sect">HANDLER'S NOTE</div>
         <div className={`rc-note${card.handlerNote ? '' : ' none'}`}>{card.handlerNote || 'no note on file'}</div>
         {assoc.length > 0 && <>
@@ -257,6 +268,12 @@ function CaseFile({ set, counts, onOpen }) {
 }
 
 const Row = ({ k, v }) => <div className="rc-row"><i>{k}</i><span>{v}</span></div>;
+// an empty form field, waiting for someone to write it (characters.js)
+const Blank = () => <span className="rc-blank" />;
+// typed report on ruled lines; empty → blank lines
+const Ruled = ({ text }) => (text
+  ? <div className="rc-ruled">{text}</div>
+  : <div className="rc-ruled empty"><span>— awaiting report —</span></div>);
 
 const CSS = `
   .rc-root { width:100%; height:100dvh; display:flex; flex-direction:column; overflow:hidden; background:var(--desk); color:var(--amber); font-family:var(--font-ui); user-select:none; }
@@ -327,6 +344,20 @@ const CSS = `
   .rc-links button { background:none; border:none; border-bottom:1px solid #211a12; padding:0; color:#211a12; font-family:inherit; font-size:12.5px; cursor:pointer; }
   .rc-red { background:#111; color:#111; }
   .rc-sealedbox { margin:16px auto 10px; width:min(230px,70%); aspect-ratio:4/5; background:#1b1b1b; color:#3a3a3a; display:grid; place-items:center; font-size:80px; box-shadow:0 0 0 7px #f6f0e0; }
+  /* ID badge (the card) clipped to the personnel file */
+  .rc-badge { position:absolute; right:-14px; top:34px; width:min(31%,150px); padding:7px 7px 5px; border:none; cursor:zoom-in; z-index:3;
+    background:#e7e2d4; box-shadow:0 8px 16px rgba(0,0,0,.45); transform:rotate(7deg); font-family:inherit; transition:transform .15s; }
+  .rc-badge:hover { transform:rotate(4deg) scale(1.04); }
+  .rc-badge img { display:block; width:100%; aspect-ratio:2633/3752; object-fit:cover; }
+  .rc-lanyard { position:absolute; left:50%; top:-60px; width:16px; height:56px; transform:translateX(-50%);
+    background:repeating-linear-gradient(180deg,#b3121b 0 6px,#7a0c12 6px 8px); box-shadow:0 2px 4px rgba(0,0,0,.4); }
+  .rc-badgeclip { position:absolute; left:50%; top:-9px; width:26px; height:14px; transform:translateX(-50%); border-radius:4px; z-index:2;
+    background:linear-gradient(180deg,#d9dde2,#8a9098); box-shadow:0 1px 2px rgba(0,0,0,.5); }
+  .rc-badgetag { display:block; font-size:9px; letter-spacing:1.5px; color:#3a2e20; text-align:center; margin-top:4px; }
+  .rc-blank { display:inline-block; width:170px; max-width:100%; border-bottom:1.5px dotted rgba(40,30,20,.45); height:13px; }
+  .rc-ruled { font-size:12.5px; line-height:22px; min-height:66px; padding:0 4px;
+    background:repeating-linear-gradient(180deg,transparent 0 21px,rgba(60,90,160,.28) 21px 22px); }
+  .rc-ruled.empty span { font-size:11px; color:rgba(40,30,20,.35); letter-spacing:1px; }
   /* evidence polaroid */
   .rc-pol { position:relative; display:block; margin:18px auto 10px; width:min(240px,75%); padding:10px 10px 6px; background:#f3efe6; border:none; cursor:zoom-in; font-family:inherit;
     box-shadow:0 8px 18px rgba(0,0,0,.35); transform:rotate(-2deg); }
