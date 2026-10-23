@@ -21,7 +21,7 @@
 //   { end: true }                     stop the scene here
 //   { shake: true }   { wait: 0.8 }   { sfx: 'ui_warp' }  (a file in public/sounds/)
 //   { crawl: ['…', '…'] }             paragraphs of text fading in one by one on black, then fading out;
-//                                       {red:words} lights words up (red, havoc, gold, green, title, em, dim, shake)
+//                                       {red:words} lights words up (red, havoc, gold, zone, green, title, em, dim, shake)
 //   { music: 'audio/story/x.mp3' }    music (path in public/), loops until the next { music };
 //                                       { music: null } fades it out. It also stops when the scene ends
 //
@@ -42,13 +42,13 @@ export const SCENES = {
     // The opening: black screen, each paragraph fades in, then it all fades out.
     // Music: put a track at public/audio/story/intro.mp3 (it loops until the next { music }).
     { music: 'audio/story/intro.mp3' },
-    // {style:words} lights words up: red, havoc (glitchy red), gold, green, title, em, dim, shake
+    // {style:words} lights words up: red, havoc (glitchy red), gold, zone (worn gold), green, title, em, dim, shake
     { crawl: [
       '{em:Decades ago} a {green:virus} spread throughout the world, mutating humans and other life forms alike into terrifying and powerful creatures. Since then, those creatures have shifted society into chaos, massacring humans in mass to satisfy their hunger.',
       'Only a small percentage of the total human population remain today, {em:lowering with each passing day.}',
-      'These creatures were called {havoc:"Havoc"}, and their claimed territories from humans are assigned as {gold:"Frail Environments"}.',
+      'These creatures were called {havoc:"Havoc"}, and their claimed territories from humans are assigned as {zone:"Frail Environments"}.',
       'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the {havoc:Havoc}. Thanks to those efforts, today fending off Havoc hordes became much more manageable, {em:but still on the edge.}',
-      '{title:Frail-Initiative} is a task force created with the intention to unite the strongest humans alive to delve deep into the source of the virus outbreak. A frail environment notoriously known for its overwhelming amount of powerful Havoc creatures.',
+      '{title:Frail-Initiative} is a task force created with the intention to unite the strongest humans alive to delve deep into the source of the virus outbreak. A {zone:frail environment} notoriously known for its overwhelming amount of powerful Havoc creatures.',
     ] },
     { bg: null },
     'A phone buzzes in the dark. Unknown number.',

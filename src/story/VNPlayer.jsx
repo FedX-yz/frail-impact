@@ -233,9 +233,9 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 }
 
 // {style:words} inside a crawl paragraph: the words light up in that style a moment
-// after the paragraph appears. Styles (codecStyle.js → .cw-*): red, havoc, gold, green,
+// after the paragraph appears. Styles (codecStyle.js → .cw-*): red, havoc, gold, zone, green,
 // title, em, dim, shake. Plain text around them stays white.
-const MARK = /\{(red|havoc|gold|green|title|em|dim|shake):([^}]+)\}/g;
+const MARK = /\{(red|havoc|gold|zone|green|title|em|dim|shake):([^}]+)\}/g;
 const plainCrawl = (p) => p.replace(MARK, '$2');
 function marked(p) {
   const out = [];

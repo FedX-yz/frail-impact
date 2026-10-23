@@ -42,6 +42,7 @@ export const STORY_CSS = `
   .cw { animation-duration: 1.4s; animation-delay: 1.1s; animation-fill-mode: both; animation-timing-function: ease-out; }
   .cw-red    { animation-name: cwRed; }
   .cw-gold   { animation-name: cwGold; }
+  .cw-zone   { font-family: var(--font-hit); font-size: 1.05em; letter-spacing: 1px; animation-name: cwGold; }   /* worn, weathered: the Frail Environments */
   .cw-green  { animation-name: cwGreen; }
   .cw-em     { font-style: italic; color: #fff; }
   .cw-dim    { font-style: italic; animation-name: cwDim; }
