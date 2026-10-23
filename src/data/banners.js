@@ -74,8 +74,10 @@ export const BANNERS = [
       uiFrame: { size: [4412, 2310], card: [690, 357, 3139, 1932] },
     },
     {
-      // Placeholder until the Platinum cards have kits: shows as COMING SOON and can't be pulled on
+      // Placeholder until the Platinum cards have kits: shows as COMING SOON and can't be pulled on.
+      // hidden: players don't see it at all (even if it's on the schedule). Delete that line to show it.
       id: 'platinum-series',
+      hidden: true,
       name: 'Platinum Series',
       subtitle: 'Limited · 6★ Platinum',
       accentColor: '#e2e8f0',

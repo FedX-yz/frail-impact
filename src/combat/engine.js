@@ -173,6 +173,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       parts.push(spawnEnemy(typeId));
     }
     s.bossInfo = { name: t.name, maxHp: parts.reduce((a, p) => a + p.maxHp, 0), group: parts[0]?.group };
+    // most of the small fry clear out when a boss shows up (less clutter around it)
+    const keep = Math.max(1, Math.floor(s.stage.basicCap / 4));
+    s.enemies.filter(e => e.tier === 'basic' && !e.type.horde && e.life == null).slice(keep).forEach(e => { e.life = rand(0.4, 1.8); });
   }
 
   function spawnHorde() {
@@ -202,9 +205,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const st = s.stage, T = s.timers;
     if (s.phase === 'fight' || s.phase === 'boss') {
       T.basic -= dt;
-      const cap = s.phase === 'boss' ? Math.ceil(st.basicCap / 2) : st.basicCap;
+      // with a boss out, far fewer small enemies (less clutter around it)
+      const cap = s.phase === 'boss' ? Math.max(1, Math.floor(st.basicCap / 4)) : st.basicCap;
       if (T.basic <= 0) {
-        T.basic = st.basicEvery * (s.phase === 'boss' ? 2 : 1);
+        T.basic = st.basicEvery * (s.phase === 'boss' ? 4 : 1);
         if (countTier('basic') < cap) spawnEnemy(pick(st.basics), { armed: Math.random() < st.armedBasicChance });
       }
       T.treasure -= dt;
@@ -268,8 +272,27 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
   }
 
+  // Hydra heads: hang around their spot, sway, and lean toward your cursor
+  // (they droop while DOWN). BattleArena turns them to look at you too.
+  function moveHydraHead(e, dt) {
+    if (e.hx == null) { e.hx = e.x; e.hy = e.y; }
+    const t = s.time + e.segIndex * 1.7, P = s.player.pos;
+    let tx = e.hx + Math.sin(t * 0.8) * K(16), ty = e.hy + Math.sin(t * 1.25 + 1) * K(9);
+    let tilt = 0;
+    if (e.down > 0) ty = e.hy + K(36);
+    else if (P) {
+      const dx = P.x - e.hx, dy = P.y - e.hy, d = Math.hypot(dx, dy) || 1, reach = Math.min(K(48), d * 0.22);
+      tx += dx / d * reach; ty += dy / d * reach;
+      tilt = clamp(-Math.atan2(P.x - e.x, Math.max(P.y - e.y, K(40))) * 57.3 * 0.6, -26, 26);
+    }
+    const f = 1 - Math.exp(-dt * 3.2);
+    e.x += (tx - e.x) * f; e.y += (ty - e.y) * f;
+    e.tilt = (e.tilt ?? 0) + (tilt - (e.tilt ?? 0)) * (1 - Math.exp(-dt * 5));
+  }
+
   function moveEnemy(e, dt) {
     if (e.move === 'worm') { moveWorm(e, dt); return; }
+    if (e.role === 'hydra') { moveHydraHead(e, dt); return; }
     if (e.dashing) return;
     if (e.move === 'swarm' && e.busy === 0) {
       // crowd around you (not on you) at their own spot in the ring
@@ -1013,7 +1036,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!W || !H) return;
     if (s.W) {
       const fx = W / s.W, fy = H / s.H;
-      s.enemies.forEach(e => { e.x *= fx; e.y *= fy; e.target = null; });
+      s.enemies.forEach(e => { e.x *= fx; e.y *= fy; e.target = null; if (e.hx != null) { e.hx *= fx; e.hy *= fy; } });
       if (s.player.pos) s.player.pos = { x: s.player.pos.x * fx, y: s.player.pos.y * fy };
     }
     const first = !s.W;

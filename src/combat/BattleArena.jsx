@@ -143,6 +143,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       el.style.transform = `translate3d(${e.x - half}px, ${e.y - half}px, 0)`;
       // art with a `facing` turns toward where it's going (worm parts)
       if (e.facing != null) el.style.setProperty('--rot', `${Math.round(e.angle * 57.2958 - e.facing)}deg`);
+      // hydra heads turn to look at you
+      if (e.role === 'hydra') el.style.setProperty('--tilt', `${(e.tilt ?? 0).toFixed(1)}deg`);
       // attack poses face the attack: mirrored when aiming the other way, then tilted
       if (e.type.poses && e.aim != null && e.type.poseFacing != null) {
         const deg = e.aim * 57.2958;
@@ -247,8 +249,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             return null;
           })}
 
-          {/* ── Hydra necks, behind its heads ─────────────────────────── */}
-          <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} />
+          {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
+          <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
@@ -562,23 +564,40 @@ const StageBarView = memo(function StageBarView({ label, ratio, color, boss }) {
 // One enemy. Only re-renders when how it LOOKS changes; its position is set
 // directly on the DOM node by BattleArena every frame.
 // The hydra's heads hang from long necks that come down from the top of the
-// arena: a column of neck segments above each head, lower ones in front.
-// The heads never move, so this is worked out from where they are.
-function HydraNecks({ heads, k }) {
+// arena. Each neck is a chain of neck pictures along a curve from the top down to
+// its head, with a wave running down it (snake-like). The heads lean toward you
+// (engine.js → moveHydraHead), and the necks follow them.
+function HydraNecks({ heads, k, time }) {
   if (!heads.length) return null;
   const t = heads[0].type;
   return heads.flatMap(h => {
     const box = h.size * k * h.drawScale;
     const [fx, fy] = t.neckAttach?.[h.segIndex] ?? [0.5, 0.2];
-    const ax = h.x - box / 2 + fx * box, ay = h.y - box / 2 + fy * box;     // where the neck meets the head
-    const bw = box * 0.6, bh = bw * 856 / 715, step = bh * 0.56;
-    const ys = [];
-    for (let y = ay - bh * 0.3; y > -bh * 0.6; y -= step) ys.push(y);
-    return ys.reverse().map((y, i) => (
-      <img key={`${h.id}-${i}`} src={t.neckImg} alt="" draggable={false} className="hydra-neck"
-        style={{ position: 'absolute', left: ax - bw / 2, top: y - bh / 2, width: bw, height: bh, zIndex: 5, pointerEvents: 'none',
-          filter: h.down > 0 ? 'grayscale(1) brightness(0.5)' : undefined }} />
-    ));
+    const ax = h.x - box / 2 + fx * box, ay = h.y - box / 2 + fy * box;      // where the neck meets the head now
+    const topX = (h.hx ?? h.x) - box / 2 + fx * box;                           // where it comes from (above its home spot)
+    const bw = box * 0.6, bh = bw * 856 / 715, step = bh * 0.5;
+    const y0 = -bh * 0.6, cy = (y0 + ay) * 0.55;
+    const amp = box * (h.down > 0 ? 0.04 : 0.11);
+    const at = (u) => {                                                        // point on the neck, u = 0 top … 1 head
+      const v = 1 - u;
+      const bx = v * v * topX + 2 * v * u * topX + u * u * ax;
+      const by = v * v * y0 + 2 * v * u * cy + u * u * ay;
+      const wave = Math.sin(time * 2.1 - u * 5 + h.segIndex * 1.9) * Math.sin(Math.PI * Math.min(1, u * 1.15)) * amp;
+      return [bx + wave, by];
+    };
+    const n = Math.max(3, Math.ceil(Math.hypot(ax - topX, ay - y0) / step));
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const u = Math.min(1, (i + 0.35) / n);                                   // last piece tucks in behind the head
+      const [x, y] = at(u), [px, py] = at(Math.max(0, u - 0.02));
+      const rot = Math.atan2(y - py, x - px) * 57.2958 - 90;
+      out.push(
+        <img key={`${h.id}-${i}`} src={t.neckImg} alt="" draggable={false} className="hydra-neck"
+          style={{ position: 'absolute', left: x - bw / 2, top: y - bh / 2, width: bw, height: bh, zIndex: 7, pointerEvents: 'none',
+            transform: `rotate(${rot.toFixed(1)}deg)`, filter: h.down > 0 ? 'grayscale(1) brightness(0.5)' : undefined }} />,
+      );
+    }
+    return out;
   });
 }
 
@@ -594,7 +613,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
   return (
     <div ref={el => register(id, el)} style={{
       position: 'absolute', left: 0, top: 0, width: size, height: size, willChange: 'transform',
-      zIndex: isWormHead ? 9 : tier === 'boss' ? 6 : tier === 'treasure' ? 8 : 7, pointerEvents: 'none',
+      // bosses float above the small enemies
+      zIndex: isWormHead ? 9 : tier === 'boss' ? 8 : tier === 'treasure' ? 8 : 6, pointerEvents: 'none',
     }}>
       {shieldR > 0 && (
         <div style={{
@@ -605,6 +625,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
           boxShadow: shieldPct > 0 ? 'inset 0 0 24px rgba(125,211,252,0.45)' : 'none',
         }} />
       )}
+      {tier === 'boss' && (role === 'hydra' || !grouped) && <div className="boss-shadow" style={{ top: `${50 + drawScale * 58}%` }} />}
       {dashing && <div className="dash-trail" />}
       {ax && <div className="affix-aura" style={{ '--ac': ax.color }} />}
       {ax && <div className="affix-tag" style={{ color: ax.color, fontSize: 10 * Math.max(0.85, k) }}>{ax.name}</div>}
@@ -774,9 +795,10 @@ const ARENA_CSS = `
   .enemy-img.worm-head:not(.turns) { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
   .enemy-img.turns { animation:none; image-rendering:auto; }
   .enemy-img.smooth { image-rendering:auto; }
-  .enemy-img.hydra-head { image-rendering:auto; transform-origin: 50% 15%; animation: hydraSway 3.3s ease-in-out infinite;
+  .enemy-img.hydra-head { image-rendering:auto; transform-origin: 50% 15%; animation:none; transform: rotate(var(--tilt, 0deg));
     filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45)); }
-  @keyframes hydraSway { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+  .boss-shadow { position:absolute; left:12%; right:12%; height:16%; transform:translateY(-50%); z-index:-1; pointer-events:none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.5), rgba(0,0,0,0.25) 45%, transparent 70%); }
   .hydra-neck { image-rendering:auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
   .pose-aim { position:absolute; inset:0; transform: rotate(var(--aim-rot, 0deg)) scaleX(var(--aim-flip, 1)); transition: transform 0.08s ease-out; }
   .enemy-img.worm-head.turns { filter: drop-shadow(0 0 10px rgba(255,40,120,0.75)); }

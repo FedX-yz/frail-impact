@@ -278,7 +278,7 @@ export default function SchedulePanel() {
             return (
               <button key={b.id} disabled={!canEdit} onClick={() => togglePermanent(b.id)}
                 style={{ ...btn(), cursor: canEdit ? 'pointer' : 'default', color: on ? '#fff' : C.dim, background: on ? `${b.accentColor}33` : 'transparent', border: `1px solid ${on ? b.accentColor : C.line}` }}>
-                {on ? '✓ ' : ''}{b.name}
+                {on ? '✓ ' : ''}{b.name}{b.hidden ? ' (hidden)' : ''}
               </button>
             );
           })}
@@ -326,9 +326,10 @@ function Entry({ e, now, canEdit, editing, setEditing, change, actions, remove, 
   const b = bannerOf(e.banner);
   const color = b?.accentColor || '#888';
   const isLive = e.start <= now && e.end > now;
-  const line = e.end <= now ? `Ran ${when(e.start)} → ${when(e.end)}`
+  const line = (e.end <= now ? `Ran ${when(e.start)} → ${when(e.end)}`
     : isLive ? `Started ${when(e.start)} · ${e.end === Infinity ? 'no end date' : `ends in ${formatTimeLeft(e.end - now)} (${when(e.end)})`}`
-      : `Starts in ${formatTimeLeft(e.start - now)} (${when(e.start)}) · runs ${formatLength(e.end - e.start)}`;
+      : `Starts in ${formatTimeLeft(e.start - now)} (${when(e.start)}) · runs ${formatLength(e.end - e.start)}`)
+    + (b?.hidden ? ' · HIDDEN from players (hidden: true in banners.js)' : '');
   return (
     <div style={{ ...card, padding: 0, display: 'flex', overflow: 'hidden', opacity: faded ? 0.7 : 1 }}>
       <div style={{ width: 6, background: color, flexShrink: 0 }} />
@@ -395,7 +396,7 @@ function AddBanner({ add, lastEnd }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <label style={{ fontSize: 12, color: C.dim, display: 'flex', flexDirection: 'column', gap: 4 }}>Banner
           <select value={banner} onChange={e => setBanner(e.target.value)} style={input}>
-            {BANNERS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {BANNERS.map(b => <option key={b.id} value={b.id}>{b.name}{b.hidden ? ' (hidden in code)' : ''}</option>)}
           </select></label>
         <div>
           <div style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>Starts</div>
