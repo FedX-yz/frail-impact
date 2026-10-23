@@ -599,7 +599,7 @@ function HydraNecks({ heads, k, time }) {
             transform: `rotate(${rot.toFixed(1)}deg)`, filter: h.down > 0 ? 'brightness(0.7) saturate(0.8)' : undefined }} />,
       );
     }
-    // beheaded: the neck ends in a stump that swells as the head is about to grow back
+    // beheaded: the neck ends in a glowing stump that swells as the head is about to grow back
     if (h.down > 0) {
       const grow = 1 - Math.min(1, h.down / (t.downTime || 5)), sw = bw * (0.62 + 0.18 * grow);
       out.push(<div key={`${h.id}-stump`} className="hydra-stump" style={{ left: ax - sw / 2, top: ay - sw * 0.32, width: sw, height: sw * 0.64, zIndex: 7 }} />);
@@ -808,11 +808,9 @@ const ARENA_CSS = `
   @keyframes hydraFall { 0% { transform: rotate(var(--tilt, 0deg)); opacity:1; } 18% { transform: translate(6%, -6%) rotate(18deg); }
     100% { transform: translate(18%, 170%) rotate(120deg); opacity:0; } }
   .hydra-stump { position:absolute; pointer-events:none; border-radius:50%;
-    background: radial-gradient(ellipse at 50% 40%, #ff5a4a 0 18%, #9b1c1c 40%, #4a0b0b 75%); box-shadow: 0 0 10px rgba(180,20,20,.6), inset 0 -3px 6px rgba(0,0,0,.5);
+    background: radial-gradient(ellipse at 50% 40%, #b8fff0 0 14%, #3fb8a6 42%, #1d5f58 78%); box-shadow: 0 0 12px rgba(94,234,212,.55), inset 0 -3px 6px rgba(0,0,0,.45);
     animation: stumpPulse 0.9s ease-in-out infinite; }
-  .hydra-stump::after { content:''; position:absolute; left:46%; top:70%; width:9%; height:0; background:#8b1111; border-radius:0 0 4px 4px; animation: stumpDrip 1.6s ease-in infinite; }
-  @keyframes stumpPulse { 50% { filter: brightness(1.25); transform: scale(1.06); } }
-  @keyframes stumpDrip { 0% { height:0; opacity:1; } 70% { height:120%; opacity:1; } 100% { height:140%; opacity:0; } }
+  @keyframes stumpPulse { 50% { filter: brightness(1.3); transform: scale(1.06); } }
   .enemy-img.hydra-head { image-rendering:auto; transform-origin: 50% 15%; transform: rotate(var(--tilt, 0deg));
     filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45)); }
   .boss-shadow { position:absolute; left:12%; right:12%; height:16%; transform:translateY(-50%); z-index:-1; pointer-events:none;
