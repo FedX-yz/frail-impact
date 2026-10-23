@@ -271,3 +271,11 @@ licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) (credited in 
 The picks and colours are in `src/data/gameIcons.js`. Switches in `src/data/icons.jsx`:
 `ICON_STYLE = 'detailed'` (game-icons), `'bold'` / `'line'` (simple drawings),
 `USE_EMOJI = true` (the old emoji). Give an icon `img: 'ui/file.png'` to use your own art.
+
+### Voiced story lines
+
+A cast member with `voice` in `src/story/cast.js` (the unknown caller, for now) gets an
+audio file per line, made ahead of time by `node tools/make-voices.mjs` (needs `espeak-ng`,
+`mbrola-us2` and `ffmpeg`; see the top of that file). The files are named by a hash of the
+line's text, so after editing what that character says, run the tool again. A line with no
+file just plays silently.

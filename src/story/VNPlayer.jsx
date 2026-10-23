@@ -4,7 +4,8 @@ import { CAST } from './cast';
 import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
-import { playSFX, playPress, playMusic, stopMusic } from '../utils/sfx';
+import { playSFX, playPress, playMusic, stopMusic, playVoice, stopVoice } from '../utils/sfx';
+import { voiceFile } from './voice';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
 
@@ -79,6 +80,15 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   useEffect(() => () => { if (musicN) stopMusic(1.2); }, [musicN === 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const [crawlTap, setCrawlTap] = useState(0);
   const endCrawl = useCallback(() => setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)), [steps]);
+
+  // voiced lines (cast.js → voice): play when the line comes up, cut off by the next one
+  const lineKey = st.line ? `${st.i}:${st.line.who}` : null;
+  useEffect(() => {
+    const v = st.line && CAST[st.line.who]?.voice;
+    if (v && !skip) playVoice(asset(voiceFile(v.dir, st.line.text)));
+    else stopVoice();
+  }, [lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopVoice(), []);
 
   // sounds from { sfx } steps
   useEffect(() => { st.sfx?.forEach(n => playSFX(`${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`)); }, [st.sfx]);
@@ -162,7 +172,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
       </div>
 
       {/* top buttons */}
-      <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 6 }} onPointerDown={e => e.stopPropagation()}>
+      <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 10 }} onPointerDown={e => e.stopPropagation()}>
         <button className={`vn-btn${auto ? ' on' : ''}`} onClick={() => setAuto(v => !v)}>AUTO</button>
         <button className={`vn-btn${skip ? ' on' : ''}`} onClick={() => setSkip(v => !v)} title="Skip to the next choice or the end">SKIP ▸▸</button>
         <button className="vn-btn" onClick={() => setShowLog(true)}>LOG</button>
@@ -206,7 +216,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 
       {/* backlog */}
       {showLog && (
-        <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 9, background: 'rgba(3,8,6,0.94)', display: 'flex', flexDirection: 'column', cursor: 'default' }}>
+        <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 11, background: 'rgba(3,8,6,0.94)', display: 'flex', flexDirection: 'column', cursor: 'default' }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: `2px solid ${CODEC.yellow}55` }}>
             <span style={{ color: CODEC.yellow, fontWeight: 900, letterSpacing: 2, flex: 1 }}>LOG</span>
             <button className="vn-btn" onClick={() => setShowLog(false)}>CLOSE ✕</button>
