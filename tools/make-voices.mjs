@@ -1,8 +1,8 @@
 // Makes the audio for voiced story lines (cast.js → voice) — run it after changing
 // any line a voiced character says:   node tools/make-voices.mjs   (--force redoes all)
 //
-// Needs espeak-ng with the MBROLA us2 voice, and ffmpeg built with rubberband:
-//   Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us2 ffmpeg
+// Needs espeak-ng with the MBROLA us1 and us2 voices, and ffmpeg built with rubberband:
+//   Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us1 mbrola-us2 ffmpeg
 // The files go to public/<voice.dir>/<hash>.mp3 (see src/story/voice.js).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -16,11 +16,11 @@ const force = process.argv.includes('--force');
 // voice presets: espeak voice/speed/pitch, then ffmpeg effects
 const PRESETS = {
   // the unknown caller: low, doubled an octave down, phone-band, slightly crushed, wavering, echoing
-  // the intro narrator: calm, a bit deep, a little room echo, no distortion
+  // the intro narrator: a calm woman's voice (nothing like the caller), clean, a soft hall echo
   narrator: {
-    espeak: ['-v', 'mb-en1', '-s', '138', '-p', '38'],
-    filter: '[0:a]aresample=44100,rubberband=pitch=0.93:formant=preserved,highpass=f=70,lowpass=f=8000,' +
-            'equalizer=f=160:t=q:w=1:g=3,aecho=0.8:0.85:40|75:0.16|0.09,loudnorm=I=-17:TP=-1.5,apad=pad_dur=0.4',
+    espeak: ['-v', 'mb-us1', '-s', '142', '-p', '45'],
+    filter: '[0:a]aresample=44100,rubberband=pitch=0.97:formant=preserved,highpass=f=90,lowpass=f=9000,' +
+            'equalizer=f=3000:t=q:w=1:g=2,aecho=0.8:0.8:60|120:0.14|0.08,loudnorm=I=-17:TP=-1.5,apad=pad_dur=0.4',
   },
   creepy: {
     espeak: ['-v', 'mb-us2', '-s', '125', '-p', '25'],

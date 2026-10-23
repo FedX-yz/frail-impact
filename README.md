@@ -277,6 +277,6 @@ The picks and colours are in `src/data/gameIcons.js`. Switches in `src/data/icon
 The intro text has a narrator (`{ voice: 'narrator', crawl: [...] }`, voices in `src/story/voice.js`).
 A cast member with `voice` in `src/story/cast.js` (the unknown caller, for now) gets an
 audio file per line, made ahead of time by `node tools/make-voices.mjs` (needs `espeak-ng`,
-`mbrola-us2` and `ffmpeg`; see the top of that file). The files are named by a hash of the
+`mbrola-us1`, `mbrola-us2` and `ffmpeg`; see the top of that file). The files are named by a hash of the
 line's text, so after editing what that character says, run the tool again. A line with no
 file just plays silently.
