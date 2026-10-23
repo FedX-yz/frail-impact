@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Children, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES } from './enemies';
 import { SKILLS, describeKit } from './kits';
@@ -7,6 +7,8 @@ import { getSettings } from '../utils/settings';
 import FocusImg from '../components/FocusImg';
 import CctvOverlay from './CctvOverlay';
 import TapButton from '../components/TapButton';
+import { Icon, SvgIcon } from '../components/Icon';
+import { withIcons } from '../utils/withIcons';
 
 const BASE = import.meta.env.BASE_URL;
 const STATUS_PORTRAITS = {
@@ -243,8 +245,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               );
             }
             if (SHIKI_ICON[a.kind]) return (
-              <div key={a.id} className={`shiki ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', fontSize: (a.kind === 'nue' ? 30 : 34) * k,
-                opacity: a.life < 1 ? a.life : 1 }}>{SHIKI_ICON[a.kind]}</div>
+              <div key={a.id} className={`shiki ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', fontSize: (a.kind === 'nue' ? 40 : 44) * k,
+                opacity: a.life < 1 ? a.life : 1, color: '#c7d2fe' }}><Icon name={a.kind} /></div>
             );
             return null;
           })}
@@ -364,7 +366,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               <div className="suspended-text">SUSPENDED · WATCH AND PRAY</div>
               <div style={{ position: 'absolute', left: m.x - w / 2, top: m.y - w * 0.3, width: w, zIndex: 13, pointerEvents: 'none' }}>
                 <div style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 4 * k, display: 'flex', alignItems: 'center', gap: 4 * k }}>
-                  <span className="maho-wheel" style={{ transform: `rotate(${m.wheel * 45}deg)`, fontSize: 20 * k }}>☸</span>
+                  <span className="maho-wheel" style={{ transform: `rotate(${m.wheel * 45}deg)`, fontSize: 20 * k, color: '#fde047', lineHeight: 0 }}><Icon name="wheel" /></span>
                   <div style={{ width: w * 0.8, height: 7 * k, background: 'rgba(0,0,0,0.7)', borderRadius: 4, border: '1px solid #fde047' }}>
                     <div style={{ width: `${Math.max(0, m.hp / m.maxHp) * 100}%`, height: '100%', background: '#fde047', borderRadius: 4 }} />
                   </div>
@@ -486,7 +488,7 @@ function EffectShape({ f, k }) {
     }).join(' ');
     return <polyline points={pts} fill="none" stroke="#fde047" strokeWidth={3 * k} opacity={1 - p} style={{ filter: 'drop-shadow(0 0 6px #facc15)' }} />;
   }
-  if (f.kind === 'fist') return <text x={f.x} y={f.y} textAnchor="middle" dominantBaseline="middle" fontSize={26 * k * (1 + p * 0.4)} opacity={1 - p}>👊</text>;
+  if (f.kind === 'fist') return <SvgIcon name="fist" x={f.x} y={f.y} size={26 * k * (1 + p * 0.4)} color="#fde68a" opacity={1 - p} />;
   if (f.kind === 'stab') return <line x1={f.x - f.r * 0.6} y1={f.y + f.r * 0.6} x2={f.x + f.r * 0.6} y2={f.y - f.r * 0.6} stroke="#fff" strokeWidth={3 * k} opacity={1 - p} />;
   if (f.kind === 'ratio') return <line x1={f.x - f.r} y1={f.y + f.r * 0.4} x2={f.x + f.r} y2={f.y - f.r * 0.4} stroke="#facc15" strokeWidth={5 * k * (1 - p * 0.5)} opacity={1 - p} style={{ filter: 'drop-shadow(0 0 8px #facc15)' }} />;
   if (f.kind === 'spiral') {
@@ -552,7 +554,7 @@ const StageBarView = memo(function StageBarView({ label, ratio, color, boss }) {
   return (
     <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', width: 'min(70%, 460px)', zIndex: 13, pointerEvents: 'none', textAlign: 'center' }}>
       <div style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: 1, textShadow: '0 1px 4px #000', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {boss && '⚔ '}{label}
+        {boss && <><Icon name="swords" />{' '}</>}{label}
       </div>
       <div style={{ height: boss ? 10 : 6, background: 'rgba(0,0,0,0.55)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)' }}>
         <div style={{ width: `${ratio * 100}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.15s' }} />
@@ -665,7 +667,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
           <div style={{ width: `${hpPct}%`, height: '100%', borderRadius: 3, background: role === 'hydra' ? '#ff4400' : tier === 'elite' ? '#c084fc' : tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
         </div>
       )}
-      {frozen && <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translate(-50%, 8px)', color: '#67e8f9', fontSize: 11, whiteSpace: 'nowrap' }}>❄</div>}
+      {frozen && <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translate(-50%, 8px)', color: '#67e8f9', fontSize: 13, whiteSpace: 'nowrap' }}><Icon name="snow" /></div>}
     </div>
   );
 });
@@ -678,7 +680,7 @@ const FloaterLayer = memo(function FloaterLayer({ floaters, k }) {
       left: f.x, top: f.y, color: f.color, fontFamily: 'var(--font-hit)', fontWeight: 400,
       fontSize: (f.kind === 'crit' ? 26 : f.big ? 22 : 17) * Math.max(0.8, k),
     }}>
-      {f.text}
+      {withIcons(f.text)}
       {f.icon === 'coin' && <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
       {f.icon === 'gem'  && <img src={`${BASE}ui/ui_frailite.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
     </div>
@@ -717,7 +719,7 @@ function KitChip({ s, sk, cur }) {
 }
 
 const Chip = ({ color, children }) => (
-  <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{children}</div>
+  <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{Children.map(children, c => withIcons(c))}</div>
 );
 
 const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked }) {
@@ -764,7 +766,7 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
           title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : mainCard?.ult ? 'Ult unlocks at LV50' : 'No ult'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
-          {!ult ? (mainCard?.ult ? 'LV50' : '—') : blocked ? <span style={{ fontSize: '0.8em' }}>{blocked}</span> : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
+          {!ult ? (mainCard?.ult ? 'LV50' : '—') : blocked ? <span style={{ fontSize: '0.8em' }}>{withIcons(blocked)}</span> : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
               <span>{cd}s</span>
               <span style={{ fontSize: '0.6em', opacity: 0.8 }}>{Math.floor(charge * 100)}%</span>

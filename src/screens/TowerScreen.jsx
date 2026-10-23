@@ -10,12 +10,14 @@ import useIsMobile from '../hooks/useIsMobile';
 import { playPress, playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import TermTitle from '../components/TermTitle';
+import { Icon } from '../components/Icon';
+import { withIcons } from '../utils/withIcons';
 
 const BASE = import.meta.env.BASE_URL;
 const MAP_ASPECT = 16 / 9;
 
 const kindOf = (n) => (!n.battle ? 'story' : n.battle.boss ? 'boss' : 'battle');
-const ICON = { story: '📖', battle: '⚔', boss: '💀' };
+const ICON = { story: 'book', battle: 'swords', boss: 'skull' };   // components/Icon.jsx
 
 // The Tower: chapter maps made of nodes. Pick a node → play its level.
 export default function TowerScreen({ navigate, story, setStory, stats, deck, devMode, onReward, coins, pullCurrency, profile, setProfile }) {
@@ -144,7 +146,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
           <button className="tw-arrow" disabled={chIdx === 0} onClick={() => switchChapter(-1)} aria-label="Previous chapter">◀</button>
           <div style={{ textAlign: 'center', minWidth: 0 }}>
             <div style={{ color: CODEC.yellow, fontFamily: CODEC.font, fontWeight: 900, fontSize: mobile ? 11.5 : 16, letterSpacing: mobile ? -0.3 : 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {open ? '' : '🔒 '}{ch.name}
+              {open ? '' : <><Icon name="lock" />{' '}</>}{ch.name}
             </div>
             <div style={{ color: '#667', fontSize: 11 }}>{clearedCount}/{ch.nodes.length} cleared</div>
           </div>
@@ -190,7 +192,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
                 <button key={n.id} data-node={n.id} className={`tw-node ${st}${isSel ? ' sel' : ''} ${kind}`} onClick={() => pick(n)}
                   style={{ left: `${n.x}%`, top: `${n.y}%`, width: nodeSize * (kind === 'boss' ? 1.25 : 1), height: nodeSize * (kind === 'boss' ? 1.25 : 1) }}
                   aria-label={`${n.name}${st === 'locked' ? ' (locked)' : st === 'cleared' ? ' (cleared)' : ''}`}>
-                  <span style={{ fontSize: nodeSize * (kind === 'boss' ? 0.5 : 0.42), filter: st === 'locked' ? 'grayscale(1) opacity(0.5)' : 'none' }}>{st === 'locked' ? '🔒' : ICON[kind]}</span>
+                  <span style={{ fontSize: nodeSize * (kind === 'boss' ? 0.5 : 0.42), filter: st === 'locked' ? 'grayscale(1) opacity(0.5)' : 'none' }}>{st === 'locked' ? <Icon name="lock" /> : <Icon name={ICON[kind]} />}</span>
                   {st === 'cleared' && <span className="tw-check">✓</span>}
                   <span className="tw-label" style={{ fontSize: mobile ? 11 : 13 }}>{n.name}</span>
                 </button>
@@ -213,11 +215,11 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
 
       {!panel && (
         <div style={{ position: 'absolute', bottom: mobile ? 10 : 16, left: '50%', transform: 'translateX(-50%)', color: '#8899aa', fontSize: 12, background: 'rgba(7,11,20,0.75)', padding: '5px 12px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
-          {open ? 'Pick a level on the map' : `🔒 Clear ${findNode(ch.after)?.node.name ?? 'the previous chapter'} to open this chapter`}
+          {open ? 'Pick a level on the map' : withIcons(`🔒 Clear ${findNode(ch.after)?.node.name ?? 'the previous chapter'} to open this chapter`)}
         </div>
       )}
 
-      {toast && <div className="tw-toast">{toast}</div>}
+      {toast && <div className="tw-toast">{withIcons(toast)}</div>}
 
       {devMode && (
         <div style={{ position: 'absolute', top: mobile ? 56 : 66, right: 8, background: 'rgba(30,10,50,0.92)', border: '1px solid #a855f7', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, maxWidth: 280, zIndex: 5 }}>
@@ -230,7 +232,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
           <div style={{ color: '#c4b5fd' }}>Flags: {Object.entries(story.flags).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}</div>
           {problems.length > 0 && (
             <details style={{ color: '#fca5a5' }}>
-              <summary>⚠ {problems.length} problem{problems.length > 1 ? 's' : ''} in the story files</summary>
+              <summary><Icon name="warn" /> {problems.length} problem{problems.length > 1 ? 's' : ''} in the story files</summary>
               <ul style={{ margin: '4px 0 0', paddingLeft: 16 }}>{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
             </details>
           )}
@@ -259,9 +261,9 @@ function NodeCard({ node, story, mobile, onPlay, onClose }) {
       {node.desc && <div style={{ color: '#d1fae5', fontSize: 13, fontFamily: 'var(--font-ui)' }}>{node.desc}</div>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
         {b && <span className="tw-chip">LV {b.level ?? 1}</span>}
-        {b?.boss && <span className="tw-chip" style={{ borderColor: '#ff6b4a', color: '#ffb4a2' }}>💀 {ENEMY_TYPES[b.boss]?.name}</span>}
+        {b?.boss && <span className="tw-chip" style={{ borderColor: '#ff6b4a', color: '#ffb4a2' }}><Icon name="skull" /> {ENEMY_TYPES[b.boss]?.name}</span>}
         {mod && <span className="tw-chip" style={{ borderColor: mod.color, color: mod.color }} title={mod.desc}>◆ {mod.name}</span>}
-        {(node.intro || node.outro) && <span className="tw-chip">📖 cutscene</span>}
+        {(node.intro || node.outro) && <span className="tw-chip"><Icon name="book" /> cutscene</span>}
       </div>
       {mod && <div style={{ color: '#a7c4b5', fontSize: 12, fontFamily: 'var(--font-ui)' }}>{mod.desc}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
