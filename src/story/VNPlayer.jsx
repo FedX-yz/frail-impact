@@ -4,7 +4,7 @@ import { CAST } from './cast';
 import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
-import { playSFX, playPress } from '../utils/sfx';
+import { playSFX, playPress, playMusic, stopMusic } from '../utils/sfx';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
 
@@ -15,7 +15,7 @@ const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90 };
 // Plays steps from `i` until one needs the player (a line, a choice, a wait)
 // and returns the new state. Nothing here touches the screen directly.
 function run(steps, from, prev, signed = false) {
-  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false };
+  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false, crawl: null };
   const labelAt = (name) => steps.findIndex(x => x?.label === name);
   let i = from;
   for (let guard = 0; i < steps.length && guard < 2000; guard++) {
@@ -24,6 +24,7 @@ function run(steps, from, prev, signed = false) {
     if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? '') }, choice: null, wait: 0 };
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
+    if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl };   // intro text on black
     if (step.application && !signed) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx), once
     if (step.if !== undefined) {   // conditional jump
       if (testFlag(s.flags, step.if) && step.goto) { const j = labelAt(step.goto); if (j >= 0) { i = j; continue; } }
@@ -46,6 +47,7 @@ function run(steps, from, prev, signed = false) {
     if (step.set) Object.assign(s.flags, step.set);
     if (step.shake) s.shakeN = (s.shakeN ?? 0) + 1;
     if (step.sfx) s.sfx.push(step.sfx);
+    if ('music' in step) s.music = { src: step.music, loop: step.loop ?? true, n: (s.music?.n ?? 0) + 1 };
     if (step.wait) return { ...s, i, line: null, choice: null, wait: step.wait };
     i++;
   }
@@ -67,6 +69,17 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const typed = shown >= text.length;
   const ended = useRef(false);
 
+  // music from { music } steps (loops until the next one; null = fade out), stops when the scene ends
+  const musicN = st.music?.n ?? 0;
+  useEffect(() => {
+    if (!musicN) return;
+    if (st.music.src) playMusic(asset(st.music.src), { fadeIn: 2, gain: 0.8, loop: st.music.loop });
+    else stopMusic(1.5);
+  }, [musicN]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (musicN) stopMusic(1.2); }, [musicN === 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [crawlTap, setCrawlTap] = useState(0);
+  const endCrawl = useCallback(() => setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)), [steps]);
+
   // sounds from { sfx } steps
   useEffect(() => { st.sfx?.forEach(n => playSFX(`${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`)); }, [st.sfx]);
   useEffect(() => {
@@ -75,6 +88,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 
   const next = useCallback(() => {
     if (st.done || st.choice || st.application || showLog) return;
+    if (st.crawl) { setCrawlTap(t => t + 1); return; }
     if (st.line && !typed) { finish(); return; }
     setSt(prev => {
       const log = prev.line ? [...prev.log, prev.line] : prev.log;
@@ -94,7 +108,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 
   // waits, auto-play and skip
   useEffect(() => {
-    if (st.done || st.choice || st.application) { if (st.choice || st.application) setSkip(false); return; }
+    if (st.done || st.choice || st.application || st.crawl) { if (st.choice || st.application) setSkip(false); return; }
     let ms = null;
     if (st.wait) ms = st.wait * 1000;
     else if (skip) ms = 70;
@@ -169,7 +183,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
                 {speaker.name}
               </div>
             )}
-            <div style={{ fontWeight: narr ? 400 : 700, fontSize: (tall ? 16 : 21) + (narr ? 5 : 0), lineHeight: narr ? 1.3 : 1.4, color: narr ? '#e2e8f0' : CODEC.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            <div style={{ fontWeight: narr ? 500 : 700, fontSize: (tall ? 16 : 21) + (narr ? 5 : 0), lineHeight: narr ? 1.3 : 1.4, color: narr ? '#e2e8f0' : CODEC.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               fontFamily: narr ? 'var(--font-narration)' : undefined, letterSpacing: narr ? 0.5 : undefined }}>
               {text.slice(0, shown)}<span style={{ opacity: 0 }}>{text.slice(shown)}</span>
             </div>
@@ -210,9 +224,42 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
           </div>
         </div>
       )}
+      {st.crawl && <IntroCrawl key={st.i} paragraphs={st.crawl} tap={crawlTap} skip={skip} onDone={endCrawl} tall={tall} />}
       {st.application && (
         <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)); }} />
       )}
+    </div>
+  );
+}
+
+// Paragraphs of white text fading in one by one on black, then everything fades out.
+// Tap / Space: show the next paragraph now (or, once all are in, fade out). SKIP: done.
+function IntroCrawl({ paragraphs, tap, skip, onDone, tall }) {
+  const [n, setN] = useState(0);          // paragraphs shown
+  const [out, setOut] = useState(false);  // fading out
+  const read = (p) => 1600 + (p?.length ?? 0) * 55;   // ms to read a paragraph
+  const done = useRef(false);
+  const finish = useCallback(() => { if (!done.current) { done.current = true; onDone(); } }, [onDone]);
+  useEffect(() => { if (skip) finish(); }, [skip, finish]);
+  // next paragraph after the last one has been read; after the last, fade out
+  useEffect(() => {
+    if (out) { const id = setTimeout(finish, 1800); return () => clearTimeout(id); }
+    const id = setTimeout(() => (n < paragraphs.length ? setN(n + 1) : setOut(true)), n === 0 ? 900 : read(paragraphs[n - 1]));
+    return () => clearTimeout(id);
+  }, [n, out, paragraphs, finish]);
+  useEffect(() => {
+    if (!tap) return;
+    if (n < paragraphs.length) setN(n + 1); else setOut(true);
+  }, [tap]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className={`vn-crawl${out ? ' out' : ''}`} style={{ position: 'absolute', inset: 0, zIndex: 8, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: tall ? '60px 22px' : '60px 40px', overflowY: 'auto' }}>
+      <div style={{ maxWidth: 780, display: 'flex', flexDirection: 'column', gap: tall ? 18 : 24 }}>
+        {paragraphs.slice(0, n).map((p, i) => (
+          <p key={i} className="vn-crawl-p" style={{ margin: 0, color: '#f1f1f1', fontFamily: 'var(--font-narration)', fontWeight: 500, fontSize: tall ? 19 : 25, lineHeight: 1.5,
+            textAlign: 'center', opacity: i < n - 1 ? 0.62 : 1, transition: 'opacity 1.2s' }}>{p}</p>
+        ))}
+      </div>
     </div>
   );
 }

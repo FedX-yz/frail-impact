@@ -35,6 +35,10 @@ export const STORY_CSS = `
   .vn-actor { transition: filter 0.2s, transform 0.25s, left 0.35s; animation: vnIn 0.3s ease-out; }
   @keyframes vnIn { from { opacity: 0; transform: translateX(-50%) translateY(18px); } to { opacity: 1; } }
   .vn-shake { animation: vnShake 0.45s; }
+  .vn-crawl { animation: vnFade 0.8s ease-out; transition: opacity 1.6s ease-in; }
+  .vn-crawl.out { opacity: 0; }
+  .vn-crawl-p { animation: crawlIn 1.8s ease-out both; }
+  @keyframes crawlIn { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
   @keyframes vnShake { 10%,50%,90% { transform: translate(-6px, 2px); } 30%,70% { transform: translate(6px, -2px); } }
   .vn-btn { font-family: ${CODEC.font}; font-weight: 900; font-size: 12px; letter-spacing: 1px; color: ${CODEC.yellow};
             background: rgba(10,30,22,0.82); border: 2px solid ${CODEC.yellow}88; border-radius: 4px; padding: 5px 10px; cursor: pointer; }

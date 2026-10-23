@@ -341,7 +341,7 @@ const CSS = `
   .rq-sliprow i, .rq-sign i { font-style:normal; font-size:9.5px; letter-spacing:1.5px; color:#6f6150; width:100px; flex-shrink:0; padding-top:2px; }
   .rq-sign { display:flex; align-items:flex-end; gap:10px; margin-top:12px; min-height:58px; }
   .rq-sign img { height:58px; max-width:220px; object-fit:contain; animation:rqInk .5s ease-out both; }
-  .rq-signtext { font-family:var(--font-narration); font-size:30px; color:#22306e; animation:rqInk .5s ease-out both; }
+  .rq-signtext { font-family:var(--font-hand); font-size:30px; color:#22306e; animation:rqInk .5s ease-out both; }
   .rq-signline { flex:1; border-bottom:1.5px solid #211a12; height:40px; }
   .rq-approved { position:absolute; right:14px; top:58px; font-family:var(--font-hit); font-size:34px; color:#2f6b3a; border:5px solid currentColor; padding:0 10px; border-radius:6px !important;
     transform:rotate(-14deg); opacity:.85; mix-blend-mode:multiply; pointer-events:none; animation:rqStamp .32s cubic-bezier(.3,1.4,.5,1) both; }

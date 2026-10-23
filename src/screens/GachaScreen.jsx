@@ -562,7 +562,7 @@ export default function GachaScreen({
         .rv-pol-photo { position:relative; display:block; aspect-ratio:1/1; overflow:hidden; background:#111; }
         .rv-pol-photo img { width:100%; height:100%; object-fit:cover; object-position:50% 30%; animation: rvDevelop 1.3s ease-out both; }
         .rv-pol-photo img.framed { position:absolute; width:132.4%; height:auto; left:-16.2%; top:-13.2%; max-width:none; object-fit:initial; }
-        .rv-caption { font-family:var(--font-narration); font-size:28px; color:#22306e; text-align:center; margin-top:8px; line-height:1.1; animation: rvWrite .9s .7s steps(18) both; }
+        .rv-caption { font-family:var(--font-hand); font-size:28px; color:#22306e; text-align:center; margin-top:8px; line-height:1.1; animation: rvWrite .9s .7s steps(18) both; }
         .rv-pstars { text-align:center; font-size:13px; color:var(--rc); }
         .rv-pstamp { position:absolute; right:10px; top:14%; font-family:var(--font-hit); font-size:24px; letter-spacing:1px; padding:0 8px; border:3px solid currentColor; border-radius:5px;
           transform:rotate(-12deg); background:rgba(243,239,230,.85); opacity:.93; animation: prStamp .28s 1.1s cubic-bezier(.3,1.4,.5,1) both; }
@@ -637,7 +637,7 @@ export default function GachaScreen({
         .pr-note b { color:#f0c040; font-weight:400; }
         .pr-sign { display:flex; flex-direction:column; align-items:center; margin-top:16px; padding:8px 22px 8px; background:#e7dcc2; border-radius:2px; color:#2a2219;
           box-shadow: 0 8px 18px rgba(0,0,0,.55); transform: rotate(-1deg); animation: prFade .5s ease both; }
-        .pr-sig { height:46px; display:flex; align-items:flex-end; justify-content:center; font-family:var(--font-narration); font-size:28px; color:#1d2a6b; line-height:1; }
+        .pr-sig { height:46px; display:flex; align-items:flex-end; justify-content:center; font-family:var(--font-hand); font-size:28px; color:#1d2a6b; line-height:1; }
         .pr-sig img { max-height:46px; max-width:240px; transform: rotate(-3deg); }
         .pr-sig i { font-style:normal; transform: rotate(-3deg); }
         .pr-line { border-top:1px solid #2a2219; padding-top:4px; margin-top:2px; font-size:9.5px; letter-spacing:2px; color:#5e5140; min-width:240px; text-align:center; }
@@ -665,7 +665,7 @@ export default function GachaScreen({
         .pr-pol-photo { position:relative; display:block; aspect-ratio: 1 / 1; overflow:hidden; background:#222; filter: sepia(.15) saturate(.9) contrast(1.05); }
         .pr-pol.r4 .pr-pol-photo { box-shadow: 0 0 0 2px rgba(168,85,247,.55); }
         .pr-exhibit { position:absolute; left:4px; bottom:4px; font-size:8px; letter-spacing:1px; color:#fff; background:rgba(0,0,0,.6); padding:1px 4px; font-family:var(--font-dialogue); }
-        .pr-caption { font-family:var(--font-narration); font-size:15px; line-height:1.15; color:#22306e; margin-top:6px; min-height:18px;
+        .pr-caption { font-family:var(--font-hand); font-size:15px; line-height:1.15; color:#22306e; margin-top:6px; min-height:18px;
           overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .pr-pol-stars { font-size:8px; color:var(--rc); letter-spacing:-.5px; margin-top:1px; }
         .pr-files.single .pr-caption { font-size:22px; } .pr-files.single .pr-pol-stars { font-size:12px; }

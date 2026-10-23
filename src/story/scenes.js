@@ -20,6 +20,9 @@
 //   { set: { metHox: true } }         set flags without a choice
 //   { end: true }                     stop the scene here
 //   { shake: true }   { wait: 0.8 }   { sfx: 'ui_warp' }  (a file in public/sounds/)
+//   { crawl: ['…', '…'] }             paragraphs of text fading in one by one on black, then fading out
+//   { music: 'audio/story/x.mp3' }    music (path in public/), loops until the next { music };
+//                                       { music: null } fades it out. It also stops when the scene ends
 //
 // Flags are saved with the story and can also hide/show map nodes and codec
 // lines (`if:` in chapters.js) — that's where "consequences" will hook in.
@@ -35,6 +38,16 @@ export const SCENES = {
   // Story mode's first level: you get hired. PLACEHOLDER lines — rewrite them; keep the
   // { application: true } step (it's skipped on replays once you've signed).
   'c1-briefing': [
+    // The opening: black screen, each paragraph fades in, then it all fades out.
+    // Music: put a track at public/audio/story/intro.mp3 (it loops until the next { music }).
+    { music: 'audio/story/intro.mp3' },
+    { crawl: [
+      'Decades ago a virus spread throughout the world, mutating humans and other life forms alike into terrifying and powerful creatures. Since then, those creatures have shifted society into chaos, massacring humans in mass to satisfy their hunger.',
+      'Only a small percentage of the total human population remain today, lowering with each passing day.',
+      'These creatures were called "Havoc", and their claimed territories from humans are assigned as "Frail Environments".',
+      'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the Havoc. Thanks to those efforts, today fending off Havoc hordes became much more manageable, but still on the edge.',
+      'Frail-Initiative is a task force created with the intention to unite the strongest humans alive to delve deep into the source of the virus outbreak. A frail environment notoriously known for its overwhelming amount of powerful Havoc creatures.',
+    ] },
     { bg: null },
     'A phone buzzes in the dark. Unknown number.',
     { show: 'stranger', at: 'center' },

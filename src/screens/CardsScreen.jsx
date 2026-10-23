@@ -338,7 +338,7 @@ const CSS = `
   .rc-com { display:flex; gap:6px; margin-top:4px; }
   .rc-com span { width:28px; height:28px; border:2px solid #211a12; display:grid; place-items:center; font-size:15px; }
   .rc-com span.on { background:#b3121b; color:#fff; border-color:#b3121b; }
-  .rc-note { font-family:var(--font-narration); color:#22306e; font-size:19px; line-height:1.25; }
+  .rc-note { font-family:var(--font-hand); color:#22306e; font-size:19px; line-height:1.25; }
   .rc-note.none { color:rgba(34,48,110,.35); }
   .rc-links { display:flex; flex-wrap:wrap; gap:6px 10px; font-size:12.5px; }
   .rc-links button { background:none; border:none; border-bottom:1px solid #211a12; padding:0; color:#211a12; font-family:inherit; font-size:12.5px; cursor:pointer; }
@@ -366,7 +366,7 @@ const CSS = `
   .rc-polimg { position:relative; display:grid; place-items:center; aspect-ratio:1/1; overflow:hidden; background:#222; color:#555; font-size:46px; }
   .rc-polimg img { width:100%; height:100%; object-fit:cover; }
   .rc-polimg img.framed { position:absolute; width:132.4%; height:auto; left:-16.2%; top:-13.2%; max-width:none; }
-  .rc-cap { display:block; font-family:var(--font-narration); font-size:20px; color:#22306e; text-align:center; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rc-cap { display:block; font-family:var(--font-hand); font-size:20px; color:#22306e; text-align:center; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .rc-board { display:flex; flex-wrap:wrap; gap:18px; justify-content:center; margin-top:16px; }
   .rc-pol.small { width:170px; margin:8px 0; }
   .rc-pol.small .rc-cap { font-size:16px; }

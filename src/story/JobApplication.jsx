@@ -166,7 +166,7 @@ const CSS = `
   .ja-grid { display:grid; grid-template-columns:auto 1fr; gap:8px 14px; align-items:baseline; }
   .ja-k { font-size:10px; letter-spacing:1.5px; color:#6f6150; }
   .ja-v { font-size:15px; border-bottom:1px dotted rgba(40,30,20,.4); padding-bottom:2px; }
-  .ja-input { font-family:var(--font-narration); font-size:24px; color:${INK}; background:transparent; border:none; border-bottom:1.5px solid #211a12; padding:0 2px 2px; outline:none; min-width:0; width:100%; }
+  .ja-input { font-family:var(--font-hand); font-size:24px; color:${INK}; background:transparent; border:none; border-bottom:1.5px solid #211a12; padding:0 2px 2px; outline:none; min-width:0; width:100%; }
   .ja-input::placeholder { color:rgba(33,26,18,.3); }
   .ja-terms { margin-top:14px; }
   .ja-terms ol { margin:4px 0 0; padding-left:20px; font-size:12px; line-height:1.5; color:#3a3024; }

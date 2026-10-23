@@ -66,7 +66,7 @@ export const preloadSound = (src) => { if (src) loadBuffer(src).catch(() => {});
 // Play `src` from `offset` seconds, fading in over `fadeIn` seconds.
 // Resolves to a handle once it's actually playing (null if it couldn't load or
 // was stopped first); musicElapsed(handle) says how far into the fade it is.
-export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1 } = {}) {
+export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1, loop = false } = {}) {
   stopMusic(0);
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
   const handle = { stopped: false };
@@ -74,7 +74,7 @@ export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1 } = {}) {
   return loadBuffer(src).then(decoded => {
     if (handle.stopped) return null;
     const source = _audioCtx.createBufferSource(), g = _audioCtx.createGain();
-    source.buffer = decoded;
+    source.buffer = decoded; source.loop = loop;
     source.connect(g); g.connect(master);
     const t = _audioCtx.currentTime + 0.03;
     if (fadeIn > 0) {
