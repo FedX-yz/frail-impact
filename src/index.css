@@ -38,7 +38,16 @@
 html, body, #root { height: 100%; }
 
 /* a faint amber glow on text, like a phosphor screen (inline text-shadows still win) */
-#root { text-shadow: 0 0 5px rgba(255, 140, 40, 0.18); }
+#root { text-shadow: 0 0 4px rgba(255, 140, 40, 0.1); }
+
+/* Terminal: square corners on everything outside the fight (the battle keeps its round shapes) */
+#root *:not(.battle-arena, .battle-arena *) { border-radius: 0 !important; }
+.term-cursor { animation: termBlink 1.05s steps(1) infinite; }
+@keyframes termBlink { 50% { opacity: 0; } }
+::selection { background: #ff8a1e; color: #090502; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #090502; }
+::-webkit-scrollbar-thumb { background: #5a3313; }
 
 body {
   margin: 0;
@@ -52,7 +61,7 @@ a { color: #ff8c00; text-decoration: inherit; }
 /* Default button look (same as before in dark mode; buttons with their own
    inline styles override this) */
 button {
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
@@ -64,7 +73,7 @@ button {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;   /* no double-tap zoom delay on buttons */
 }
-button:hover { border-color: #646cff; }
+button:hover { border-color: var(--amber); }
 button:focus { outline: none; }
 button:focus-visible { outline: 2px solid #ff8c00; outline-offset: 2px; }
 

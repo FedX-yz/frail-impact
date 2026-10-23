@@ -6,6 +6,7 @@ import { CARD_SETS, setOfCard, formatSub } from '../combat/sets';
 import { cardBattleStats } from '../combat/stats';
 import { BAL } from '../combat/balance';
 import useIsMobile from '../hooks/useIsMobile';
+import TermTitle from '../components/TermTitle';
 
 const rc     = (r) => ({ 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' }[r] || '#888');
 const rLabel = (r) => ({ 6:'6★', 5:'5★', 4:'4★', 3:'3★' }[r] || '?');
@@ -119,8 +120,8 @@ const pool = CHARACTERS
 
       {/* Top bar */}
       <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 18px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink:0 }}>
-      <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
-        <div style={{ fontSize:18, fontWeight:700, color:'#ff8c00', letterSpacing:1 }}>DECK</div>
+      <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>[&nbsp;back&nbsp;]</button>
+        <TermTitle path="DECK" />
         {!mobile && <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★ · 3 of a set in supports = set bonus</div>}
         <div style={{ flex:1 }} />
         <div style={{ color:'#445', fontSize:13 }}>{CHARACTERS.filter(c => cardCounts[c.id] > 0).length} unique cards</div>

@@ -735,7 +735,7 @@ zIndex: 10,
           padding: '7px 18px', borderRadius: 8, cursor: 'pointer',
         }}
       >
-        ← back
+        [&nbsp;back&nbsp;]
       </button>
 
       <div style={{

@@ -9,6 +9,7 @@ import { fmt } from '../combat/engine';
 import useIsMobile from '../hooks/useIsMobile';
 import { playPress, playClose } from '../utils/sfx';
 import { thumb } from '../utils/assets';
+import TermTitle from '../components/TermTitle';
 
 const BASE = import.meta.env.BASE_URL;
 const MAP_ASPECT = 16 / 9;
@@ -137,8 +138,8 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
 
       {/* top bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 6 : 12, padding: mobile ? '6px 8px' : '8px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink: 0 }}>
-        <button className="tw-back" onPointerDown={() => playClose()} onClick={() => navigate('main')}>← back</button>
-        {!mobile && <div style={{ color: '#ff8c00', fontWeight: 800, letterSpacing: 3, fontSize: 18 }}>TOWER</div>}
+        <button className="tw-back" onPointerDown={() => playClose()} onClick={() => navigate('main')}>[&nbsp;back&nbsp;]</button>
+        {!mobile && <TermTitle path="TOWER" />}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 0 }}>
           <button className="tw-arrow" disabled={chIdx === 0} onClick={() => switchChapter(-1)} aria-label="Previous chapter">◀</button>
           <div style={{ textAlign: 'center', minWidth: 0 }}>

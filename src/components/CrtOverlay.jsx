@@ -10,8 +10,8 @@ export default function CrtOverlay() {
   return (
     <div aria-hidden="true" style={{
       position: 'fixed', inset: 0, zIndex: 9000, pointerEvents: 'none',
-      background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.11) 0 1px, transparent 1px 3px)',
-      boxShadow: 'inset 0 0 140px rgba(0,0,0,0.55)',
+      background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 3px)',
+      boxShadow: 'inset 0 0 120px rgba(0,0,0,0.3)',
     }} />
   );
 }

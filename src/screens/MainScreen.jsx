@@ -9,6 +9,7 @@ import BattleArena from '../combat/BattleArena';
 import DevMenu from './DevMenu';
 import useIsMobile from '../hooks/useIsMobile';
 import { thumb } from '../utils/assets';
+import TermTitle from '../components/TermTitle';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -69,6 +70,7 @@ export default function MainScreen({
   // ── Pieces shared by both layouts ─────────────────────────────────────────
   const topBar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: mobile ? 8 : 12, padding: mobile ? '6px 10px' : '8px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink: 0, flexWrap: 'wrap' }}>
+      {!mobile && <TermTitle path="OPS" small />}
       <div className="pill" style={{ borderColor: '#5588ff' }}><GemIcon size={mobile ? 20 : 26} /><span style={{ color: '#fff' }}>{pullCurrency}</span></div>
       <div className="pill" style={{ borderColor: '#cc8800' }}><CoinIcon size={mobile ? 20 : 26} /><span style={{ color: '#f0c040' }}>{fmt(coins)}</span></div>
       <div style={{ fontSize: mobile ? 11 : 13, color: '#778', lineHeight: 1.3 }}>

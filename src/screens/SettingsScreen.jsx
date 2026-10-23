@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { playClose, sfx, playPress } from '../utils/sfx';
 import { getSettings, setSetting } from '../utils/settings';
 import JobApplication from '../story/JobApplication';
+import TermTitle from '../components/TermTitle';
 
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
@@ -109,17 +110,17 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           onClick={triggerScare} 
           style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}
         >
-          ← back
+          [&nbsp;back&nbsp;]
         </button>
 
-        <span onClick={tapTitle} style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2, userSelect:'none' }}>SETTINGS</span>
+        <TermTitle path="SETTINGS" onClick={tapTitle} />
 
         {/* REAL BACK BUTTON (Top Right) */}
         <button 
           onPointerDown={playClose} onClick={() => navigate('main')} 
           style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}
         >
-          ← back
+          [&nbsp;back&nbsp;]
         </button>
       </div>
 

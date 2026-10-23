@@ -6,6 +6,7 @@ import { setOfCard, formatSub, CARD_SETS } from '../combat/sets';
 import { SKILLS, ULTS, describeKit, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK } from '../combat/kits';
 import { cardBattleStats } from '../combat/stats';
 import useIsMobile from '../hooks/useIsMobile';
+import TermTitle from '../components/TermTitle';
 
 const RARITY_COLOR = { 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' };
 const RARITY_LABEL = { 6:'6★', 5:'5★', 4:'4★', 3:'3★' };
@@ -128,8 +129,8 @@ export default function CardsScreen({ navigate, collection, cardInventory = {} }
 
       {/* Top bar */}
       <div style={{ display:'flex', alignItems:'center', padding:'10px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink:0, gap:12 }}>
-        <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>← back</button>
-        <span style={{ color:'#ff8c00', fontWeight:700, fontSize:18, letterSpacing:2 }}>CODEX</span>
+        <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>[&nbsp;back&nbsp;]</button>
+        <TermTitle path="CODEX" />
         {!mobile && <span style={{ color:'#445', fontSize:12 }}>{Object.values(counts).reduce((a, b) => a + b, 0)} total · {unique.length} unique</span>}
         <div style={{ flex:1 }} />
         <button onClick={() => navigate('gacha')} style={{ background:'#1a1000', border:'2px solid #f0c040', color:'#f0c040', fontSize:13, padding:'6px 18px', borderRadius:6, cursor:'pointer', fontWeight:700 }}>

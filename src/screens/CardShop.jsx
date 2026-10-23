@@ -5,6 +5,7 @@ import { thumb } from '../utils/assets';
 import { upgradeSubs, formatSub } from '../combat/sets';
 import { siMult, SI_MULT, SI_MULT_HIGH } from '../combat/stats';
 import { SKILLS, ULTS, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
+import TermTitle from '../components/TermTitle';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -123,7 +124,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
           className="cs-back-btn"
           onPointerDown={playClose} onClick={() => navigate('main')}
         >
-          ← back
+          [&nbsp;back&nbsp;]
         </button>
         <div style={COIN_BADGE}>
           <CoinIcon />
@@ -131,7 +132,7 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
         </div>
         <div style={{ flex: 1 }} />
         <span style={{ color: '#ff8c00', fontWeight: 900, fontSize: 20, letterSpacing: 2 }}>
-          {tab === 'exchange' ? 'SHOP' : '⚡ FUSION'}
+          <TermTitle path={tab === 'exchange' ? 'SHOP' : 'SHOP\\FUSION'} />
         </span>
       </div>
 
