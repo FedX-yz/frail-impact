@@ -22,7 +22,7 @@ const STATUS_PORTRAITS = {
 // Battle background: three layers of the city painting, back to front, each shifting with
 // the cursor by `depth` px (farther = less) for a parallax effect. A stage with its own
 // `bg` (story levels) shows that one picture instead.
-// SCROLL (test): the layers also slide sideways forever at `speed` px/s (positive = to the
+// SCROLL (test): the layers also slide sideways forever at `speed` px/s (the view travels to the
 // right; it eases to a stop while a boss is out), using the *_loop pictures (each painting + its mirror image, so it repeats seamlessly).
 const SCROLL = true;
 const PARALLAX = [
@@ -165,7 +165,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         const el = parallaxRefs.current[i];
         if (!el) return;
         el.style.transform = `translate3d(${(par.x * l.depth).toFixed(2)}px, ${(par.y * l.depth * 0.4).toFixed(2)}px, 0)`;
-        if (SCROLL) { sc.off[i] = (sc.off[i] + l.speed * s.k * sc.v * dt) % 1e6; el.style.backgroundPositionX = `${sc.off[i].toFixed(1)}px`; }
+        if (SCROLL) { sc.off[i] = (sc.off[i] - l.speed * s.k * sc.v * dt) % 1e6; /* minus: picture slides left = travelling right */ el.style.backgroundPositionX = `${sc.off[i].toFixed(1)}px`; }
       });
     }
     for (const e of s.enemies) {
