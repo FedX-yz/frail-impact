@@ -54,6 +54,13 @@ export const ICONS = {
   shield:{ emoji: '🛡', draw: <path d="M12 2.5 L20 5.5 V12 C20 17 16.3 20.3 12 21.5 C7.7 20.3 4 17 4 12 V5.5 Z" /> },
   bolt:  { emoji: '⚡', draw: <path d="M13.5 2 L4.5 14 H11 L10 22 L19.5 9.5 H13 Z" fill="currentColor" fillOpacity="0.85" /> },
   warn:  { emoji: '⚠', draw: <><path d="M12 3 L22 20.5 H2 Z" /><path d="M12 9.5 V14.2" /><circle cx="12" cy="17.2" r="1.1" {...F} /></> },
+  // ── HQ rooms (game-icons only; the simple styles fall back to a box) ──
+  armory:    { emoji: '🛠', draw: <rect x="4" y="4" width="16" height="16" /> },
+  infirmary: { emoji: '⚕', draw: <rect x="4" y="4" width="16" height="16" /> },
+  security:  { emoji: '📹', draw: <rect x="4" y="4" width="16" height="16" /> },
+  analytics: { emoji: '📊', draw: <rect x="4" y="4" width="16" height="16" /> },
+  ops:       { emoji: '📡', draw: <rect x="4" y="4" width="16" height="16" /> },
+  payroll:   { emoji: '💰', draw: <rect x="4" y="4" width="16" height="16" /> },
   // ── Story map ──
   book:  { emoji: '📖', draw: <path d="M3 5 C6 4 9 4 12 6 C15 4 18 4 21 5 V19 C18 18 15 18 12 20 C9 18 6 18 3 19 Z M12 6 V20" /> },
   swords:{ emoji: '⚔', noFill: true, draw: <><path d="M3.5 3.5 L15 15 M12.5 17.5 L17.5 12.5 M15 15 L19 19" /><circle cx="20.2" cy="20.2" r="1.2" /><path d="M20.5 3.5 L9 15 M6.5 12.5 L11.5 17.5 M9 15 L5 19" /><circle cx="3.8" cy="20.2" r="1.2" /></> },

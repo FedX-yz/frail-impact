@@ -14,9 +14,7 @@ export const BAL = {
   LEVEL_ATK:        0.02,  // main card: +2% ATK per level (LV50 ≈ +98%)
   LEVEL_HP:         0.01,  // …and +1% HP and DEF per level (so you hit harder faster than you get tankier)
   AUTO_PCT:         0.10,  // auto-attack deals 10% of ATK every second
-  TRAIN_ATK:        0.10,  // each Train level: +10% ATK (clicks and auto)
-  TRAIN_COST:       100,   // Train level 1 costs this, ×TRAIN_COST_GROWTH per level
-  TRAIN_COST_GROWTH: 1.55,
+  // (the old Train button is now the HQ: combat/hq.js; old saves turn Train levels into Armory levels)
 
   BASE_CRIT_RATE:   0.15,
   BASE_CRIT_DMG:    1.00,  // +100% → crits do 2×
@@ -40,10 +38,16 @@ export const BAL = {
   ENEMY_HP_MULT:    2.5,
   ENEMY_DMG_MULT:   12,
 
-  // Stage scaling (stage n multiplies by GROWTH^(n-1))
+  // Stage scaling: enemies get GROWTH× tougher every stage up to GROWTH_TAPER_FROM,
+  // then the *_LATE rate, so late stages stay within reach of HQ upgrades and levels
+  // (stage 30 ≈ 210× stage-1 HP instead of 1,300×; stage 50 ≈ 4,900×)
   HP_GROWTH:        1.28,
+  HP_GROWTH_LATE:   1.17,
   COIN_GROWTH:      1.20,
   DMG_GROWTH:       1.10,  // enemy damage ×1.10 per stage (stage 10 ≈ 2.4×)
+  DMG_GROWTH_LATE:  1.06,
+  GROWTH_TAPER_FROM: 10,
+  XP_GROWTH:        0.10,  // kill XP +10% per stage (stage 21 = 3×), so card levels keep coming
   GEM_GROWTH:       0.15,  // gem rewards +15% per stage (stage 5 = 1.6×, stage 11 = 2.5×)
 
   // Combo: every hit you land adds a stack (+1% DMG each, up to +50%).
@@ -73,7 +77,6 @@ export const BAL = {
   XP: { basic: 100, elite: 300, boss: 1000, treasure: 10 },
 };
 
-export const trainCost = (level) => Math.round(BAL.TRAIN_COST * Math.pow(BAL.TRAIN_COST_GROWTH, level));
 
 // Faster enemies get less HP, slow ones get more. speed is 0..1.
 export const speedHpMult = (speed) => 1.5 - speed;

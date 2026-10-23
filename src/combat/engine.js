@@ -590,7 +590,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const gems  = t.gems ? Math.round(t.gems * s.stage.gemScale * M('gem')) : 0;
     if (coins) floater(`+${fmt(coins)}`, e.x, e.y + K(14), '#f0c040', false, 'coin');
     if (gems)  floater(`+${gems}`, e.x, e.y + K(30), '#7aa2ff', false, 'gem');
-    cb('onReward', { coins, gems, xp: Math.round((t.xp ?? BAL.XP[e.tier] ?? 0) * M('xp') * reward), kill: e.tier !== 'treasure' && !e.group });
+    cb('onReward', { coins, gems, xp: Math.round((t.xp ?? BAL.XP[e.tier] ?? 0) * M('xp') * reward * (s.stage.xpScale ?? 1) * (s.stats.xpMult ?? 1)), kill: e.tier !== 'treasure' && !e.group });
     if (M('killHeal', 0) && e.tier !== 'treasure') heal(s.player.maxHp * M('killHeal', 0));
     rt.onKill(e);
 
@@ -619,7 +619,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         const g = Math.round((r.gems ?? 0) * s.stage.gemScale * M('gem'));
         floater(`+${fmt(c)}`, e.x, e.y + K(14), '#f0c040', true, 'coin');
         if (g) floater(`+${g}`, e.x, e.y + K(34), '#7aa2ff', true, 'gem');
-        cb('onReward', { coins: c, gems: g, xp: r.xp ?? 0, kill: true });
+        cb('onReward', { coins: c, gems: g, xp: Math.round((r.xp ?? 0) * (s.stage.xpScale ?? 1) * (s.stats.xpMult ?? 1)), kill: true });
       }
       if (e.tier === 'boss') { s.hitStop = 0.28; shake(0.6); stageClear(); }
       return;

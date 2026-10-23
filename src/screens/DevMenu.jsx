@@ -12,8 +12,8 @@ const SPAWNABLE = ['xiao', 'swarmling', 'bonk', 'rusher', 'shielder', 'treasure'
 const RC = { 6: '#ff4444', 5: '#f0c040', 4: '#a855f7', 3: '#60a5fa' };
 
 export default function DevMenu({ engine, actions, state, mobile, onClose }) {
-  const { setPullCurrency, setCoins, setCardInventory, setDeck, setTrainLevel, setPity4, setPity5, disable } = actions;
-  const { cardInventory, deck, trainLevel, pity4, pity5 } = state;
+  const { setPullCurrency, setCoins, setCardInventory, setDeck, setHq, setPity4, setPity5, disable } = actions;
+  const { cardInventory, deck, hq = {}, pity4, pity5 } = state;
   const sorted = [...CHARACTERS].sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name));
   const [cardId, setCardId] = useState(deck?.main?.id ?? sorted[0].id);
   const [stageTo, setStageTo] = useState(engine.state.stageNum + 1);
@@ -55,10 +55,11 @@ export default function DevMenu({ engine, actions, state, mobile, onClose }) {
             <button className="dv" onClick={() => { setCoins(v => v + 1e6); say('+1M coins'); }}>+1M coins</button>
           </Row>
           <Row>
-            <span className="lbl">Train LV {trainLevel}</span>
-            <button className="dv" onClick={() => setTrainLevel(l => Math.max(0, l - 1))}>−1</button>
-            <button className="dv" onClick={() => setTrainLevel(l => l + 1)}>+1</button>
-            <button className="dv" onClick={() => setTrainLevel(l => l + 10)}>+10</button>
+            <span className="lbl">HQ (all rooms) {Math.min(...['armory', 'infirmary', 'security', 'analytics', 'ops', 'payroll'].map(k => hq[k] ?? 0))}</span>
+            <button className="dv" onClick={() => setHq(h => Object.fromEntries(['armory', 'infirmary', 'security', 'analytics', 'ops', 'payroll'].map(k => [k, Math.max(0, (h[k] ?? 0) - 1)])))}>−1</button>
+            <button className="dv" onClick={() => setHq(h => Object.fromEntries(['armory', 'infirmary', 'security', 'analytics', 'ops', 'payroll'].map(k => [k, (h[k] ?? 0) + 1])))}>+1</button>
+            <button className="dv" onClick={() => setHq(h => Object.fromEntries(['armory', 'infirmary', 'security', 'analytics', 'ops', 'payroll'].map(k => [k, (h[k] ?? 0) + 10])))}>+10</button>
+            <button className="dv" onClick={() => setHq({})}>reset</button>
           </Row>
         </Section>
 

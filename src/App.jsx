@@ -7,13 +7,14 @@ import CardsScreen    from './screens/CardsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CardShop       from './screens/CardShop';
 import TowerScreen    from './screens/TowerScreen';
+import HQScreen       from './screens/HQScreen';
 import { normalizeStory } from './story/story';
 import { CHARACTERS }  from './data/characters';
 import { rollSubs }    from './combat/sets';
 import { createBattle } from './combat/engine';
 import { computePlayerStats } from './combat/stats';
 import { SKILL_UNLOCK, ULT_UNLOCK } from './combat/kits';
-import { trainCost } from './combat/balance';
+import { FACILITIES, facilityCost, maxed } from './combat/hq';
 
 const DEV_KEY = 'frail_dev';
 const devFromStorage = () => {
@@ -92,7 +93,8 @@ export default function App() {
   // Kept separate from `collection` (the gacha array) so nothing breaks.
   const [cardInventory, setCardInventory] = useState(s.cardInventory ?? {}); // ← NEW
   // Train level (+10% ATK each). Old saves stored +5 click power per Train.
-  const [trainLevel,    setTrainLevel]    = useState(s.trainLevel ?? Math.max(0, Math.round(((s.clickPower ?? 5) - 5) / 5)));
+  // HQ room levels (combat/hq.js). Old saves: Train levels become Armory levels
+  const [hq,            setHq]            = useState(() => s.hq ?? { armory: s.trainLevel ?? Math.max(0, Math.round(((s.clickPower ?? 5) - 5) / 5)) });
   const [multiplier]                      = useState(s.multiplier    ?? 1);
   const [totalEarned,   setTotalEarned]   = useState(s.totalEarned   ?? 0);
   const [devMode,       setDevMode]       = useState(devFromStorage);
@@ -132,22 +134,25 @@ export default function App() {
   // Coins come from kills only (no idle income)
   useSave({
     pullCurrency, coins, collection, cardInventory,
-    trainLevel, multiplier, totalEarned,
+    hq, multiplier, totalEarned,
     deck, pity4, pity5, killCount, stage, stageKills, story, profile,
   });
 
-  const buyUpgrade = () => {
-    const cost = trainCost(trainLevel);
-    if (coins < cost) return;
+  const buyFacility = (id) => {
+    const f = FACILITIES.find(x => x.id === id), lv = hq[id] ?? 0;
+    if (!f || maxed(f, lv)) return false;
+    const cost = facilityCost(f, lv);
+    if (coins < cost) return false;
     setCoins(c => c - cost);
-    setTrainLevel(l => l + 1);
+    setHq(h => ({ ...h, [id]: (h[id] ?? 0) + 1 }));
+    return true;
   };
 
   // ── Battle ────────────────────────────────────────────────────────────────
   // Your stats, straight from the deck (also shown in Deck)
   const stats = useMemo(
-    () => computePlayerStats({ deck, cardInventory, trainLevel, multiplier }),
-    [deck, cardInventory, trainLevel, multiplier],
+    () => computePlayerStats({ deck, cardInventory, hq, multiplier }),
+    [deck, cardInventory, hq, multiplier],
   );
 
   // The battle lives here, not in the main screen, so opening a menu pauses
@@ -195,7 +200,7 @@ export default function App() {
 
   // Everything the sandbox menu can change
   const devActions = {
-    setPullCurrency, setCoins, setCollection, setCardInventory, setDeck, setTrainLevel, setPity4, setPity5,
+    setPullCurrency, setCoins, setCollection, setCardInventory, setDeck, setHq, setPity4, setPity5,
     disable: () => { try { localStorage.removeItem(DEV_KEY); } catch { /* ignore */ } resetDevBattle(); setDevMode(false); },
   };
   // turning developer mode off also switches off god mode and game speed
@@ -215,6 +220,7 @@ export default function App() {
   );
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
+  if (screen === 'hq')       return <HQScreen navigate={navigate} coins={coins} hq={hq} buy={buyFacility} stats={stats} />;
   if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} mainCardId={deck?.main?.id ?? null} />;
   if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} profile={profile} setProfile={setProfile} />;
 
@@ -257,7 +263,7 @@ export default function App() {
   if (screen === 'main') return (
     <MainScreen {...common}
       engine={engine} stats={stats}
-      trainLevel={trainLevel} buyUpgrade={buyUpgrade}
+      hq={hq}
       deck={deck}
       cardInventory={cardInventory}
       devMode={devMode} devActions={devActions}

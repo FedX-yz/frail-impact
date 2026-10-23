@@ -4,6 +4,7 @@ import { fmt } from '../combat/engine';
 import { cardBattleStats } from '../combat/stats';
 import { SKILL_UNLOCK, ULT_UNLOCK, abilityText } from '../combat/kits';
 import { BAL } from '../combat/balance';
+import { FACILITIES, facilityCost, maxed } from '../combat/hq';
 import { formatSub } from '../combat/sets';
 import BattleArena from '../combat/BattleArena';
 import DevMenu from './DevMenu';
@@ -39,7 +40,7 @@ export default function MainScreen({
   navigate,
   pullCurrency, coins, collection,
   engine, stats,
-  trainLevel, buyUpgrade,
+  hq = {},
   deck,
   cardInventory,
   devMode, devActions, pity4, pity5,
@@ -58,7 +59,8 @@ export default function MainScreen({
 
   const level = stats.level;
   const xpEntry = mainCard ? cardInventory[mainCard.id] : null;
-  const canTrain = coins >= stats.trainCost;
+  // HQ rooms you can afford to upgrade right now
+  const hqReady = FACILITIES.filter(f => !maxed(f, hq[f.id] ?? 0) && coins >= facilityCost(f, hq[f.id] ?? 0)).length;
   const statLine = (size) => (
     <span style={{ fontSize: size, color: '#778', whiteSpace: 'nowrap' }}>
       ATK <b style={{ color: '#f0c040' }}>{fmt(stats.atk)}</b>
@@ -87,14 +89,15 @@ export default function MainScreen({
     </div>
   );
 
+  // (was the Train button) → the HQ screen, where coins buy upgrades
   const trainBtn = (
-    <button className="train-btn" disabled={!canTrain} onPointerDown={() => canTrain && playPress()} onClick={buyUpgrade}
-      title={`Train level ${trainLevel} → ${trainLevel + 1}: +${Math.round(BAL.TRAIN_ATK * 100)}% ATK (clicks and auto). Currently +${Math.round(trainLevel * BAL.TRAIN_ATK * 100)}%.`}>
+    <button className="train-btn" onPointerDown={playPress} onClick={() => navigate('hq')}
+      title="Frail Initiative HQ: spend coins on upgrades (ATK, HP, crit, ult charge, coins/XP)">
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
-        <span>⬆ Train <span style={{ color: '#fde68a', fontSize: 11 }}>LV{trainLevel}</span></span>
-        <span style={{ fontSize: 10, color: '#d6b25e', fontWeight: 600 }}>+{Math.round(BAL.TRAIN_ATK * 100)}% ATK</span>
+        <span>▣ HQ</span>
+        <span style={{ fontSize: 10, color: hqReady ? '#6ef59b' : '#d6b25e', fontWeight: 600 }}>{hqReady ? `${hqReady} upgrade${hqReady === 1 ? '' : 's'} ready` : 'upgrades'}</span>
       </span>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><CoinIcon size={14} />{fmt(stats.trainCost)}</span>
+      {!mobile && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><CoinIcon size={14} />{fmt(coins)}</span>}
     </button>
   );
 
@@ -211,7 +214,7 @@ export default function MainScreen({
   const arena = <BattleArena engine={engine} mainCard={mainCard} mobile={mobile} />;
   const devMenu = devMode && devOpen && (
     <DevMenu engine={engine} actions={devActions} mobile={mobile} onClose={() => setDevOpen(false)}
-      state={{ pullCurrency, coins, collection, cardInventory, deck, trainLevel, pity4, pity5 }} />
+      state={{ pullCurrency, coins, collection, cardInventory, deck, hq, pity4, pity5 }} />
   );
 
   return (

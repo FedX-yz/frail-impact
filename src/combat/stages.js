@@ -38,6 +38,12 @@ export function stageModifier(n) {
   return { id, ...MODIFIERS[id] };
 }
 
+// early rate up to GROWTH_TAPER_FROM, the late rate after it
+const tapered = (n, early, late) => {
+  const a = Math.min(n, BAL.GROWTH_TAPER_FROM) - 1, b = Math.max(0, n - BAL.GROWTH_TAPER_FROM);
+  return Math.pow(early, a) * Math.pow(late, b);
+};
+
 export function makeEndlessStage(n) {
   return {
     n,
@@ -62,8 +68,9 @@ export function makeEndlessStage(n) {
     boss: ['devourer', 'worm', 'hydra'][(n - 1) % 3],
     bossCooldownMult: Math.max(0.6, 1 - (n - 1) * 0.05),
 
-    hpScale: Math.pow(BAL.HP_GROWTH, n - 1),
-    dmgScale: Math.pow(BAL.DMG_GROWTH, n - 1),
+    hpScale: tapered(n, BAL.HP_GROWTH, BAL.HP_GROWTH_LATE),
+    dmgScale: tapered(n, BAL.DMG_GROWTH, BAL.DMG_GROWTH_LATE),
+    xpScale: 1 + BAL.XP_GROWTH * (n - 1),
     coinScale: Math.pow(BAL.COIN_GROWTH, n - 1),
     gemScale: 1 + BAL.GEM_GROWTH * (n - 1),   // boss/treasure gems grow so later stages stay worth it
 

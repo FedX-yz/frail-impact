@@ -1,4 +1,5 @@
-import { BAL, trainCost } from './balance';
+import { BAL } from './balance';
+import { hqBonuses } from './hq';
 import { SKILLS, ULTS, SKILL_UNLOCK, ULT_UNLOCK, ULT_CD_PER_SI, scaleKit, weakKit } from './kits';
 import { CARD_SETS } from './sets';
 
@@ -29,7 +30,8 @@ export function activeSets(deck) {
 }
 
 // Everything the battle needs to know about the player, from the deck.
-export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, multiplier = 1 }) {
+export function computePlayerStats({ deck, cardInventory = {}, hq = {}, multiplier = 1 }) {
+  const H = hqBonuses(hq);
   const main     = deck?.main ?? null;
   const supports = (deck?.supports ?? []).filter(Boolean);
 
@@ -55,15 +57,15 @@ export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, m
   // Set bonuses
   const sets = activeSets(deck);
   const has = id => sets.some(s => s.id === id);
-  const atkPct = sub.atkPct + (has('endings') ? 0.20 : 0) + trainLevel * BAL.TRAIN_ATK;
+  const atkPct = sub.atkPct + (has('endings') ? 0.20 : 0);
   const hpPct  = sub.hpPct + (has('oof') ? 0.25 : 0);
-  let critRate = BAL.BASE_CRIT_RATE + sub.critRate + (has('mystery') ? 0.05 : 0);
-  let critDmg  = BAL.BASE_CRIT_DMG  + sub.critDmg  + (has('mystery') ? 0.50 : 0);
+  let critRate = BAL.BASE_CRIT_RATE + sub.critRate + (has('mystery') ? 0.05 : 0) + H.critRate;
+  let critDmg  = BAL.BASE_CRIT_DMG  + sub.critDmg  + (has('mystery') ? 0.50 : 0) + H.critDmg;
 
   // Team stats — the numbers shown in Deck and on the main screen
   const baseAtk = mainS.atk + BAL.SUPPORT_ATK * sum('atk');
-  const atk = Math.round(baseAtk * (1 + atkPct) * dmgMult);
-  const maxHp = Math.round((mainS.hp + BAL.SUPPORT_HP * sum('hp')) * (1 + hpPct));
+  const atk = Math.round(baseAtk * (1 + atkPct) * dmgMult * H.atkMult);
+  const maxHp = Math.round((mainS.hp + BAL.SUPPORT_HP * sum('hp')) * (1 + hpPct) * H.hpMult);
   const def = Math.round((mainS.def + BAL.SUPPORT_DEF * sum('def')) * (1 + defBoost));
   const defReduction = def / (def + BAL.DEF_K);
 
@@ -82,7 +84,7 @@ export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, m
   if (skill?.type === 'ratio') critRate = Math.max(0, critRate + (skill.critRateMod ?? 0));   // Nanami crits by timing instead
 
   const dmgReduction = Math.min(BAL.MAX_DMG_REDUCTION,
-    defReduction + sub.dmgRed + enemyDmgRed + (has('showdown') ? 0.15 : 0));
+    defReduction + sub.dmgRed + enemyDmgRed + (has('showdown') ? 0.15 : 0) + H.dmgRed);
 
   return {
     atk, maxHp, def, defReduction,
@@ -93,15 +95,16 @@ export function computePlayerStats({ deck, cardInventory = {}, trainLevel = 0, m
     highHpAtkBonus,
     regen:    maxHp * (BAL.BASE_REGEN_PCT + regenPct) * (has('oof') ? 2 : 1),
     dmgReduction,
-    coinMult:      1 + sub.coinPct + (has('meme') ? 0.25 : 0),
-    ultChargeMult: 1 + sub.ultCharge + (has('broke') ? 0.35 : 0),
+    coinMult:      1 + sub.coinPct + (has('meme') ? 0.25 : 0) + H.payPct,
+    xpMult:        1 + H.payPct,
+    ultChargeMult: 1 + sub.ultCharge + (has('broke') ? 0.35 : 0) + H.ultCharge,
     treasureMult:  has('meme') ? 2 : 1,
     telegraphMult: has('showdown') ? 1.3 : 1,
     bossDmgMult:   has('endings') ? 1.3 : 1,
     labubuEvery:   has('labubu') ? 10 : 0,
-    trainLevel, trainCost: trainCost(trainLevel),
+    hq: H,
     // where the numbers come from, for the Deck screen breakdown
-    parts: { main: main ? mainS : null, supports: supS, atkPct, hpPct, dmgMult, defBoost },
+    parts: { main: main ? mainS : null, supports: supS, atkPct, hpPct, dmgMult, defBoost, hqAtk: H.atkMult },
     sets, skill, ult, level, si,
   };
 }

@@ -236,8 +236,8 @@ const pool = CHARACTERS
               </div>
               <div style={{ color:'#556', fontSize:10, marginTop:6, lineHeight:1.4 }}>
                 Main card's stats + {Math.round(BAL.SUPPORT_ATK * 100)}% of supports' ATK and {Math.round(BAL.SUPPORT_HP * 100)}% of their HP/DEF
-                {stats.trainLevel > 0 && <>, Train +{Math.round(stats.trainLevel * BAL.TRAIN_ATK * 100)}% ATK</>}
-                {stats.parts.atkPct - stats.trainLevel * BAL.TRAIN_ATK > 0.001 && <>, sub-stats/sets +{Math.round((stats.parts.atkPct - stats.trainLevel * BAL.TRAIN_ATK) * 100)}% ATK</>}
+                {stats.parts.hqAtk > 1.001 && <>, HQ Armory ×{stats.parts.hqAtk.toFixed(2)} ATK</>}
+                {stats.parts.atkPct > 0.001 && <>, sub-stats/sets +{Math.round(stats.parts.atkPct * 100)}% ATK</>}
                 {stats.parts.dmgMult > 1.001 && <>, passives ×{stats.parts.dmgMult.toFixed(2)}</>}.
               </div>
               {[deck?.main, ...supports].filter(Boolean).filter(c => c.passive).map((c, i) => (
