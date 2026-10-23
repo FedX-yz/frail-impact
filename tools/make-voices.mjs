@@ -1,8 +1,9 @@
 // Makes the audio for voiced story lines (cast.js → voice) — run it after changing
 // any line a voiced character says:   node tools/make-voices.mjs   (--force redoes all)
 //
-// Needs espeak-ng with the MBROLA us1 and us2 voices, and ffmpeg built with rubberband:
-//   Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us1 mbrola-us2 ffmpeg
+// Needs ffmpeg built with rubberband, espeak-ng + MBROLA us2 (the caller) and Kokoro (the narrator):
+//   Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us2 ffmpeg
+//   Kokoro:         see tools/kokoro_say.py (pip install + two model files)
 // The files go to public/<voice.dir>/<hash>.mp3 (see src/story/voice.js).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -16,11 +17,10 @@ const force = process.argv.includes('--force');
 // voice presets: espeak voice/speed/pitch, then ffmpeg effects
 const PRESETS = {
   // the unknown caller: low, doubled an octave down, phone-band, slightly crushed, wavering, echoing
-  // the intro narrator: a calm woman's voice (nothing like the caller), clean, a soft hall echo
+  // the intro narrator: Kokoro neural voice (natural, British man, unhurried), a soft room echo
   narrator: {
-    espeak: ['-v', 'mb-us1', '-s', '142', '-p', '45'],
-    filter: '[0:a]aresample=44100,rubberband=pitch=0.97:formant=preserved,highpass=f=90,lowpass=f=9000,' +
-            'equalizer=f=3000:t=q:w=1:g=2,aecho=0.8:0.8:60|120:0.14|0.08,loudnorm=I=-17:TP=-1.5,apad=pad_dur=0.4',
+    kokoro: ['bm_george', 'en-gb', '0.92'],
+    filter: '[0:a]aresample=44100,highpass=f=60,aecho=0.8:0.85:50|90:0.12|0.07,loudnorm=I=-17:TP=-1.5,apad=pad_dur=0.4',
   },
   creepy: {
     espeak: ['-v', 'mb-us2', '-s', '125', '-p', '25'],
@@ -48,7 +48,8 @@ for (const [scene, steps] of Object.entries(SCENES)) {
     const p = PRESETS[v.preset ?? 'creepy'];
     const say = text.replaceAll('Manager {manager}', 'Manager').replaceAll('{manager}', 'Manager');   // the voice can't know the player's name
     const wav = path.join(tmp, 'line.wav');
-    execFileSync('espeak-ng', [...p.espeak, '-w', wav, say]);
+    if (p.kokoro) execFileSync('python3', [path.join('tools', 'kokoro_say.py'), ...p.kokoro, wav, say]);
+    else execFileSync('espeak-ng', [...p.espeak, '-w', wav, say]);
     execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', wav, '-filter_complex', p.filter, '-ar', '44100', '-ac', '1', '-b:a', '96k', out]);
     console.log(`${scene}  ${who}: ${say.slice(0, 60)}  →  ${out}`);
     made++;

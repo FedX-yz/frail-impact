@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Kokoro TTS model files (tools/kokoro_say.py)
+tools/kokoro/
