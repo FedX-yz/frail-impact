@@ -567,8 +567,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.attacks.forEach(a => { if (a.owner === h.id && (a.phase === 'wait' || a.phase === 'tele')) finishAttack(a); });
     const heads = s.enemies.filter(x => x.group === h.group);
     const up = heads.filter(x => !(x.down > 0)).length;
+    // beheaded: a spray of blood where the neck was cut (BattleArena drops the head and shows the stump)
+    const cut = { x: h.x - h.size * s.k * h.drawScale * 0.05, y: h.y - h.size * s.k * h.drawScale * 0.35 };
+    effect({ kind: 'shards', x: cut.x, y: cut.y, r: K(70), color: '#b91c1c', n: 14 });
+    effect({ kind: 'burst', x: cut.x, y: cut.y, r: K(60), color: '#dc2626' });
+    shake(0.25); sfx('bigKill');
     if (up === 0) { heads.forEach(x => killEnemy(x)); return; }
-    floater(`HEAD DOWN! ${up} left`, h.x, h.y - K(60), '#facc15', true);
+    floater(`BEHEADED! ${up} left`, h.x, h.y - K(60), '#facc15', true);
   }
 
   function killEnemy(e, { silent = false } = {}) {
@@ -977,6 +982,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (e.down <= 0) {
           e.down = 0; e.hp = Math.round(e.maxHp * e.type.regrowPct);
           floater('REGROWN!', e.x, e.y - K(60), '#ff4444', true);
+          effect({ kind: 'burst', x: e.x, y: e.y - e.size * s.k * 0.4, r: K(80), color: '#a3e635' });
         }
         continue;
       }

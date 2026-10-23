@@ -596,8 +596,13 @@ function HydraNecks({ heads, k, time }) {
       out.push(
         <img key={`${h.id}-${i}`} src={t.neckImg} alt="" draggable={false} className="hydra-neck"
           style={{ position: 'absolute', left: x - bw / 2, top: y - bh / 2, width: bw, height: bh, zIndex: 7, pointerEvents: 'none',
-            transform: `rotate(${rot.toFixed(1)}deg)`, filter: h.down > 0 ? 'grayscale(1) brightness(0.5)' : undefined }} />,
+            transform: `rotate(${rot.toFixed(1)}deg)`, filter: h.down > 0 ? 'brightness(0.7) saturate(0.8)' : undefined }} />,
       );
+    }
+    // beheaded: the neck ends in a stump that swells as the head is about to grow back
+    if (h.down > 0) {
+      const grow = 1 - Math.min(1, h.down / (t.downTime || 5)), sw = bw * (0.62 + 0.18 * grow);
+      out.push(<div key={`${h.id}-stump`} className="hydra-stump" style={{ left: ax - sw / 2, top: ay - sw * 0.32, width: sw, height: sw * 0.64, zIndex: 7 }} />);
     }
     return out;
   });
@@ -607,7 +612,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
   frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
-  if (down) filter = 'grayscale(1) brightness(0.5)';
+  if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
   else if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
   else if (flashRed || pose) filter = 'none';
   else if (hurt) filter = `${tint ?? ''} brightness(2.2)`;
@@ -645,13 +650,12 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         ))}</div>
       ) : (
         <img src={img} alt="" draggable={false} decoding="async"
-          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}${poses ? ' smooth' : ''}${sway != null ? ' hydra-head' : ''}`}
-          style={{ width: '100%', height: '100%', objectFit: isWormHead && !turns ? 'cover' : 'contain', filter: turns && filter === 'none' ? undefined : filter, animationPlayState: frozen || down || paused ? 'paused' : 'running',
-            animationDelay: sway != null ? `${-sway * 1.1}s` : undefined }} />
+          className={`enemy-img${tier === 'boss' && !grouped ? ' boss' : ''}${flashRed ? ' flash-red' : ''}${tier === 'treasure' ? ' treasure' : ''}${isWormHead ? ' worm-head' : ''}${turns ? ' turns' : ''}${poses ? ' smooth' : ''}${sway != null ? ` hydra-head${down ? ' severed' : ''}` : ''}`}
+          style={{ width: '100%', height: '100%', objectFit: isWormHead && !turns ? 'cover' : 'contain', filter: turns && filter === 'none' ? undefined : filter, animationPlayState: frozen || (down && sway == null) || paused ? 'paused' : 'running' }} />
       )}
       </div>
       </div>
-      {down > 0 && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#facc15', fontWeight: 900, fontSize: 13 * Math.max(0.8, k), textShadow: '0 1px 4px #000' }}>DOWN {down.toFixed(1)}s</div>}
+      {down > 0 && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#facc15', fontWeight: 900, fontSize: 13 * Math.max(0.8, k), textShadow: '0 1px 4px #000' }}>{sway != null ? `REGROWS ${down.toFixed(1)}s` : `DOWN ${down.toFixed(1)}s`}</div>}
       {shieldR > 0 && (
         <div style={{ position: 'absolute', left: '10%', right: '10%', bottom: '100%', height: 5, background: '#0b2233', borderRadius: 3, marginBottom: 3 }}>
           <div style={{ width: `${shieldPct}%`, height: '100%', borderRadius: 3, background: '#38bdf8' }} />
@@ -797,7 +801,19 @@ const ARENA_CSS = `
   .enemy-img.worm-head:not(.turns) { border-radius:50%; border:3px solid #7f1d1d; box-shadow:0 0 14px rgba(255,60,0,0.8); animation:none; }
   .enemy-img.turns { animation:none; image-rendering:auto; }
   .enemy-img.smooth { image-rendering:auto; }
-  .enemy-img.hydra-head { image-rendering:auto; transform-origin: 50% 15%; animation:none; transform: rotate(var(--tilt, 0deg));
+  /* hydra heads grow in (spawn and regrow) and fall off when beheaded */
+  .enemy-img.hydra-head { animation: hydraGrow .75s cubic-bezier(.2,1.5,.45,1) both; }
+  .enemy-img.hydra-head.severed { animation: hydraFall 1.1s cubic-bezier(.45,0,.9,.6) forwards; }
+  @keyframes hydraGrow { 0% { transform: scale(.08) rotate(var(--tilt, 0deg)); opacity:.3; } 60% { opacity:1; } 100% { transform: scale(1) rotate(var(--tilt, 0deg)); } }
+  @keyframes hydraFall { 0% { transform: rotate(var(--tilt, 0deg)); opacity:1; } 18% { transform: translate(6%, -6%) rotate(18deg); }
+    100% { transform: translate(18%, 170%) rotate(120deg); opacity:0; } }
+  .hydra-stump { position:absolute; pointer-events:none; border-radius:50%;
+    background: radial-gradient(ellipse at 50% 40%, #ff5a4a 0 18%, #9b1c1c 40%, #4a0b0b 75%); box-shadow: 0 0 10px rgba(180,20,20,.6), inset 0 -3px 6px rgba(0,0,0,.5);
+    animation: stumpPulse 0.9s ease-in-out infinite; }
+  .hydra-stump::after { content:''; position:absolute; left:46%; top:70%; width:9%; height:0; background:#8b1111; border-radius:0 0 4px 4px; animation: stumpDrip 1.6s ease-in infinite; }
+  @keyframes stumpPulse { 50% { filter: brightness(1.25); transform: scale(1.06); } }
+  @keyframes stumpDrip { 0% { height:0; opacity:1; } 70% { height:120%; opacity:1; } 100% { height:140%; opacity:0; } }
+  .enemy-img.hydra-head { image-rendering:auto; transform-origin: 50% 15%; transform: rotate(var(--tilt, 0deg));
     filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45)); }
   .boss-shadow { position:absolute; left:12%; right:12%; height:16%; transform:translateY(-50%); z-index:-1; pointer-events:none;
     background: radial-gradient(ellipse at center, rgba(0,0,0,0.5), rgba(0,0,0,0.25) 45%, transparent 70%); }
