@@ -220,7 +220,7 @@ export default function App() {
   );
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
-  if (screen === 'hq')       return <HQScreen navigate={navigate} coins={coins} hq={hq} buy={buyFacility} stats={stats} />;
+  if (screen === 'hq')       return <HQScreen navigate={navigate} coins={coins} hq={hq} buy={buyFacility} stats={stats} profile={profile} />;
   if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} mainCardId={deck?.main?.id ?? null} />;
   if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} profile={profile} setProfile={setProfile} />;
 
