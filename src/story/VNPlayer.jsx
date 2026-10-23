@@ -232,12 +232,30 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   );
 }
 
+// {style:words} inside a crawl paragraph: the words light up in that style a moment
+// after the paragraph appears. Styles (codecStyle.js → .cw-*): red, havoc, gold, green,
+// title, em, dim, shake. Plain text around them stays white.
+const MARK = /\{(red|havoc|gold|green|title|em|dim|shake):([^}]+)\}/g;
+const plainCrawl = (p) => p.replace(MARK, '$2');
+function marked(p) {
+  const out = [];
+  let last = 0, m, k = 0;
+  MARK.lastIndex = 0;
+  while ((m = MARK.exec(p))) {
+    if (m.index > last) out.push(p.slice(last, m.index));
+    out.push(<span key={k++} className={`cw cw-${m[1]}`} data-t={m[2]}>{m[2]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < p.length) out.push(p.slice(last));
+  return out;
+}
+
 // Paragraphs of white text fading in one by one on black, then everything fades out.
 // Tap / Space: show the next paragraph now (or, once all are in, fade out). SKIP: done.
 function IntroCrawl({ paragraphs, tap, skip, onDone, tall }) {
   const [n, setN] = useState(0);          // paragraphs shown
   const [out, setOut] = useState(false);  // fading out
-  const read = (p) => 1600 + (p?.length ?? 0) * 55;   // ms to read a paragraph
+  const read = (p) => 1600 + plainCrawl(p ?? '').length * 55;   // ms to read a paragraph
   const done = useRef(false);
   const finish = useCallback(() => { if (!done.current) { done.current = true; onDone(); } }, [onDone]);
   useEffect(() => { if (skip) finish(); }, [skip, finish]);
@@ -257,7 +275,7 @@ function IntroCrawl({ paragraphs, tap, skip, onDone, tall }) {
       <div style={{ maxWidth: 780, display: 'flex', flexDirection: 'column', gap: tall ? 18 : 24 }}>
         {paragraphs.slice(0, n).map((p, i) => (
           <p key={i} className="vn-crawl-p" style={{ margin: 0, color: '#f1f1f1', fontFamily: 'var(--font-narration)', fontWeight: 500, fontSize: tall ? 19 : 25, lineHeight: 1.5,
-            textAlign: 'center', opacity: i < n - 1 ? 0.62 : 1, transition: 'opacity 1.2s' }}>{p}</p>
+            textAlign: 'center', opacity: i < n - 1 ? 0.62 : 1, transition: 'opacity 1.2s' }}>{marked(p)}</p>
         ))}
       </div>
     </div>
