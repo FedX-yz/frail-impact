@@ -45,21 +45,16 @@ export const STORY_CSS = `
   .cw-green  { animation-name: cwGreen; }
   .cw-em     { font-style: italic; color: #fff; }
   .cw-dim    { font-style: italic; animation-name: cwDim; }
-  .cw-title  { font-family: var(--font-dramatic); font-size: 1.25em; letter-spacing: 2px; animation-name: cwTitle; }
+  .cw-title  { font-weight: 600; letter-spacing: 1px; animation-name: cwTitle; }
   .cw-shake  { display: inline-block; animation: cwRed 1.4s 1.1s ease-out both, cwShake .18s 1.1s 6 linear; }
-  .cw-havoc  { position: relative; display: inline-block; font-family: var(--font-glitch); font-size: 1.12em; letter-spacing: 1px;
-               animation: cwHavoc 1.4s 1.1s ease-out both, cwJit 3.2s 2.5s steps(1) infinite; }
-  .cw-havoc::after { content: attr(data-t); position: absolute; left: 2px; top: 0; color: #00e5ff; opacity: 0; mix-blend-mode: screen;
-               animation: cwGhost 3.2s 2.5s steps(1) infinite; pointer-events: none; }
-  @keyframes cwRed   { from { color: #f1f1f1; text-shadow: none; } to { color: #ff5a4f; text-shadow: 0 0 12px rgba(255,60,50,.75), 0 0 2px #ff2a1f; } }
-  @keyframes cwGold  { from { color: #f1f1f1; text-shadow: none; } to { color: #ffc46b; text-shadow: 0 0 14px rgba(255,170,60,.7); } }
-  @keyframes cwGreen { from { color: #f1f1f1; text-shadow: none; } to { color: #a6e86a; text-shadow: 0 0 12px rgba(140,230,80,.6); } }
+  .cw-havoc  { letter-spacing: 1px; animation-name: cwHavoc; }
+  @keyframes cwRed   { from { color: #f1f1f1; text-shadow: none; } to { color: #ff5a4f; text-shadow: 0 0 8px rgba(255,60,50,.5); } }
+  @keyframes cwGold  { from { color: #f1f1f1; text-shadow: none; } to { color: #ffc46b; text-shadow: 0 0 8px rgba(255,170,60,.45); } }
+  @keyframes cwGreen { from { color: #f1f1f1; text-shadow: none; } to { color: #a6e86a; text-shadow: 0 0 8px rgba(140,230,80,.4); } }
   @keyframes cwDim   { from { opacity: 1; } to { opacity: .55; } }
-  @keyframes cwTitle { from { color: #f1f1f1; text-shadow: none; } to { color: #fff; text-shadow: 0 0 16px rgba(255,255,255,.8), 0 0 40px rgba(255,180,90,.5); } }
-  @keyframes cwHavoc { from { color: #f1f1f1; text-shadow: none; } to { color: #ff3b30; text-shadow: 0 0 14px rgba(255,40,30,.9), 2px 0 0 rgba(0,229,255,.35); } }
+  @keyframes cwTitle { from { color: #f1f1f1; text-shadow: none; } to { color: #fff; text-shadow: 0 0 10px rgba(255,255,255,.45); } }
+  @keyframes cwHavoc { from { color: #f1f1f1; text-shadow: none; } to { color: #ff5246; text-shadow: 0 0 8px rgba(255,50,40,.55); } }
   @keyframes cwShake { 0%,100% { transform: none; } 25% { transform: translate(-1px,1px) rotate(-1deg); } 75% { transform: translate(1px,-1px) rotate(1deg); } }
-  @keyframes cwJit   { 0%,100% { transform: none; } 91% { transform: translate(2px,0) skewX(-8deg); } 93% { transform: translate(-2px,1px); } 95% { transform: none; } }
-  @keyframes cwGhost { 0%,100% { opacity: 0; } 91% { opacity: .7; transform: translate(-3px,0); } 95% { opacity: 0; } }
   @keyframes crawlIn { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
   @keyframes vnShake { 10%,50%,90% { transform: translate(-6px, 2px); } 30%,70% { transform: translate(6px, -2px); } }
   .vn-btn { font-family: ${CODEC.font}; font-weight: 900; font-size: 12px; letter-spacing: 1px; color: ${CODEC.yellow};

@@ -44,11 +44,11 @@ export const SCENES = {
     { music: 'audio/story/intro.mp3' },
     // {style:words} lights words up: red, havoc (glitchy red), gold, green, title, em, dim, shake
     { crawl: [
-      '{em:Decades ago} a {green:virus} spread throughout the world, mutating humans and other life forms alike into {red:terrifying and powerful creatures}. Since then, those creatures have shifted society into {shake:chaos}, massacring humans in mass to satisfy their {red:hunger}.',
-      'Only a {em:small percentage} of the total human population remain today, {dim:lowering with each passing day.}',
+      'Decades ago a {green:virus} spread throughout the world, mutating humans and other life forms alike into terrifying and powerful creatures. Since then, those creatures have shifted society into chaos, massacring humans in mass to satisfy their hunger.',
+      'Only a small percentage of the total human population remain today, lowering with each passing day.',
       'These creatures were called {havoc:"Havoc"}, and their claimed territories from humans are assigned as {gold:"Frail Environments"}.',
-      'In the face of this {red:merciless enemy}, humanity was forced to hasten their technology advancements to get an {gold:upper hand} against the {havoc:Havoc}. Thanks to those efforts, today fending off Havoc hordes became much more manageable, {em:but still on the edge.}',
-      '{title:Frail-Initiative} is a task force created with the intention to unite the {gold:strongest humans alive} to delve deep into the {green:source of the virus outbreak}. A frail environment notoriously known for its {red:overwhelming amount of powerful Havoc creatures}.',
+      'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the Havoc. Thanks to those efforts, today fending off Havoc hordes became much more manageable, but still on the edge.',
+      '{title:Frail-Initiative} is a task force created with the intention to unite the strongest humans alive to delve deep into the source of the virus outbreak. A frail environment notoriously known for its overwhelming amount of powerful Havoc creatures.',
     ] },
     { bg: null },
     'A phone buzzes in the dark. Unknown number.',
