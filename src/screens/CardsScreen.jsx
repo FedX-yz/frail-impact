@@ -1,338 +1,352 @@
-import { useState, useMemo, memo, useCallback, useTransition } from 'react';
-import { playClose } from '../utils/sfx';
+// Codex → "Records": the Frail Initiative's filing cabinet.
+// Drawers by rarity (and one for sets, "case files"). Opening a drawer shows its
+// folders; cards you don't own yet are folders with a blacked-out tab. Picking a
+// folder opens it on the desk: a personnel file for 5★/6★, an evidence file for
+// 3★/4★. On phones the open folder covers the screen.
+//
+// handlerNote (optional, in characters.js): a handwritten line on the card's file.
+import { useState, useMemo } from 'react';
+import { playClose, playPress } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
+import { BANNERS } from '../data/banners';
 import { setOfCard, formatSub, CARD_SETS } from '../combat/sets';
 import { SKILLS, ULTS, describeKit, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK } from '../combat/kits';
-import { cardBattleStats } from '../combat/stats';
+import { cardBattleStats, siMult } from '../combat/stats';
 import useIsMobile from '../hooks/useIsMobile';
 import TermTitle from '../components/TermTitle';
 
-const RARITY_COLOR = { 6:'#ff4444', 5:'#f0c040', 4:'#a855f7', 3:'#60a5fa' };
-const RARITY_LABEL = { 6:'6★', 5:'5★', 4:'4★', 3:'3★' };
-const ELEMENT_ICON = { Geo:'🪨', Hydro:'💧', Ice:'❄️', Fire:'🔥', Lightning:'⚡', Physical:'⚔️', Quantum:'🌌', Imaginary:'✨', Wind:'💨', Shadow:'🌑' };
+const RC = { 6: '#ff4d6d', 5: '#e0a800', 4: '#9b5de5', 3: '#3a7bd5' };
+const CLEAR = { 3: 'C', 4: 'B', 5: 'A', 6: 'Ω' };
+const DRAWERS = [
+  { id: '6', label: 'CLASSIFIED', sub: '6★ · PLATINUM & SPECIAL', rarity: 6 },
+  { id: '5', label: 'AGENTS', sub: '5★ PERSONNEL', rarity: 5 },
+  { id: '4', label: 'EVIDENCE · B', sub: '4★ EXHIBITS', rarity: 4 },
+  { id: '3', label: 'EVIDENCE · C', sub: '3★ EXHIBITS', rarity: 3 },
+  { id: 'sets', label: 'CASE FILES', sub: 'SETS OF EVIDENCE' },
+];
+const fileNo = c => `FI-${String(c.id).padStart(4, '0')}`;
+const photoOf = c => c.cardArt || c.sprite || c.characterImage || c.image;
 
-const CardImage = memo(({ card, size = 28, small = false }) => {
-  const full = card.characterImage || card.image;
-  const src = small ? thumb(full) : full;
-  const isPlaceholder = !src || src.includes('placeholder');
-  return isPlaceholder
-    ? <span style={{ fontSize: size, fontWeight: 900, color: '#fff' }}>{card.name[0]}</span>
-    : <img src={src} alt={card.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        loading={small ? 'lazy' : undefined} decoding="async"
-        onError={e => { if (e.target.src !== full) e.target.src = full; }}
-      />;
-});
-
-const CardTile = memo(({ card, isSelected, count, onSelect }) => {
-  return (
-    <div onClick={() => onSelect(card)} style={{
-      border: `2px solid ${isSelected ? '#ff8c00' : RARITY_COLOR[card.rarity]}`,
-      borderRadius:8, padding:8,
-      background: isSelected ? '#2a1f00' : 'var(--panel)',
-      cursor:'pointer', textAlign:'center', transition:'all 0.15s', position:'relative',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-    }}>
-      <div style={{ 
-        width:'100%', 
-        aspectRatio:'1', 
-        position:'relative', 
-        borderRadius:4, 
-        overflow:'hidden', 
-        background:card.color, 
-        marginBottom:6,
-        display:'flex', 
-        alignItems:'center', 
-        justifyContent:'center',
-        flexShrink: 0,
-      }}>
-        <CardImage card={card} size={28} small />
-      </div>
-      <div style={{ fontSize:11, fontWeight:700, color:'#eee', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{card.name}</div>
-      <div style={{ fontSize:10, color:RARITY_COLOR[card.rarity] }}>{RARITY_LABEL[card.rarity]}</div>
-      {count > 1 && (
-        <div style={{ position:'absolute', top:4, right:4, background:'#ff8c00', color:'#000', fontSize:9, fontWeight:700, borderRadius:8, padding:'1px 5px' }}>×{count}</div>
-      )}
-    </div>
-  );
-}, (prev, next) => {
-  return prev.card.id === next.card.id && 
-         prev.isSelected === next.isSelected && 
-         prev.count === next.count;
-});
-
-// Plain grid. (It used to be "virtualized" with a fixed 160px row height, but
-// tiles are much taller on wide screens, so the last rows could never be
-// scrolled into view. A few dozen cards with lazy thumbnails don't need it.)
-const FastVirtualGrid = memo(({ cards, counts, selected, onSelect, cols = 5 }) => (
-  <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 12, background:'var(--desk)' }}>
-    {cards.length === 0 ? (
-      <div style={{ color: '#445', textAlign: 'center', fontSize: 14, marginTop: 40 }}>no cards yet — go pull!</div>
-    ) : (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 10 }}>
-        {cards.map(card => (
-          <CardTile key={card.id} card={card} isSelected={selected?.id === card.id} count={counts[card.id]} onSelect={onSelect} />
-        ))}
-      </div>
-    )}
-  </div>
-));
-
-export default function CardsScreen({ navigate, collection, cardInventory = {} }) {
+export default function CardsScreen({ navigate, collection, cardInventory = {}, mainCardId = null }) {
   const { mobile } = useIsMobile();
-  const [filter, setFilter] = useState('all');
-  const [selected, setSelected] = useState(null);
+  const [drawer, setDrawer] = useState('5');
+  const [open, setOpen] = useState(null);          // { kind: 'card', card } | { kind: 'set', set }
   const [showArt, setShowArt] = useState(null);
-  const [, startTransition] = useTransition();
 
-  // Copies from the gacha AND the shop
   const counts = useMemo(() => {
     const c = {};
     collection.forEach(card => { c[card.id] = (c[card.id] || 0) + 1; });
     Object.entries(cardInventory).forEach(([id, e]) => { if (e.count) c[id] = (c[id] || 0) + e.count; });
     return c;
   }, [collection, cardInventory]);
+  const owned = c => (counts[c.id] ?? 0) > 0;
+  const inDrawer = r => CHARACTERS.filter(c => c.rarity === r).sort((a, b) => (owned(b) - owned(a)) || a.name.localeCompare(b.name));
+  const found = CHARACTERS.filter(owned).length;
 
-  // Current card definitions (not the copies saved at pull time)
-  const unique = useMemo(
-    () => CHARACTERS.filter(c => counts[c.id] > 0).sort((a, b) => b.rarity - a.rarity),
-    [counts],
+  const pick = (o) => { playPress(); setOpen(o); };
+  const toggle = (id) => { playPress(); setDrawer(d => (d === id ? null : id)); };
+
+  const cabinet = (
+    <div className="rc-cab">
+      <div className="rc-cabtop">FRAIL INITIATIVE · RECORDS · DO NOT REMOVE</div>
+      {DRAWERS.map(d => {
+        const cards = d.rarity ? inDrawer(d.rarity) : null;
+        const have = cards ? cards.filter(owned).length : CARD_SETS.filter(s => s.members.every(id => counts[id] > 0)).length;
+        const total = cards ? cards.length : CARD_SETS.length;
+        const isOpen = drawer === d.id;
+        return (
+          <div key={d.id} className="rc-dwrap">
+            <button className={`rc-drawer${isOpen ? ' open' : ''}`} onClick={() => toggle(d.id)}>
+              <span className="rc-label">{d.label}<small>{d.sub}</small></span>
+              <span className="rc-pull" />
+              <span className="rc-cnt">{have} / {total}{d.id === 'sets' ? ' complete' : ''}</span>
+              {isOpen && <span className="rc-openmark">▼ OPEN</span>}
+            </button>
+            {isOpen && (
+              <div className="rc-slot">
+                {cards ? cards.map((c, i) => {
+                  const has = owned(c);
+                  const sel = open?.kind === 'card' && open.card.id === c.id;
+                  return (
+                    <button key={c.id} className={`rc-folder${has ? '' : ' sealed'}${sel ? ' sel' : ''}`} onClick={() => pick({ kind: 'card', card: c })}
+                      style={{ '--tab': `${(i % 3) * 30}%`, '--rc': RC[c.rarity] }}>
+                      <span className="rc-tab">{has ? c.name : <span className="rc-bar">██████████</span>}</span>
+                      <span className="rc-edge">{has ? <>{fileNo(c)}{c.subtitle ? ` · ${c.subtitle}` : ''}{counts[c.id] > 1 ? ` · ×${counts[c.id]}` : ''}</> : 'SEALED'}</span>
+                    </button>
+                  );
+                }) : CARD_SETS.map((s, i) => {
+                  const n = s.members.filter(id => counts[id] > 0).length;
+                  const sel = open?.kind === 'set' && open.set.id === s.id;
+                  return (
+                    <button key={s.id} className={`rc-folder case${sel ? ' sel' : ''}`} onClick={() => pick({ kind: 'set', set: s })} style={{ '--tab': `${(i % 3) * 30}%`, '--rc': s.color }}>
+                      <span className="rc-tab">CASE: {s.name}</span>
+                      <span className="rc-edge">{n}/{s.members.length} exhibits{n === s.members.length ? ' · CLOSED' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 
-  const display = useMemo(
-    () => (filter === 'all' || filter === 'sets') ? unique : unique.filter(c => {
-      const rarity = parseInt(String(c.rarity), 10);
-      return rarity === parseInt(filter, 10);
-    }),
-    [filter, unique]
-  );
-  // "Sets" view: one section per set (with all 3 members, owned or not), then the rest
-  const setGroups = useMemo(() => filter !== 'sets' ? null : [
-    ...CARD_SETS.map(set => ({ set, cards: set.members.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean) })),
-    { set: null, cards: unique.filter(c => !setOfCard(c.id)) },
-  ], [filter, unique]);
-
-  const handleCardSelect = useCallback((card) => {
-    startTransition(() => {
-      setSelected(prev => prev?.id === card.id ? null : card);
-    });
-  }, []);
+  const desk = open
+    ? (open.kind === 'set'
+      ? <CaseFile set={open.set} counts={counts} onOpen={c => pick({ kind: 'card', card: c })} />
+      : owned(open.card)
+        ? <CardFile card={open.card} entry={cardInventory[open.card.id] ?? {}} count={counts[open.card.id] ?? 0} active={open.card.id === mainCardId}
+            counts={counts} onArt={() => setShowArt(open.card)} onOpen={c => pick({ kind: 'card', card: c })} />
+        : <SealedFile card={open.card} />)
+    : <div className="rc-empty">Open a drawer and pick a folder.</div>;
 
   return (
-    <div style={{ width:'100%', height:"100dvh", background:'var(--desk)', display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:'var(--font-ui)', color:'#eee' }}>
-      <style>{`
-        img { -webkit-user-drag:none; user-select:none; -webkit-touch-callout: none; }
-        body { -webkit-font-smoothing: antialiased; }
-      `}</style>
-
-      {/* Top bar */}
-      <div style={{ display:'flex', alignItems:'center', padding:'10px 16px', background:'var(--bar)', borderBottom:'2px solid #ff8c00', flexShrink:0, gap:12 }}>
-        <button onPointerDown={playClose} onClick={() => navigate('main')} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}>[&nbsp;back&nbsp;]</button>
-        <TermTitle path="CODEX" />
-        {!mobile && <span style={{ color:'#445', fontSize:12 }}>{Object.values(counts).reduce((a, b) => a + b, 0)} total · {unique.length} unique</span>}
-        <div style={{ flex:1 }} />
-        <button onClick={() => navigate('gacha')} style={{ background:'#1a1000', border:'2px solid #f0c040', color:'#f0c040', fontSize:13, padding:'6px 18px', borderRadius:6, cursor:'pointer', fontWeight:700 }}>
-          ✨ PULL
-        </button>
+    <div className="rc-root">
+      <style>{CSS}</style>
+      <div className="rc-top">
+        <button onPointerDown={playClose} onClick={() => navigate('main')}>[&nbsp;back&nbsp;]</button>
+        <TermTitle path="RECORDS" small={mobile} />
+        {!mobile && <span className="rc-meta">{found} of {CHARACTERS.length} files recovered</span>}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => navigate('gacha')}>[&nbsp;recruit&nbsp;]</button>
       </div>
 
-      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+      {mobile ? (
+        <div className="rc-body phone">{cabinet}</div>
+      ) : (
+        <div className="rc-body">{cabinet}<div className="rc-desk">{desk}</div></div>
+      )}
 
-        {/* Grid */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-
-          {/* Filter bar */}
-          <div style={{ display:'flex', gap:8, padding:'10px 14px', borderBottom:'1px solid var(--line)', flexShrink:0, flexWrap:'wrap' }}>
-            {[['all','ALL'],['6','6★'],['5','5★'],['4','4★'],['3','3★'],['sets','◆ SETS']].map(([val, label]) => (
-              <button key={val} onClick={() => setFilter(val)} style={{
-                background: filter===val ? '#ff8c0022' : 'none',
-                border: `1px solid ${filter===val ? '#ff8c00' : 'var(--line)'}`,
-                color: filter===val ? '#ff8c00' : '#556',
-                padding:'4px 14px', borderRadius:4, cursor:'pointer', fontSize:12,
-              }}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {setGroups ? (
-            <div style={{ flex:1, overflowY:'auto', padding:12 }}>
-              {setGroups.filter(g => g.cards.length).map(({ set, cards }) => (
-                <div key={set?.id ?? 'rest'} style={{ marginBottom:16 }}>
-                  <div style={{ display:'flex', alignItems:'baseline', gap:8, flexWrap:'wrap', marginBottom:8, paddingBottom:4, borderBottom:`1px solid ${set ? set.color + '55' : '#2a3050'}` }}>
-                    <span style={{ color: set?.color ?? '#889', fontWeight:800, fontSize:14 }}>{set ? `◆ ${set.name}` : 'No set'}</span>
-                    {set && <span style={{ color:'#667', fontSize:11 }}>{cards.filter(c => counts[c.id] > 0).length}/3 owned</span>}
-                    {set && <span style={{ color:'#889', fontSize:12 }}>{set.desc}</span>}
-                  </div>
-                  <div style={{ display:'grid', gridTemplateColumns:`repeat(${mobile ? 3 : 5}, 1fr)`, gap:10 }}>
-                    {cards.map(card => (
-                      <div key={card.id} style={{ opacity: counts[card.id] > 0 ? 1 : 0.35, filter: counts[card.id] > 0 ? 'none' : 'grayscale(1)' }}
-                        title={counts[card.id] > 0 ? '' : 'not owned yet'}>
-                        <CardTile card={card} isSelected={selected?.id === card.id} count={counts[card.id] ?? 0} onSelect={handleCardSelect} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <FastVirtualGrid
-              cards={display}
-              counts={counts}
-              selected={selected}
-              onSelect={handleCardSelect}
-              cols={mobile ? 3 : 5}
-            />
-          )}
+      {mobile && open && (
+        <div className="rc-sheet">
+          <button className="rc-close" onClick={() => { playClose(); setOpen(null); }}>[&nbsp;close&nbsp;]</button>
+          {desk}
         </div>
-
-        {/* Detail panel — side column on PC, bottom sheet on phones */}
-        {mobile && selected && <div onClick={() => setSelected(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:40 }} />}
-        <div style={mobile
-          ? { display: selected ? 'block' : 'none', position:'fixed', left:0, right:0, bottom:0, maxHeight:'78dvh', zIndex:41, borderTop:'2px solid #ff8c00', borderRadius:'14px 14px 0 0', padding:16, overflowY:'auto', background:'var(--panel)' }
-          : { width:260, flexShrink:0, borderLeft:'1px solid var(--line)', padding:16, overflowY:'auto', background:'var(--panel)' }}>
-          {mobile && selected && (
-            <button onClick={() => setSelected(null)} style={{ float:'right', background:'none', border:'1px solid #445', color:'#aaa', borderRadius:6, padding:'2px 10px', fontSize:16 }}>×</button>
-          )}
-          {selected ? (
-            <>
-              <div
-                onClick={() => { if (selected.cardArt) setShowArt(selected); }}
-                style={{ width: mobile ? '55%' : '100%', margin: mobile ? '0 auto 6px' : undefined, aspectRatio:'1', borderRadius:12, overflow:'hidden', background:selected.color, marginBottom:6, display:'flex', alignItems:'center', justifyContent:'center', border:`3px solid ${RARITY_COLOR[selected.rarity]}`, cursor: selected.cardArt ? 'zoom-in' : 'default' }}
-              >
-                <CardImage card={selected} size={56} />
-              </div>
-              {selected.cardArt && (
-                <div style={{ color:'rgba(255,255,255,0.25)', fontSize:11, textAlign:'center', marginBottom:10 }}>tap image for full art</div>
-              )}
-
-              <div style={{ color:RARITY_COLOR[selected.rarity], fontSize:13, marginBottom:2 }}>{RARITY_LABEL[selected.rarity]}</div>
-              <div style={{ fontSize:20, fontWeight:700, marginBottom:2 }}>{selected.name}</div>
-              <div style={{ color:'#778', fontSize:13, marginBottom:10 }}>{selected.subtitle}</div>
-
-              {selected.element && (
-                <div style={{ color:selected.color, fontSize:13, marginBottom:10 }}>
-                  {ELEMENT_ICON[selected.element]} {selected.element}
-                </div>
-              )}
-
-              {selected.stats && (
-                <div style={{ background:'#0f1420', borderRadius:6, padding:'8px 12px', marginBottom:10, display:'flex', gap:12, justifyContent:'center' }}>
-                  <div style={{ textAlign:'center' }}><div style={{ color:'#556', fontSize:10 }}>HP</div><div style={{ color:'#44cc66', fontWeight:700 }}>{selected.stats.hp}</div></div>
-                  <div style={{ textAlign:'center' }}><div style={{ color:'#556', fontSize:10 }}>ATK</div><div style={{ color:'#f0c040', fontWeight:700 }}>{selected.stats.atk}</div></div>
-                  <div style={{ textAlign:'center' }}><div style={{ color:'#556', fontSize:10 }}>DEF</div><div style={{ color:'#5588ff', fontWeight:700 }}>{selected.stats.def}</div></div>
-                </div>
-              )}
-
-              {(() => {
-                // Your copy of the card: level and superimposition change the numbers
-                const e = cardInventory[selected.id] ?? {};
-                const si = Math.min(4, e.si ?? 0);
-                const bs = cardBattleStats(selected, e);
-                const changed = bs.atk !== selected.stats?.atk;
-                return (
-                  <>
-                    {changed && counts[selected.id] > 0 && (
-                      <div style={{ color:'#889', fontSize:11, textAlign:'center', marginTop:-6, marginBottom:10 }}>
-                        Yours{selected.rarity >= 5 ? ` (LV${e.level ?? 1}` : ' ('}{si > 0 ? `${selected.rarity >= 5 ? ', ' : ''}S${si + 1}` : ''}): ATK {bs.atk} · HP {bs.hp} · DEF {bs.def}
-                      </div>
-                    )}
-                    {[['✦ Skill', selected.skill, SKILLS[selected.skill?.effect]], ['⚡ Ult · LV50', selected.ult, ULTS[selected.ult?.effect]]].filter(([, a]) => a).map(([tag, a, kit]) => (
-                      <div key={tag} style={{ background:'#1a1000', border:'1px solid #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
-                        <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{a.name} <span style={{ color:'#776', fontWeight:400, fontSize:11 }}>{tag}{si > 0 ? ` · S${si + 1}` : ''}</span></div>
-                        <div style={{ color:'#aaa', fontSize:12 }}>{kit ? describeKit(kit, si) : a.description}</div>
-                        {tag.startsWith('⚡') && <div style={{ color:'#889', fontSize:11, marginTop:4 }}>Cooldown {Math.round((a.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si))}s · fills from damage you deal · press E</div>}
-                        {!tag.startsWith('⚡') && kit?.lv1 && (
-                          <div style={{ color:'#8a7a3a', fontSize:11, marginTop:4 }}>
-                            Always on. Before LV{SKILL_UNLOCK} (weaker): {describeKit(weakKit(kit), si)}
-                          </div>
-                        )}
-                        {kit && si < 4 && <div style={{ color:'#7c6a2a', fontSize:11, marginTop:3 }}>Next S{si + 2}: {describeSiStep(kit, si)}{tag.startsWith('⚡') ? `, cooldown −${Math.round(ULT_CD_PER_SI * 100)}%` : ''}</div>}
-                      </div>
-                    ))}
-                  </>
-                );
-              })()}
-
-              {selected.rarity >= 5 && !selected.skill && !selected.ult && (
-                <div style={{ background:'#1a1000', border:'1px dashed #4a3000', borderRadius:6, padding:'8px 10px', marginBottom:8, color:'#998', fontSize:12 }}>
-                  ✦ Skill and ult coming soon — for now this card brings its stats.
-                </div>
-              )}
-              {selected.passive && (
-                <div style={{ background:'#0a1020', border:'1px solid #1a2a40', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
-                  <div style={{ color:'#88aaff', fontWeight:700, marginBottom:4 }}>◈ {selected.passive.name}</div>
-                  <div style={{ color:'#aaa', fontSize:12 }}>{selected.passive.description}</div>
-                </div>
-              )}
-
-              {(() => {
-                const set = setOfCard(selected.id);
-                const subs = cardInventory[selected.id]?.subs ?? [];
-                if (!set && !subs.length) return null;
-                return (
-                  <div style={{ background:'#0a1020', border:`1px solid ${set?.color ?? '#1a2a40'}66`, borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
-                    {set && <>
-                      <div style={{ color:set.color, fontWeight:700, marginBottom:3 }}>◆ Set: {set.name}</div>
-                      <div style={{ color:'#aaa', fontSize:12 }}>{set.desc}</div>
-                      <div style={{ color:'#667', fontSize:11, marginTop:3 }}>
-                        {set.members.map(id => CHARACTERS.find(c => c.id === id)?.name).join(' · ')}
-                      </div>
-                    </>}
-                    {subs.length > 0 && (
-                      <div style={{ marginTop: set ? 8 : 0 }}>
-                        <div style={{ color:'#88aaff', fontSize:11, marginBottom:2 }}>SUB-STATS</div>
-                        {subs.map((sb, i) => <div key={i} style={{ color:'#ddd', fontSize:12 }}>{formatSub(sb)}{sb.ups ? <span style={{ color:'#f0c040' }}> {'▲'.repeat(sb.ups)}</span> : null}</div>)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {!selected.skill && !selected.ult && selected.rarity < 5 && !setOfCard(selected.id) && (
-                <div style={{ color:'#445', fontSize:12, textAlign:'center', marginTop:8 }}>no abilities — stat support only</div>
-              )}
-
-              {counts[selected.id] > 1 && (
-                <div style={{ marginTop:10, color:'#ff8c00', fontSize:12, textAlign:'center' }}>×{counts[selected.id]} owned</div>
-              )}
-            </>
-          ) : (
-            <div style={{ color:'var(--line)', fontSize:13, textAlign:'center', marginTop:60 }}>click a card to view details</div>
-          )}
-        </div>
-      </div>
+      )}
 
       {showArt && (
-        <div
-          onClick={() => setShowArt(null)}
-          style={{
-            position:'fixed', inset:0, zIndex:100,
-            background:'rgba(0,0,0,0.95)',
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            cursor:'pointer',
-          }}
-        >
-          <button
-            onClick={() => setShowArt(null)}
-            style={{ position:'absolute', top:16, right:16, background:'rgba(255,255,255,0.15)', border:'none', color:'#fff', fontSize:28, width:48, height:48, borderRadius:'50%', cursor:'pointer' }}
-          >×</button>
-          <img
-            src={showArt.cardArt}
-            alt={showArt.name}
-            style={{ maxWidth:'90vw', maxHeight:'80vh', objectFit:'contain', borderRadius:12 }}
-          />
-          <div style={{ marginTop:16, textAlign:'center' }}>
-            <div style={{ color:({ 6:'#ff4444', 5:'#f0c040' }[showArt.rarity]), fontSize:16, marginBottom:4 }}>
-              {'★'.repeat(showArt.rarity)} {showArt.name}
-            </div>
-            <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>{showArt.subtitle}</div>
-            <div style={{ color:'rgba(255,255,255,0.2)', fontSize:12, marginTop:8 }}>tap anywhere to close</div>
-          </div>
+        <div onClick={() => setShowArt(null)} className="rc-art">
+          <img src={photoOf(showArt)} alt={showArt.name} />
+          <div style={{ marginTop: 12, color: 'var(--amber)' }}>{showArt.name} · tap to close</div>
         </div>
       )}
     </div>
   );
 }
+
+// ── An owned card's file ──────────────────────────────────────────────────────
+function CardFile({ card, entry, count, active, counts, onArt, onOpen }) {
+  const agent = card.rarity >= 5;
+  const si = Math.min(4, entry.si ?? 0);
+  const bs = cardBattleStats(card, entry);
+  const set = setOfCard(card.id);
+  const subs = entry.subs ?? [];
+  // others from the same banner(s)
+  const assoc = [...new Set(BANNERS.filter(b => b.featuredIds?.includes(card.id)).flatMap(b => b.featuredIds))]
+    .filter(id => id !== card.id).map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean);
+  const kits = [['SKILL', card.skill, SKILLS[card.skill?.effect]], ['ULT · LV 50', card.ult, ULTS[card.ult?.effect]]].filter(([, a]) => a);
+
+  return (
+    <div className="rc-folderopen" key={card.id}>
+      <div className="rc-page">
+        <div className="rc-hd"><span>{agent ? 'PERSONNEL FILE' : 'EVIDENCE LOG'} · {fileNo(card)}</span><span style={{ color: RC[card.rarity] }}>{'★'.repeat(Math.min(card.rarity, 6))}</span></div>
+        {agent ? (
+          <button className="rc-photo" onClick={onArt} title="view full art">
+            <span className="rc-clip" /><img src={photoOf(card)} alt={card.name} style={{ objectPosition: card.cardArt ? '50% 12%' : '50% 4%' }} />
+          </button>
+        ) : (
+          <button className="rc-pol" onClick={onArt} title="view full art">
+            <span className="rc-tape" /><span className="rc-polimg"><img src={thumb(card.characterImage || card.image)} alt={card.name} className={card.cardArt ? '' : 'framed'} /></span>
+            <span className="rc-cap">{card.name}</span>
+          </button>
+        )}
+        {agent && <div className="rc-name">{card.name}</div>}
+        {card.subtitle && <Row k="TITLE" v={card.subtitle} />}
+        <Row k="CLEARANCE" v={`LVL ${CLEAR[Math.min(card.rarity, 6)]}${card.element ? ` · ${card.element}` : ''}${card.series === 'platinum' ? ' · Platinum Series' : ''}`} />
+        <Row k="ON FILE" v={`×${count} cop${count === 1 ? 'y' : 'ies'}${agent ? ` · LV ${entry.level ?? 1}` : ''}`} />
+        <Row k="STATS" v={`ATK ${bs.atk} · HP ${bs.hp} · DEF ${bs.def}`} />
+        {active && <span className="rc-stamp" style={{ color: '#b3121b' }}>ACTIVE DUTY</span>}
+      </div>
+      <div className="rc-page">
+        <div className="rc-hd"><span>{agent ? 'FIELD NOTES' : 'CASE NOTES'}</span><span>PAGE 2</span></div>
+        {kits.map(([tag, a, kit]) => (
+          <div key={tag}>
+            <div className="rc-sect">{tag} · {a.name.toUpperCase()}</div>
+            <div className="rc-kit">{kit ? describeKit(kit, si) : a.description}</div>
+            {tag === 'SKILL' && kit?.lv1 && <div className="rc-small">Before LV{SKILL_UNLOCK} (weaker): {describeKit(weakKit(kit), si)}</div>}
+            {tag !== 'SKILL' && <div className="rc-small">Cooldown {Math.round((a.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si))}s · fills from damage you deal · press E</div>}
+            {kit && si < 4 && <div className="rc-small">Next commendation: {describeSiStep(kit, si)}</div>}
+          </div>
+        ))}
+        {agent && !card.skill && !card.ult && <><div className="rc-sect">KIT</div><div className="rc-kit">Skill and ult pending. For now this agent brings their stats.</div></>}
+        {card.passive && <><div className="rc-sect">PASSIVE · {card.passive.name.toUpperCase()}</div><div className="rc-kit">{card.passive.description}</div></>}
+        {set && <>
+          <div className="rc-sect">CASE · {set.name.toUpperCase()}</div>
+          <div className="rc-kit">{set.desc}</div>
+          <div className="rc-links">{set.members.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean).map(c => (
+            counts[c.id] > 0 ? <button key={c.id} onClick={() => onOpen(c)}>{c.name}</button> : <span key={c.id} className="rc-red">████████</span>))}</div>
+        </>}
+        {subs.length > 0 && <>
+          <div className="rc-sect">SUB-STATS</div>
+          {subs.map((sb, i) => <div key={i} className="rc-kit">{formatSub(sb)}{sb.ups ? <b> {'▲'.repeat(sb.ups)}</b> : null}</div>)}
+        </>}
+        <div className="rc-sect">{agent ? 'COMMENDATIONS' : 'CONDITION'} (SUPERIMPOSITION)</div>
+        <div className="rc-com">{[0, 1, 2, 3, 4].map(i => <span key={i} className={i <= si ? 'on' : ''}>{i <= si ? '★' : '☆'}</span>)}</div>
+        <div className="rc-small">S{si + 1} · +{Math.round((siMult(si, card.rarity) - 1) * 100)}% ATK/HP/DEF{si < 4 ? ` · next at ${si + 2} copies` : ' · MAX'}</div>
+        <div className="rc-sect">HANDLER'S NOTE</div>
+        <div className={`rc-note${card.handlerNote ? '' : ' none'}`}>{card.handlerNote || 'no note on file'}</div>
+        {assoc.length > 0 && <>
+          <div className="rc-sect">KNOWN ASSOCIATES</div>
+          <div className="rc-links">{assoc.map(c => counts[c.id] > 0
+            ? <button key={c.id} onClick={() => onOpen(c)}>{c.name}</button>
+            : <span key={c.id} className="rc-red">████████</span>)}</div>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+function SealedFile({ card }) {
+  return (
+    <div className="rc-folderopen" key={card.id}>
+      <div className="rc-page">
+        <div className="rc-hd"><span>{card.rarity >= 5 ? 'PERSONNEL FILE' : 'EVIDENCE LOG'} · {fileNo(card)}</span><span style={{ color: RC[card.rarity] }}>{'★'.repeat(Math.min(card.rarity, 6))}</span></div>
+        <div className="rc-sealedbox">?</div>
+        <div className="rc-name"><span className="rc-red">██████</span></div>
+        <Row k="TITLE" v={<span className="rc-red">████████████</span>} />
+        <Row k="CLEARANCE" v={`LVL ${CLEAR[Math.min(card.rarity, 6)]}`} />
+        <Row k="ON FILE" v="none" />
+        <span className="rc-stamp" style={{ color: '#5b4a2a' }}>SEALED</span>
+      </div>
+      <div className="rc-page">
+        <div className="rc-hd"><span>NOTICE</span><span>PAGE 2</span></div>
+        <div className="rc-kit" style={{ marginTop: 14 }}>This file stays sealed until the Initiative has {card.rarity >= 5 ? 'recruited this agent' : 'logged this evidence'}.</div>
+        {[80, 95, 60, 88, 70, 92, 55].map((w, i) => <div key={i} className="rc-red" style={{ display: 'block', width: `${w}%`, height: 12, margin: '12px 0' }} />)}
+      </div>
+    </div>
+  );
+}
+
+function CaseFile({ set, counts, onOpen }) {
+  const members = set.members.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean);
+  const n = members.filter(c => counts[c.id] > 0).length;
+  return (
+    <div className="rc-folderopen" key={set.id}>
+      <div className="rc-page" style={{ flex: 2 }}>
+        <div className="rc-hd"><span>CASE FILE · {set.id.toUpperCase()}</span><span>{n}/{members.length} EXHIBITS</span></div>
+        <div className="rc-name" style={{ color: '#160f08' }}>{set.name}</div>
+        <div className="rc-kit">Bonus with all {members.length} in your deck's supports: {set.desc}</div>
+        <div className="rc-board">
+          {members.map((c, i) => counts[c.id] > 0 ? (
+            <button key={c.id} className="rc-pol small" onClick={() => onOpen(c)} style={{ transform: `rotate(${(i - 1) * 4}deg)` }}>
+              <span className="rc-tape" /><span className="rc-polimg"><img src={thumb(c.characterImage || c.image)} alt={c.name} className="framed" /></span>
+              <span className="rc-cap">{c.name}</span>
+            </button>
+          ) : (
+            <div key={c.id} className="rc-pol small missing" style={{ transform: `rotate(${(i - 1) * 4}deg)` }}>
+              <span className="rc-polimg"><span>?</span></span><span className="rc-cap">missing</span>
+            </div>
+          ))}
+        </div>
+        {n === members.length && <span className="rc-stamp" style={{ color: '#2f6b3a', top: 'auto', bottom: 18 }}>CASE CLOSED</span>}
+      </div>
+    </div>
+  );
+}
+
+const Row = ({ k, v }) => <div className="rc-row"><i>{k}</i><span>{v}</span></div>;
+
+const CSS = `
+  .rc-root { width:100%; height:100dvh; display:flex; flex-direction:column; overflow:hidden; background:var(--desk); color:var(--amber); font-family:var(--font-ui); user-select:none; }
+  .rc-top { display:flex; align-items:center; gap:12px; padding:8px 14px; background:var(--bar); border-bottom:2px solid #ff8c00; flex-shrink:0; }
+  .rc-top button { background:transparent; border:1px solid var(--amber-dim); color:var(--amber); font-size:13px; padding:5px 12px; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .rc-meta { font-size:12px; color:var(--amber-dim); }
+  .rc-body { flex:1; min-height:0; display:flex; gap:18px; padding:16px; }
+  .rc-body.phone { padding:10px; overflow-y:auto; display:block; }
+  /* cabinet */
+  .rc-cab { width:420px; flex-shrink:0; overflow-y:auto; background:linear-gradient(90deg,#3b3f45,#585e66 12%,#4a4f56 50%,#3a3e44); border:2px solid #000;
+    box-shadow:0 14px 30px rgba(0,0,0,.7), inset 0 2px 0 rgba(255,255,255,.12); padding:14px 12px; display:flex; flex-direction:column; gap:10px; text-shadow:none; }
+  .rc-body.phone .rc-cab { width:auto; overflow:visible; }
+  .rc-cabtop { font-size:10.5px; letter-spacing:3px; color:#1a1c1f; text-align:center; background:#d8d2c0; padding:3px 0; box-shadow:inset 0 0 0 1px #000; }
+  .rc-drawer { position:relative; width:100%; height:78px; display:flex; align-items:center; justify-content:center; gap:16px; cursor:pointer; font-family:inherit;
+    background:linear-gradient(180deg,#5d636b,#454a51); border:2px solid #1d1f22; box-shadow:inset 0 2px 0 rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.35); transition:filter .12s; }
+  .rc-drawer:hover { filter:brightness(1.12); }
+  .rc-drawer.open { height:54px; }
+  .rc-label { background:#efe7d3; color:#1d1711; width:200px; padding:5px 8px; text-align:center; box-shadow:inset 0 0 0 2px #2b2b2b, 0 0 0 3px #8e949b; font-size:13px; line-height:1.2; }
+  .rc-label small { display:block; font-size:9.5px; color:#5d4f3c; letter-spacing:1px; }
+  .rc-pull { width:64px; height:15px; border-radius:8px !important; background:linear-gradient(180deg,#b9bec5,#6a7078); box-shadow:0 2px 0 #000; }
+  .rc-cnt { position:absolute; right:8px; bottom:4px; font-size:10px; color:#d8d2c0; letter-spacing:1px; text-shadow:0 1px 0 #000; }
+  .rc-openmark { position:absolute; left:8px; bottom:4px; font-size:10px; color:#6ef59b; text-shadow:0 0 6px #22c55e; }
+  .rc-slot { background:linear-gradient(180deg,#26292d,#1a1c1f); border:2px solid #111; border-top:none; box-shadow:inset 0 10px 18px rgba(0,0,0,.75); padding:14px 10px 10px;
+    display:flex; flex-direction:column; gap:0; max-height:330px; overflow-y:auto; }
+  .rc-body.phone .rc-slot { max-height:none; }
+  .rc-folder { position:relative; display:block; flex-shrink:0; width:100%; height:50px; margin-top:-6px; padding:0; border:none; cursor:pointer; text-align:left; font-family:inherit;
+    background:linear-gradient(180deg,#e2c487,#d2b06f); box-shadow:0 -2px 6px rgba(0,0,0,.45); border-top:1px solid #8a6a32; transition:transform .12s; }
+  .rc-folder:first-child { margin-top:12px; }
+  .rc-folder:hover { filter:brightness(1.08); }
+  .rc-folder.sel { transform:translateY(-6px); }
+  .rc-folder.sel { background:linear-gradient(180deg,#f0d59b,#e2c487); }
+  .rc-tab { position:absolute; top:-14px; left:var(--tab); height:16px; padding:0 9px; background:inherit; border:1px solid #8a6a32; border-bottom:none; color:#2a1f10; font-size:11.5px; line-height:15px;
+    white-space:nowrap; max-width:60%; overflow:hidden; text-overflow:ellipsis; box-shadow:inset 0 2px 0 var(--rc); }
+  .rc-edge { position:absolute; left:calc(var(--tab) + 10px); right:10px; top:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:10px; letter-spacing:1px; color:#6b5326; }
+  .rc-folder.sealed { background:linear-gradient(180deg,#b9a678,#a8946a); }
+  .rc-folder.sealed .rc-edge { color:#4a3d22; }
+  .rc-bar { color:#111; letter-spacing:-1px; }
+  .rc-folder.case { background:linear-gradient(180deg,#c9b9e0,#b7a5d2); }
+  .rc-folder.case .rc-tab, .rc-folder.case .rc-edge { color:#21183a; }
+  /* desk */
+  .rc-desk { flex:1; min-width:0; position:relative; overflow:auto; }
+  .rc-empty { height:100%; display:flex; align-items:center; justify-content:center; color:var(--amber-dim); font-size:14px; letter-spacing:1px; }
+  .rc-folderopen { position:relative; display:flex; gap:4px; padding:14px; background:#c8a463; transform:rotate(-.8deg); box-shadow:0 18px 40px rgba(0,0,0,.75); margin:6px 10px 14px 4px;
+    animation: rcOpen .28s cubic-bezier(.2,.9,.25,1.05) both; text-shadow:none; }
+  .rc-page { flex:1; min-width:0; position:relative; color:#211a12; padding:14px 18px 18px;
+    background:radial-gradient(ellipse at 30% 15%, rgba(255,255,255,.45), transparent 60%), repeating-linear-gradient(0deg,rgba(120,95,60,.05) 0 1px,transparent 1px 3px), #ece2c9; }
+  .rc-hd { display:flex; justify-content:space-between; gap:8px; font-size:10px; letter-spacing:1.5px; color:#6f6150; border-bottom:1.5px solid #211a12; padding-bottom:4px; }
+  .rc-photo { position:relative; display:block; margin:16px auto 10px; width:min(230px,70%); aspect-ratio:4/5; padding:0; border:none; cursor:zoom-in; overflow:visible;
+    background:linear-gradient(180deg,#c9a24a,#6b5326); box-shadow:0 0 0 7px #f6f0e0, 0 4px 10px 6px rgba(0,0,0,.25); transform:rotate(2deg); }
+  .rc-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+  .rc-clip { position:absolute; top:-10px; left:50%; transform:translateX(-50%); width:58px; height:20px; z-index:2; background:linear-gradient(180deg,#3a3a3a,#0e0e0e); box-shadow:0 2px 3px rgba(0,0,0,.5); }
+  .rc-clip::before { content:''; position:absolute; left:8px; right:8px; top:-12px; height:14px; border:2.5px solid #c9ccd1; border-bottom:none; }
+  .rc-name { font-family:var(--font-dramatic); font-size:clamp(30px,3.4vw,46px); line-height:1; margin:6px 0 4px; }
+  .rc-row { display:flex; gap:10px; border-bottom:1px dotted rgba(40,30,20,.35); padding:3px 0; font-size:13px; }
+  .rc-row i { font-style:normal; font-size:9.5px; letter-spacing:1.5px; color:#6f6150; width:86px; flex-shrink:0; padding-top:2px; }
+  .rc-stamp { position:absolute; right:16px; top:56px; font-family:var(--font-hit); font-size:30px; letter-spacing:1px; padding:0 10px; border:4px solid currentColor; border-radius:6px !important;
+    transform:rotate(-12deg); opacity:.85; mix-blend-mode:multiply; pointer-events:none; animation: rcStamp .3s .2s cubic-bezier(.3,1.4,.5,1) both; }
+  .rc-sect { font-size:10px; letter-spacing:1.5px; color:#6f6150; margin:12px 0 4px; border-bottom:1px solid #211a12; }
+  .rc-kit { font-size:12.5px; line-height:1.45; }
+  .rc-kit b { font-weight:400; color:#9a6b00; }
+  .rc-small { font-size:11px; color:#6f6150; margin-top:2px; }
+  .rc-com { display:flex; gap:6px; margin-top:4px; }
+  .rc-com span { width:28px; height:28px; border:2px solid #211a12; display:grid; place-items:center; font-size:15px; }
+  .rc-com span.on { background:#b3121b; color:#fff; border-color:#b3121b; }
+  .rc-note { font-family:var(--font-narration); color:#22306e; font-size:19px; line-height:1.25; }
+  .rc-note.none { color:rgba(34,48,110,.35); }
+  .rc-links { display:flex; flex-wrap:wrap; gap:6px 10px; font-size:12.5px; }
+  .rc-links button { background:none; border:none; border-bottom:1px solid #211a12; padding:0; color:#211a12; font-family:inherit; font-size:12.5px; cursor:pointer; }
+  .rc-red { background:#111; color:#111; }
+  .rc-sealedbox { margin:16px auto 10px; width:min(230px,70%); aspect-ratio:4/5; background:#1b1b1b; color:#3a3a3a; display:grid; place-items:center; font-size:80px; box-shadow:0 0 0 7px #f6f0e0; }
+  /* evidence polaroid */
+  .rc-pol { position:relative; display:block; margin:18px auto 10px; width:min(240px,75%); padding:10px 10px 6px; background:#f3efe6; border:none; cursor:zoom-in; font-family:inherit;
+    box-shadow:0 8px 18px rgba(0,0,0,.35); transform:rotate(-2deg); }
+  .rc-tape { position:absolute; top:-10px; left:50%; width:44%; height:20px; transform:translateX(-50%) rotate(-3deg); background:rgba(235,225,190,.8); z-index:2;
+    clip-path: polygon(3% 0, 97% 4%, 100% 50%, 96% 100%, 2% 96%, 0 45%); }
+  .rc-polimg { position:relative; display:grid; place-items:center; aspect-ratio:1/1; overflow:hidden; background:#222; color:#555; font-size:46px; }
+  .rc-polimg img { width:100%; height:100%; object-fit:cover; }
+  .rc-polimg img.framed { position:absolute; width:132.4%; height:auto; left:-16.2%; top:-13.2%; max-width:none; }
+  .rc-cap { display:block; font-family:var(--font-narration); font-size:20px; color:#22306e; text-align:center; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rc-board { display:flex; flex-wrap:wrap; gap:18px; justify-content:center; margin-top:16px; }
+  .rc-pol.small { width:170px; margin:8px 0; }
+  .rc-pol.small .rc-cap { font-size:16px; }
+  .rc-pol.missing { cursor:default; opacity:.6; }
+  /* phone sheet */
+  .rc-sheet { position:fixed; inset:0; z-index:50; overflow-y:auto; background:rgba(5,3,2,.94); padding:10px 8px 24px; }
+  .rc-close { display:block; margin:0 0 6px auto; background:transparent; border:1px solid var(--amber-dim); color:var(--amber); font-family:inherit; font-size:13px; padding:5px 12px; }
+  .rc-sheet .rc-folderopen { flex-direction:column; transform:none; margin:6px 2px; }
+  .rc-art { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.95); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; }
+  .rc-art img { max-width:90vw; max-height:80vh; object-fit:contain; }
+  @media (max-width: 700px) { .rc-openmark { display:none; } .rc-cabtop { font-size:9px; letter-spacing:2px; } .rc-top { gap:8px; padding:8px 10px; } }
+  @keyframes rcOpen { from { opacity:0; transform: translateY(24px) rotate(-3deg); } to { opacity:1; transform: rotate(-.8deg); } }
+  @keyframes rcStamp { from { opacity:0; transform: rotate(-12deg) scale(2.4); } to { opacity:.85; transform: rotate(-12deg) scale(1); } }
+`;

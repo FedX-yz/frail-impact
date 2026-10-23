@@ -1,33 +1,32 @@
+// Shop → "Requisitions": the Frail Initiative's supply office.
+// REQUISITION: a catalog form. REQUEST a card → a requisition slip comes up on the
+// side; sign & submit it (your signature from the job application goes on it),
+// it gets an APPROVED stamp and the coins are spent.
+// PROMOTIONS: fusion. Spare copies raise a card's superimposition (S1→S5).
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { CHARACTERS } from '../data/characters';
-import { playClose } from '../utils/sfx';
+import { playClose, playPress, playStamp } from '../utils/sfx';
 import { thumb } from '../utils/assets';
-import { upgradeSubs, formatSub } from '../combat/sets';
+import { upgradeSubs, formatSub, setOfCard } from '../combat/sets';
 import { siMult, SI_MULT, SI_MULT_HIGH } from '../combat/stats';
 import { SKILLS, ULTS, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
+import useIsMobile from '../hooks/useIsMobile';
 import TermTitle from '../components/TermTitle';
 
 const BASE = import.meta.env.BASE_URL;
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const RARITY_PRICE = { 5: 75000, 4: 7500, 3: 1200 };
-const RARITY_LABEL = { 6: '✦✦✦✦✦✦', 5: '✦✦✦✦✦', 4: '✦✦✦✦', 3: '✦✦✦' };
-const RARITY_COLOR = { 6: '#ff3366', 5: '#f0c040', 4: '#b06dff', 3: '#66aaff' };
-const RARITY_BG    = {
-  6: 'linear-gradient(135deg,#330012,#220020)',
-  5: 'linear-gradient(135deg,#1a1500,#221800)',
-  4: 'linear-gradient(135deg,#150020,#1a1030)',
-  3: 'linear-gradient(135deg,#001225,#001830)',
-};
+const RC = { 6: '#ff4d6d', 5: '#e0a800', 4: '#9b5de5', 3: '#3a7bd5' };
+const KIND = r => (r >= 5 ? 'agent' : 'evidence');
 
-// S1–S5: S(n) needs n copies in total. Each level boosts ATK/HP/DEF
-// (5★/6★ more), 3★/4★ also upgrade a sub-stat, 5★/6★ also upgrade their kit.
-const siLabel = (si, rarity) => si === 0 ? 'S1 – Base'
-  : `S${si + 1} +${Math.round((siMult(si, rarity) - 1) * 100)}% ATK/HP/DEF${si === 4 ? ' ⚡MAX' : ''}`;
+const siLabel = (si, rarity) => si === 0 ? 'S1 · base'
+  : `S${si + 1} · +${Math.round((siMult(si, rarity) - 1) * 100)}% ATK/HP/DEF${si === 4 ? ' · MAX' : ''}`;
 
+// 6★ and cards held back (unpullable) aren't in the catalog
 const SHOP_CARDS = CHARACTERS
-  .filter(c => c.rarity !== 6)
-  .sort((a, b) => b.rarity - a.rarity);
+  .filter(c => RARITY_PRICE[c.rarity] && !c.unpullable)
+  .sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name));
 
 const fmt = n =>
   n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' :
@@ -35,22 +34,20 @@ const fmt = n =>
   Math.floor(n);
 
 const CoinIcon = ({ size = 30 }) => (
-  <img
-    src={`${BASE}ui/ui_cucoin.png`} alt="coin"
-    style={{ width: size, height: size, objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }}
-  />
+  <img src={`${BASE}ui/ui_cucoin.png`} alt="coin"
+    style={{ width: size, height: size, objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0, verticalAlign: 'middle' }} />
 );
 
-// (SI → ATK multiplier for battle lives in src/combat/stats.js → siMult)
-
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CardShop({ navigate, coins, setCoins, collection, setCollection, gachaCollection = [] }) {
-  const [tab,        setTab]        = useState('exchange');
-  const [toast,      setToast]      = useState(null);
-  const [confirmBuy, setConfirmBuy] = useState(null);
+export default function CardShop({ navigate, coins, setCoins, collection, setCollection, gachaCollection = [], profile = null }) {
+  const { mobile } = useIsMobile();
+  const [tab, setTab]       = useState('req');
+  const [filter, setFilter] = useState(0);         // 0 = all, else rarity
+  const [slip, setSlip]     = useState(null);      // { card, status: 'pending' | 'approved', no }
+  const [toast, setToast]   = useState(null);
   const toastTimer = useRef(null);
 
-  const showToast = useCallback((msg, color = '#f0c040') => {
+  const showToast = useCallback((msg, color = '#ffb35a') => {
     clearTimeout(toastTimer.current);
     setToast({ msg, color });
     toastTimer.current = setTimeout(() => setToast(null), 2200);
@@ -62,365 +59,347 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
     return shopCount + gachaCount;
   }, [collection, gachaCollection]);
 
-  // ── EXCHANGE ────────────────────────────────────────────────────────────────
+  // slip numbers go up with every card the office has handed out
+  const slipNo = useMemo(() => 400 + Object.values(collection).reduce((n, e) => n + (e.count ?? 0), 0), [collection]);
+
+  // ── REQUEST (buy) ──────────────────────────────────────────────────────────
+  const request = (card) => {
+    playPress();
+    if ((collection[card.id]?.si ?? 0) >= 4) return;
+    setSlip({ card, status: 'pending', no: slipNo + 1 });
+  };
+
   const handleBuy = useCallback((card) => {
     const price = RARITY_PRICE[card.rarity];
     if (!price) return;
-    if (coins < price) { showToast('Not enough coins!', '#ff4444'); return; }
+    if (coins < price) { showToast('Denied: not enough coins', '#ff5555'); return; }
     setCoins(c => c - price);
     setCollection(prev => {
       const entry = prev[card.id] ?? { count: 0, si: 0 };
       return { ...prev, [card.id]: { ...entry, count: entry.count + 1 } };
     });
-    showToast(`Obtained ${card.name}!`, RARITY_COLOR[card.rarity]);
-    setConfirmBuy(null);
+    playStamp();
+    setSlip(s => (s ? { ...s, status: 'approved' } : s));
   }, [coins, setCoins, setCollection, showToast]);
 
-  // ── FUSION ──────────────────────────────────────────────────────────────────
+  // ── PROMOTE (fuse) ─────────────────────────────────────────────────────────
   const handleFuse = useCallback((card) => {
-    const shopCount = collection[card.id]?.count ?? 0;
-    const gachaCount = (gachaCollection || []).filter(g => g.id === card.id).length;
-    const totalCount = shopCount + gachaCount;
+    const totalCount = getCardCounts(card.id);
     const si = collection[card.id]?.si ?? 0;
-    
-    if (si >= 4) { 
-      showToast('Already at S5 – MAX!', '#ff8c00'); 
-      return; 
+    if (si >= 4) { showToast('Already at S5 · MAX', '#ff8c00'); return; }
+    // S(n+1) needs n+1 copies in total. Copies aren't used up; the requirement just goes up.
+    if (totalCount < si + 2) {
+      const need = si + 2 - totalCount;
+      showToast(`Need ${need} more cop${need === 1 ? 'y' : 'ies'}`, '#ff5555');
+      return;
     }
-    // S(n+1) needs n+1 copies in total. Copies aren't removed when you
-    // fuse; the requirement just goes up. (Before, only shop copies were
-    // removed, so 2 gacha copies could be fused all the way to S5.)
-    if (totalCount < si + 2) { 
-      showToast(`Need ${si + 2 - totalCount} more cop${si + 2 - totalCount === 1 ? 'y' : 'ies'} to fuse!`, '#ff4444'); 
-      return; 
-    }
-    
     setCollection(prev => {
       const cur = prev[card.id] ?? { count: 0, si: 0 };
-      // 3★/4★: each fusion also upgrades one sub-stat
+      // 3★/4★: each promotion also upgrades one sub-stat
       const subs = card.rarity <= 4 ? upgradeSubs(cur.subs, card.rarity) : cur.subs;
       return { ...prev, [card.id]: { ...cur, si: (cur.si ?? 0) + 1, ...(subs ? { subs } : {}) } };
     });
-    
-    showToast(`${card.name} → ${siLabel(si + 1, card.rarity)}`, RARITY_COLOR[card.rarity]);
-  }, [collection, setCollection, showToast, gachaCollection]);
+    playStamp(0.8);
+    showToast(`PROMOTED · ${card.name} → ${siLabel(si + 1, card.rarity)}`, RC[card.rarity]);
+  }, [collection, setCollection, showToast, getCardCounts]);
 
-  // Memoized — only recomputes when collection changes, not on every render
-  const ownedCards  = useMemo(() => CHARACTERS.filter(c => {
-    const shopCount = collection[c.id]?.count ?? 0;
-    const gachaCount = (gachaCollection || []).filter(g => g.id === c.id).length;
-    return (shopCount + gachaCount) >= 1;
-  }), [collection, gachaCollection]);
+  const ownedCards = useMemo(() => CHARACTERS
+    .filter(c => getCardCounts(c.id) >= 1)
+    .sort((a, b) => {
+      const ready = c => { const si = collection[c.id]?.si ?? 0; return si < 4 && getCardCounts(c.id) >= si + 2 ? 1 : 0; };
+      return ready(b) - ready(a) || b.rarity - a.rarity || a.name.localeCompare(b.name);
+    }), [collection, getCardCounts]);
+  const readyCount = ownedCards.filter(c => { const si = collection[c.id]?.si ?? 0; return si < 4 && getCardCounts(c.id) >= si + 2; }).length;
 
-  const pendingCard = useMemo(() => confirmBuy != null ? CHARACTERS.find(c => c.id === confirmBuy) : null, [confirmBuy]);
+  const catalog = SHOP_CARDS.filter(c => !filter || c.rarity === filter);
+  const managerName = profile?.name || 'Field Manager';
+
+  const slipView = slip && (
+    <Slip slip={slip} coins={coins} managerName={managerName} signature={profile?.signature}
+      onSubmit={() => handleBuy(slip.card)} onClose={() => { playClose(); setSlip(null); }} />
+  );
 
   return (
-    <div style={ROOT}>
+    <div className="rq-root">
       <style>{CSS}</style>
 
       {/* TOP BAR */}
-      <div style={TOP_BAR}>
-        <button
-          className="cs-back-btn"
-          onPointerDown={playClose} onClick={() => navigate('main')}
-        >
-          [&nbsp;back&nbsp;]
-        </button>
-        <div style={COIN_BADGE}>
-          <CoinIcon />
-          <span style={{ color: '#f0c040', fontWeight: 700, fontSize: 16 }}>{fmt(coins)}</span>
-        </div>
+      <div className="rq-top">
+        <button className="rq-btn" onPointerDown={playClose} onClick={() => navigate('main')}>[&nbsp;back&nbsp;]</button>
+        {!mobile && <TermTitle path={tab === 'req' ? 'REQUISITIONS' : 'REQUISITIONS\\PROMOTIONS'} />}
+        <div className="rq-coins"><CoinIcon size={22} /><span>{fmt(coins)}</span></div>
         <div style={{ flex: 1 }} />
-        <span style={{ color: '#ff8c00', fontWeight: 900, fontSize: 20, letterSpacing: 2 }}>
-          <TermTitle path={tab === 'exchange' ? 'SHOP' : 'SHOP\\FUSION'} />
-        </span>
+        <button className={`rq-tab${tab === 'req' ? ' on' : ''}`} onClick={() => { playPress(); setTab('req'); }}>{mobile ? 'FORMS' : 'REQUISITION'}</button>
+        <button className={`rq-tab${tab === 'promo' ? ' on' : ''}`} onClick={() => { playPress(); setTab('promo'); setSlip(null); }}>
+          {mobile ? 'PROMO' : 'PROMOTIONS'}{readyCount > 0 && <b className="rq-dot">{readyCount}</b>}
+        </button>
       </div>
 
-      {/* TABS */}
-      <div style={{ display: 'flex', flexShrink: 0, borderBottom: '2px solid var(--line)', background: 'var(--bar)' }}>
-        {[
-          { key: 'exchange', content: <><CoinIcon size={14} /> EXCHANGE</> },
-          { key: 'fusion',   content: <>⚡ FUSION</>                        },
-        ].map(t => (
-          <button key={t.key} style={TAB_BTN(tab === t.key)} onClick={() => setTab(t.key)}>
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-              {t.content}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* ── EXCHANGE ─────────────────────────────────────────────────────────── */}
-      {tab === 'exchange' && (
-        <div style={GRID}>
-          {SHOP_CARDS.map(card => {
-            const price     = RARITY_PRICE[card.rarity];
-            const owned     = getCardCounts(card.id);
-            const si        = collection[card.id]?.si    ?? 0;
-            const canAfford = coins >= price;
-
-            return (
-              <div
-                key={card.id}
-                className="cs-card"
-                style={{ background: RARITY_BG[card.rarity], '--hover-color': RARITY_COLOR[card.rarity] }}
-              >
-                {owned > 0 && <div className="cs-owned-badge">×{owned} owned</div>}
-
-                <div style={IMG_WRAP(RARITY_COLOR[card.rarity], 72)}>
-                  {card.image
-                    ? <img src={thumb(card.image)} alt={card.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ color: RARITY_COLOR[card.rarity], fontSize: 10 }}>{card.name.slice(0, 6)}</span>}
-                </div>
-
-                <div style={{ color: RARITY_COLOR[card.rarity], fontSize: 11, letterSpacing: 1 }}>
-                  {RARITY_LABEL[card.rarity]}
-                </div>
-                <div style={{ color: '#eee', fontWeight: 700, fontSize: 13, textAlign: 'center' }}>{card.name}</div>
-                {card.subtitle && (
-                  <div style={{ color: '#556', fontSize: 11, textAlign: 'center', marginTop: -4 }}>{card.subtitle}</div>
-                )}
-
-                <div style={{ display: 'flex', gap: 8, fontSize: 11, color: '#778' }}>
-                  <span>ATK <span style={{ color: '#f0c040' }}>{card.stats.atk}</span></span>
-                  <span>HP  <span style={{ color: '#66ff88' }}>{card.stats.hp}</span></span>
-                  <span>DEF <span style={{ color: '#88aaff' }}>{card.stats.def}</span></span>
-                </div>
-
-                {card.skill && (
-                  <div style={{ background: '#1a0a2a', border: '1px solid #3a1a5a', borderRadius: 4, padding: '3px 7px', fontSize: 10, color: '#cc88ff' }}>
-                    ✦ {card.skill.name}
-                  </div>
-                )}
-
-                {owned > 0 && <SiPips si={si} color={RARITY_COLOR[card.rarity]} />}
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                  <CoinIcon size={16} />
-                  <span style={{ color: canAfford ? '#f0c040' : '#664422', fontWeight: 700, fontSize: 13 }}>
-                    {fmt(price)}
-                  </span>
-                </div>
-
-                <button
-                className="cs-buy-btn"
-                disabled={!canAfford || si >= 4}
-                style={{ background: (canAfford && si < 4) ? `linear-gradient(90deg,${RARITY_COLOR[card.rarity]}88,${RARITY_COLOR[card.rarity]})` : '#1a2a40' }}
-                onClick={() => setConfirmBuy(card.id)}
-              >
-                {si >= 4 ? 'MAX S5' : owned === 0 ? 'OBTAIN' : 'BUY DUPE'}
-              </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── FUSION ───────────────────────────────────────────────────────────── */}
-      {tab === 'fusion' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
-          {ownedCards.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#445', marginTop: 60 }}>
-              <div style={{ fontSize: 44 }}>🃏</div>
-              <div style={{ marginTop: 10, fontSize: 16 }}>You don't own any cards yet.</div>
-              <div style={{ fontSize: 13, marginTop: 6, color: 'var(--line)' }}>Buy cards in Exchange, or pull from the gacha.</div>
-            </div>
-          ) : (
-            <>
-              <div style={{ color: '#445', fontSize: 11, marginBottom: 14, letterSpacing: 1 }}>
-                FUSE DUPLICATES TO RAISE SUPERIMPOSITION (S1→S5). EACH LEVEL BOOSTS ATK/HP/DEF · 5★/6★ ALSO POWER UP THEIR SKILL &amp; ULT.
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(190px, 44vw), 1fr))', gap: 14, alignContent: 'start' }}>
-                {ownedCards.map(card => {
-                  const entry     = collection[card.id] ?? { count: 0, si: 0 };
-                  const count     = getCardCounts(card.id);
-                  const { si } = entry;
-                  const maxed     = si >= 4;
-                  const canFuse   = !maxed && count >= si + 2;
-                  const mult      = siMult(si, card.rarity);
-                  const nextMult  = !maxed ? siMult(si + 1, card.rarity) : null;
-                  const skillKit  = SKILLS[card.skill?.effect];
-                  const ultKit    = ULTS[card.ult?.effect];
-
-                  return (
-                    <div
-                      key={card.id}
-                      className="cs-card"
-                      style={{ background: RARITY_BG[card.rarity], '--hover-color': RARITY_COLOR[card.rarity] }}
-                    >
-                      <div style={{ position: 'relative' }}>
-                        <div style={IMG_WRAP(RARITY_COLOR[card.rarity], 60)}>
-                          {card.image
-                            ? <img src={thumb(card.image)} alt={card.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : <span style={{ color: RARITY_COLOR[card.rarity], fontSize: 9 }}>{card.name.slice(0, 6)}</span>}
-                        </div>
-                        <div style={{ position: 'absolute', bottom: -5, right: -8, background: '#0f1420', border: `1px solid ${RARITY_COLOR[card.rarity]}`, borderRadius: 10, padding: '1px 7px', fontSize: 11, color: RARITY_COLOR[card.rarity], fontWeight: 900 }}>
-                          ×{count}
-                        </div>
-                      </div>
-
-                      <div style={{ color: '#eee', fontWeight: 700, fontSize: 13 }}>{card.name}</div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: '#445', fontSize: 11 }}>S{si + 1}</span>
-                        <SiPips si={si} color={RARITY_COLOR[card.rarity]} glow />
-                        {maxed && <span style={{ color: '#ff8c00', fontSize: 10, fontWeight: 700 }}>MAX</span>}
-                      </div>
-
-                      <div style={{ background: '#0a1020', border: '1px solid #1a2a40', borderRadius: 6, padding: '6px 10px', width: '100%', fontSize: 11, color: '#778' }}>
-                        <div style={{ color: RARITY_COLOR[card.rarity], fontWeight: 700, marginBottom: 2 }}>{siLabel(si, card.rarity)}</div>
-                        <div>
-                          ATK <span style={{ color: '#f0c040' }}>{Math.round(card.stats.atk * mult)}</span>
-                          {' · '}HP <span style={{ color: '#66ff88' }}>{Math.round(card.stats.hp * mult)}</span>
-                          {' · '}DEF <span style={{ color: '#88aaff' }}>{Math.round(card.stats.def * mult)}</span>
-                        </div>
-                        {nextMult && (
-                          <div style={{ marginTop: 3, color: '#556' }}>
-                            → S{si + 2}: ATK {Math.round(card.stats.atk * nextMult)} · HP {Math.round(card.stats.hp * nextMult)}{card.rarity <= 4 ? ' + a sub-stat upgrade' : ''}
-                            {skillKit && <div style={{ color: '#4a8a5a' }}>✦ {card.skill.name}: {describeSiStep(skillKit, si)}</div>}
-                            {ultKit && <div style={{ color: '#8a5ab0' }}>⚡ {card.ult.name}: {describeSiStep(ultKit, si) || 'stronger'}, cooldown −{Math.round(ULT_CD_PER_SI * 100)}%</div>}
-                          </div>
-                        )}
-                        {(entry.subs ?? []).length > 0 && (
-                          <div style={{ marginTop: 5, borderTop: '1px solid #1a2a40', paddingTop: 4 }}>
-                            {entry.subs.map((sb, i) => (
-                              <div key={i} style={{ color: '#88aaff' }}>{formatSub(sb)}{sb.ups ? <span style={{ color: '#f0c040' }}> {'▲'.repeat(sb.ups)}</span> : null}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {!maxed && (
-                        <div style={{ fontSize: 11, color: canFuse ? '#66ff88' : '#664', textAlign: 'center' }}>
-                          {canFuse ? '✓ Ready to fuse!' : `Need ×${si + 2} copies · have ×${count}`}
-                        </div>
-                      )}
-
-                      <button className="cs-fuse-btn" disabled={!canFuse} onClick={() => handleFuse(card)}>
-                        {maxed ? '✦ MAX REACHED' : canFuse ? `⚡ FUSE → S${si + 2}` : `FUSE (need ×${si + 2})`}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Reference table */}
-              <div style={{ marginTop: 28, background: '#090e1a', border: '1px solid #1a2a40', borderRadius: 8, padding: '14px 18px' }}>
-                <div style={{ color: '#f0c040', fontWeight: 700, marginBottom: 10, fontSize: 13 }}>SUPERIMPOSITION REFERENCE</div>
-                {SI_MULT.map((m, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '5px 0', borderBottom: i < 4 ? '1px solid #111a2a' : 'none' }}>
-                    <span style={{ color: '#aa44ff', fontWeight: 700, fontSize: 12 }}>S{i + 1}</span>
-                    <span style={{ color: '#778', fontSize: 12 }}>3★/4★ +{Math.round((m - 1) * 100)}% · 5★/6★ +{Math.round((SI_MULT_HIGH[i] - 1) * 100)}% stats{i > 0 ? ' + stronger kit' : ''}</span>
-                    <span style={{ color: '#445', fontSize: 11 }}>{i === 0 ? '1 copy' : `${i + 1} copies total`}</span>
-                  </div>
+      {/* ── REQUISITION ─────────────────────────────────────────────────────── */}
+      {tab === 'req' && (
+        <div className="rq-body">
+          <div className="rq-form">
+            <div className="rq-formhd">
+              <div className="rq-formtitle">FORM FI-07 · PERSONNEL &amp; EVIDENCE REQUISITION</div>
+              <div className="rq-formsub">FRAIL INITIATIVE SUPPLY OFFICE · ALL REQUESTS SUBJECT TO BUDGET APPROVAL</div>
+              <div className="rq-filters">
+                {[[0, 'ALL'], [5, '5★ AGENTS'], [4, '4★ EVIDENCE'], [3, '3★ EVIDENCE']].map(([r, l]) => (
+                  <button key={r} className={filter === r ? 'on' : ''} onClick={() => setFilter(r)}>{filter === r ? '☒' : '☐'} {l}</button>
                 ))}
               </div>
-            </>
+            </div>
+            <div className="rq-lines">
+              {catalog.map((card, i) => {
+                const price = RARITY_PRICE[card.rarity];
+                const owned = getCardCounts(card.id);
+                const si = collection[card.id]?.si ?? 0;
+                const maxed = si >= 4;
+                const set = setOfCard(card.id);
+                return (
+                  <div key={card.id} className={`rq-line${slip?.card.id === card.id ? ' sel' : ''}`}>
+                    <span className="rq-no">{String(i + 1).padStart(3, '0')}</span>
+                    <span className="rq-thumb" style={{ borderColor: RC[card.rarity] }}>
+                      {card.image ? <img src={thumb(card.image)} alt="" loading="lazy" decoding="async" /> : null}
+                    </span>
+                    <span className="rq-item">
+                      <span className="rq-name">{card.name}
+                        {owned > 0 && <span className="rq-onfile">ON FILE ×{owned}</span>}
+                      </span>
+                      <span className="rq-desc">{card.subtitle ? `${card.subtitle} · ` : ''}{card.rarity}★ {KIND(card.rarity)}{card.element ? ` · ${card.element}` : ''}{set ? ` · ${set.name} set` : ''}{owned > 0 ? ` · S${si + 1}` : ''}</span>
+                    </span>
+                    <span className={`rq-price${coins < price ? ' poor' : ''}`}><CoinIcon size={14} /> {price.toLocaleString()}</span>
+                    <button className="rq-request" disabled={maxed} onClick={() => request(card)}>{maxed ? 'MAX S5' : 'REQUEST'}</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {!mobile && (
+            <div className="rq-side">
+              {slipView || (
+                <div className="rq-hint">
+                  <div className="rq-hinthd">HOW IT WORKS</div>
+                  Pick a line and press REQUEST. Sign the slip and the supply office sends the agent or the evidence over.<br /><br />
+                  Spare copies can be used in <b>PROMOTIONS</b> to raise a card's rank (superimposition).
+                  {readyCount > 0 && <div className="rq-ready">▸ {readyCount} promotion{readyCount === 1 ? '' : 's'} ready</div>}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
 
-      {/* ── CONFIRM MODAL ────────────────────────────────────────────────────── */}
-      {pendingCard && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 100 }} onClick={() => setConfirmBuy(null)} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: RARITY_BG[pendingCard.rarity], border: `2px solid ${RARITY_COLOR[pendingCard.rarity]}`, borderRadius: 12, padding: '28px 32px', zIndex: 101, textAlign: 'center', minWidth: 260, animation: 'cs-modalIn 0.18s ease-out' }}>
-            <div style={{ color: RARITY_COLOR[pendingCard.rarity], fontSize: 13, letterSpacing: 2, marginBottom: 8 }}>{RARITY_LABEL[pendingCard.rarity]}</div>
-            <div style={{ ...IMG_WRAP(RARITY_COLOR[pendingCard.rarity], 80), margin: '0 auto 12px' }}>
-              {pendingCard.image && <img src={thumb(pendingCard.image)} alt={pendingCard.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-            <div style={{ color: '#fff', fontWeight: 900, fontSize: 18, marginBottom: 4 }}>{pendingCard.name}</div>
-            <div style={{ color: '#556', fontSize: 13, marginBottom: 16 }}>{pendingCard.subtitle}</div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 20 }}>
-              <CoinIcon size={24} />
-              <span style={{ color: '#f0c040', fontWeight: 700, fontSize: 20 }}>{fmt(RARITY_PRICE[pendingCard.rarity])}</span>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setConfirmBuy(null)} style={{ flex: 1, padding: '9px 0', border: '1px solid var(--line)', background: 'transparent', color: '#778', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
-                Cancel
-              </button>
-              <button onClick={() => handleBuy(pendingCard)} style={{ flex: 2, padding: '9px 0', border: 'none', background: `linear-gradient(90deg,${RARITY_COLOR[pendingCard.rarity]}88,${RARITY_COLOR[pendingCard.rarity]})`, color: '#fff', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
-                Confirm Purchase
-              </button>
-            </div>
+      {/* ── PROMOTIONS ──────────────────────────────────────────────────────── */}
+      {tab === 'promo' && (
+        <div className="rq-promo">
+          <div className="rq-board">
+            <div className="rq-boardhd">PROMOTIONS · spare copies raise a card's rank (S1 → S5). Each rank boosts ATK/HP/DEF · 5★/6★ also power up their skill &amp; ult · 3★/4★ upgrade a sub-stat.</div>
+            {ownedCards.length === 0 ? (
+              <div className="rq-none">No cards on file yet. Request some, or recruit.</div>
+            ) : ownedCards.map(card => {
+              const entry = collection[card.id] ?? { count: 0, si: 0 };
+              const count = getCardCounts(card.id);
+              const si = entry.si ?? 0;
+              const maxed = si >= 4;
+              const need = si + 2;
+              const canFuse = !maxed && count >= need;
+              const mult = siMult(si, card.rarity);
+              const nextMult = !maxed ? siMult(si + 1, card.rarity) : null;
+              const skillKit = SKILLS[card.skill?.effect];
+              const ultKit = ULTS[card.ult?.effect];
+              return (
+                <div key={card.id} className={`rq-prow${canFuse ? ' ready' : ''}`}>
+                  <span className="rq-pthumb" style={{ borderColor: RC[card.rarity] }}>
+                    {card.image && <img src={thumb(card.image)} alt="" loading="lazy" decoding="async" />}
+                    <i>×{count}</i>
+                  </span>
+                  <div className="rq-pinfo">
+                    <div className="rq-ptitle">{card.name.toUpperCase()} · {maxed ? 'S5 · MAX' : `S${si + 1} → S${si + 2}`}</div>
+                    <div className="rq-pnow">ATK {Math.round(card.stats.atk * mult)} · HP {Math.round(card.stats.hp * mult)} · DEF {Math.round(card.stats.def * mult)}
+                      {nextMult && <span> → ATK {Math.round(card.stats.atk * nextMult)} · HP {Math.round(card.stats.hp * nextMult)}{card.rarity <= 4 ? ' + a sub-stat upgrade' : ''}</span>}
+                    </div>
+                    {nextMult && skillKit && <div className="rq-pkit">✦ {card.skill.name}: {describeSiStep(skillKit, si)}</div>}
+                    {nextMult && ultKit && <div className="rq-pkit">⚡ {card.ult.name}: {describeSiStep(ultKit, si) || 'stronger'}, cooldown −{Math.round(ULT_CD_PER_SI * 100)}%</div>}
+                    {(entry.subs ?? []).length > 0 && (
+                      <div className="rq-psubs">{entry.subs.map((sb, i) => <span key={i}>{formatSub(sb)}{sb.ups ? <b> {'▲'.repeat(sb.ups)}</b> : null}</span>)}</div>
+                    )}
+                    {!maxed && <div className="rq-bar"><span style={{ width: `${Math.min(100, (count / need) * 100)}%` }} /></div>}
+                    <div className={`rq-pstat${canFuse ? ' ok' : ''}`}>{maxed ? 'fully promoted' : `${Math.min(count, need)} / ${need} copies${canFuse ? ' · READY' : ''}`}</div>
+                  </div>
+                  <button className="rq-promote" disabled={!canFuse} onClick={() => handleFuse(card)}>
+                    {maxed ? 'MAX' : canFuse ? `PROMOTE ▸ S${si + 2}` : `NEED ×${need}`}
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        </>
+
+          <div className="rq-ref">
+            <div className="rq-hinthd">RANK TABLE (SUPERIMPOSITION)</div>
+            {SI_MULT.map((m, i) => (
+              <div key={i} className="rq-refrow">
+                <b>S{i + 1}</b>
+                <span>3★/4★ +{Math.round((m - 1) * 100)}% · 5★/6★ +{Math.round((SI_MULT_HIGH[i] - 1) * 100)}%{i > 0 ? ' + stronger kit' : ''}</span>
+                <i>{i === 0 ? '1 copy' : `${i + 1} copies`}</i>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* TOAST */}
-      {toast && (
-        <div style={{ ...TOAST_BOX, borderColor: toast.color, color: toast.color }}>{toast.msg}</div>
+      {/* phone: the slip comes up over the form */}
+      {mobile && slipView && (
+        <div className="rq-sheet" onClick={() => { if (slip.status === 'approved') setSlip(null); }}>
+          <div onClick={e => e.stopPropagation()}>{slipView}</div>
+        </div>
       )}
+
+      {toast && <div className="rq-toast" style={{ borderColor: toast.color, color: toast.color }}>{toast.msg}</div>}
     </div>
   );
 }
 
-// ─── SI pips sub-component ────────────────────────────────────────────────────
-function SiPips({ si, color, glow = false }) {
+// ─── The requisition slip ─────────────────────────────────────────────────────
+function Slip({ slip, coins, managerName, signature, onSubmit, onClose }) {
+  const { card, status, no } = slip;
+  const price = RARITY_PRICE[card.rarity];
+  const approved = status === 'approved';
+  const short = !approved && coins < price;
   return (
-    <div style={{ display: 'flex', gap: 3 }}>
-      {[0, 1, 2, 3, 4].map(i => (
-        <div key={i} style={{
-          width: 18, height: 5, borderRadius: 2,
-          background: i <= si ? color : '#1a2a40',
-          boxShadow: glow && i === si ? `0 0 6px ${color}` : 'none',
-          transition: 'background 0.2s',
-        }} />
-      ))}
+    <div className="rq-slip" key={`${card.id}-${no}`}>
+      <div className="rq-sliphd">REQUISITION SLIP Nº {String(no).padStart(5, '0')}</div>
+      <div className="rq-sliprow"><i>ITEM</i><span>{card.rarity >= 5 ? 'Agent transfer' : 'Evidence'} · {card.name} ({card.rarity}★)</span></div>
+      <div className="rq-sliprow"><i>COST</i><span>{price.toLocaleString()} coins</span></div>
+      <div className="rq-sliprow"><i>REQUESTED BY</i><span>Field Manager {managerName}</span></div>
+      <div className="rq-sign">
+        <i>SIGNED</i>
+        {approved
+          ? (signature ? <img src={signature} alt="signature" /> : <span className="rq-signtext">{managerName}</span>)
+          : <span className="rq-signline" />}
+      </div>
+      {approved && <span className="rq-approved">APPROVED</span>}
+      {short && <span className="rq-approved denied">INSUFFICIENT FUNDS</span>}
+      <div className="rq-slipbtns">
+        {approved
+          ? <button className="rq-btn dark" onClick={onClose}>[&nbsp;file it&nbsp;]</button>
+          : <>
+              <button className="rq-btn dark" onClick={onClose}>[&nbsp;cancel&nbsp;]</button>
+              <button className="rq-submit" disabled={short} onClick={onSubmit}>SIGN &amp; SUBMIT</button>
+            </>}
+      </div>
     </div>
   );
 }
-
-// ─── Static styles ────────────────────────────────────────────────────────────
-const ROOT       = { width: '100%', height: '100dvh', background: 'var(--desk)', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-ui)', userSelect: 'none', overflow: 'hidden' };
-const TOP_BAR    = { display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', background: '#090e1a', borderBottom: '2px solid #ff8c00', flexShrink: 0 };
-const COIN_BADGE = { display: 'flex', alignItems: 'center', gap: 6, background: '#0f1420', border: '2px solid #cc8800', borderRadius: 20, padding: '4px 14px 4px 8px' };
-const GRID       = { flex: 1, overflowY: 'auto', padding: '14px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 44vw), 1fr))', gap: 12, alignContent: 'start' };
-const TOAST_BOX  = { position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', padding: '10px 28px', borderRadius: 8, background: '#090e1a', border: '2px solid', fontWeight: 700, fontSize: 15, zIndex: 999, pointerEvents: 'none', animation: 'cs-fadeUp 0.22s ease-out' };
-const TAB_BTN    = (active) => ({ flex: 1, padding: '12px 0', cursor: 'pointer', border: 'none', background: active ? '#141f35' : 'transparent', color: active ? '#ff8c00' : '#445', fontWeight: 700, fontSize: 15, letterSpacing: 1, borderBottom: active ? '3px solid #ff8c00' : '3px solid transparent', transition: 'all 0.15s' });
-const IMG_WRAP   = (color, size) => ({ width: size, height: size, borderRadius: 6, overflow: 'hidden', border: `2px solid ${color}`, background: '#0a1020', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 });
 
 const CSS = `
-  @keyframes cs-fadeUp  { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
-  @keyframes cs-modalIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.88)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
-  ::-webkit-scrollbar{width:6px}
-  ::-webkit-scrollbar-track{background:var(--bg-solid)}
-  ::-webkit-scrollbar-thumb{background:#1a2a40;border-radius:3px}
-
-  .cs-card {
-    border: 2px solid #1a2a40;
-    border-radius: 10px;
-    padding: 14px 12px 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    cursor: default;
-    position: relative;
-    will-change: transform;
-    transition: transform 0.12s;
+  .rq-root { width:100%; height:100dvh; display:flex; flex-direction:column; overflow:hidden; background:var(--desk); color:var(--amber); font-family:var(--font-ui); user-select:none; }
+  .rq-top { display:flex; align-items:center; gap:12px; padding:8px 14px; background:var(--bar); border-bottom:2px solid #ff8c00; flex-shrink:0; }
+  .rq-btn { background:transparent; border:1px solid var(--amber-dim); color:var(--amber); font-size:13px; padding:5px 12px; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .rq-btn.dark { border-color:#5a4a33; color:#3a2d1c; }
+  .rq-coins { display:flex; align-items:center; gap:6px; border:1px solid var(--amber-dim); padding:2px 10px 2px 6px; font-size:14px; }
+  .rq-tab { position:relative; background:transparent; border:1px solid var(--amber-dim); color:var(--amber-dim); font-family:inherit; font-size:13px; padding:6px 14px; cursor:pointer; white-space:nowrap; }
+  .rq-tab.on { background:#ff9a2e; color:#1a0d02; border-color:#ff9a2e; text-shadow:none; }
+  .rq-dot { position:absolute; top:-8px; right:-8px; background:#6ef59b; color:#062010; font-size:10px; min-width:16px; height:16px; line-height:16px; padding:0 3px; text-shadow:none; }
+  .rq-body { flex:1; min-height:0; display:flex; gap:26px; padding:18px 22px; }
+  /* the form */
+  .rq-form { flex:1; min-width:0; display:flex; flex-direction:column; color:#211a12; text-shadow:none; transform:rotate(-.4deg); box-shadow:0 18px 40px rgba(0,0,0,.75);
+    background:repeating-linear-gradient(0deg,rgba(120,95,60,.07) 0 1px,transparent 1px 4px), #e9dfc6; }
+  .rq-formhd { padding:16px 22px 8px; border-bottom:2px solid #211a12; margin:0 0 0; flex-shrink:0; }
+  .rq-formtitle { font-size:clamp(15px,1.9vw,22px); letter-spacing:2px; }
+  .rq-formsub { font-size:9.5px; letter-spacing:1.5px; color:#6f6150; margin-top:2px; }
+  .rq-filters { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:8px; }
+  .rq-filters button { background:none; border:none; padding:0; font-family:inherit; font-size:12px; color:#6f6150; cursor:pointer; }
+  .rq-filters button.on { color:#211a12; }
+  .rq-lines { flex:1; overflow-y:auto; padding:4px 22px 16px; }
+  .rq-line { display:flex; align-items:center; gap:14px; padding:9px 4px; border-bottom:1px dashed rgba(40,30,20,.35); }
+  .rq-line.sel { background:rgba(255,190,90,.25); }
+  .rq-no { font-size:11px; color:#6f6150; width:26px; flex-shrink:0; }
+  .rq-thumb { width:52px; height:52px; flex-shrink:0; border:2px solid; outline:1px solid #211a12; background:#222; overflow:hidden; }
+  .rq-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .rq-item { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .rq-name { font-size:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rq-onfile { font-size:10.5px; letter-spacing:1px; color:#1f4fa8; border:2px solid #1f4fa8; padding:0 5px; transform:rotate(-4deg); opacity:.85; mix-blend-mode:multiply; }
+  .rq-desc { font-size:11px; color:#6f6150; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rq-price { font-size:14px; white-space:nowrap; display:flex; align-items:center; gap:4px; }
+  .rq-price.poor { color:#a8321f; }
+  .rq-request { font-family:inherit; font-size:12.5px; letter-spacing:1px; padding:6px 14px; background:#f6f0e0; color:#211a12; border:1.5px solid #211a12; box-shadow:3px 3px 0 #211a12; cursor:pointer; white-space:nowrap; }
+  .rq-request:active:not(:disabled) { transform:translate(2px,2px); box-shadow:1px 1px 0 #211a12; }
+  .rq-request:disabled { opacity:.4; cursor:default; }
+  /* side */
+  .rq-side { width:min(420px,36vw); flex-shrink:0; overflow-y:auto; padding:6px 4px; }
+  .rq-hint { border:1px solid var(--amber-dim); background:rgba(0,0,0,.25); padding:14px 16px; font-size:12.5px; line-height:1.5; color:var(--amber); }
+  .rq-hint b { font-weight:400; color:#ffd08a; }
+  .rq-hinthd { font-size:11px; letter-spacing:2px; color:var(--amber-dim); border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:8px; }
+  .rq-ready { margin-top:12px; color:#6ef59b; }
+  /* slip */
+  .rq-slip { position:relative; color:#211a12; text-shadow:none; padding:16px 20px 30px; transform:rotate(1.2deg); box-shadow:0 14px 30px rgba(0,0,0,.7); animation:rqSlip .3s cubic-bezier(.2,.9,.25,1.05) both;
+    background:repeating-linear-gradient(0deg,rgba(120,95,60,.06) 0 1px,transparent 1px 4px), #f3ecda;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),96% 100%,92% calc(100% - 8px),87% 100%,82% calc(100% - 9px),77% 100%,71% calc(100% - 8px),65% 100%,59% calc(100% - 9px),53% 100%,47% calc(100% - 8px),41% 100%,35% calc(100% - 9px),29% 100%,23% calc(100% - 8px),17% 100%,11% calc(100% - 9px),5% 100%,0 calc(100% - 8px)); }
+  .rq-sliphd { font-size:17px; letter-spacing:2px; border-bottom:2px solid #211a12; padding-bottom:4px; margin-bottom:8px; }
+  .rq-sliprow { display:flex; gap:10px; padding:4px 0; font-size:13px; border-bottom:1px dotted rgba(40,30,20,.3); }
+  .rq-sliprow i, .rq-sign i { font-style:normal; font-size:9.5px; letter-spacing:1.5px; color:#6f6150; width:100px; flex-shrink:0; padding-top:2px; }
+  .rq-sign { display:flex; align-items:flex-end; gap:10px; margin-top:12px; min-height:58px; }
+  .rq-sign img { height:58px; max-width:220px; object-fit:contain; animation:rqInk .5s ease-out both; }
+  .rq-signtext { font-family:var(--font-narration); font-size:30px; color:#22306e; animation:rqInk .5s ease-out both; }
+  .rq-signline { flex:1; border-bottom:1.5px solid #211a12; height:40px; }
+  .rq-approved { position:absolute; right:14px; top:58px; font-family:var(--font-hit); font-size:34px; color:#2f6b3a; border:5px solid currentColor; padding:0 10px; border-radius:6px !important;
+    transform:rotate(-14deg); opacity:.85; mix-blend-mode:multiply; pointer-events:none; animation:rqStamp .32s cubic-bezier(.3,1.4,.5,1) both; }
+  .rq-approved.denied { color:#a8321f; font-size:20px; top:70px; }
+  .rq-slipbtns { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+  .rq-submit { font-family:inherit; font-size:13px; letter-spacing:1px; padding:6px 16px; background:#211a12; color:#f3ecda; border:none; cursor:pointer; }
+  .rq-submit:disabled { opacity:.35; cursor:default; }
+  /* promotions */
+  .rq-promo { flex:1; min-height:0; overflow-y:auto; display:flex; gap:22px; padding:18px 22px; align-items:flex-start; }
+  .rq-board { flex:1; min-width:0; border:1px solid #ff9a2e; background:rgba(0,0,0,.3); padding:14px 18px; }
+  .rq-boardhd { font-size:11.5px; letter-spacing:1px; color:var(--amber-dim); border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:6px; line-height:1.4; }
+  .rq-none { padding:40px 0; text-align:center; color:var(--amber-dim); }
+  .rq-prow { display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(90,51,19,.6); }
+  .rq-pthumb { position:relative; width:64px; height:64px; flex-shrink:0; border:2px solid; background:#111; }
+  .rq-pthumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .rq-pthumb i { position:absolute; right:-6px; bottom:-6px; font-style:normal; font-size:11px; background:var(--bar); border:1px solid var(--amber-dim); padding:0 4px; }
+  .rq-pinfo { flex:1; min-width:0; }
+  .rq-ptitle { font-size:15px; color:#ffcf8a; }
+  .rq-pnow { font-size:11.5px; color:var(--amber-dim); margin-top:2px; }
+  .rq-pnow span { color:var(--amber); }
+  .rq-pkit { font-size:11.5px; color:var(--amber); margin-top:2px; }
+  .rq-psubs { display:flex; flex-wrap:wrap; gap:2px 12px; font-size:11px; color:#9cc4ff; margin-top:3px; }
+  .rq-psubs b { font-weight:400; color:#ffd08a; }
+  .rq-bar { height:9px; border:1px solid var(--amber-dim); margin-top:6px; max-width:420px; }
+  .rq-bar span { display:block; height:100%; background:#ff9a2e; box-shadow:0 0 8px #ff8c00; }
+  .rq-pstat { font-size:11px; color:var(--amber-dim); margin-top:3px; }
+  .rq-pstat.ok { color:#6ef59b; }
+  .rq-promote { font-family:inherit; font-size:12.5px; padding:7px 12px; background:transparent; color:var(--amber-dim); border:1px solid var(--amber-dim); cursor:pointer; white-space:nowrap; }
+  .rq-prow.ready .rq-promote { background:#ff9a2e; border-color:#ff9a2e; color:#1a0d02; text-shadow:none; }
+  .rq-promote:disabled { cursor:default; opacity:.6; }
+  .rq-ref { width:320px; flex-shrink:0; border:1px solid var(--amber-dim); background:rgba(0,0,0,.25); padding:14px 16px; position:sticky; top:0; }
+  .rq-refrow { display:flex; gap:10px; align-items:baseline; font-size:11.5px; padding:5px 0; border-bottom:1px solid rgba(90,51,19,.5); }
+  .rq-refrow b { font-weight:400; color:#ffcf8a; width:24px; }
+  .rq-refrow span { flex:1; color:var(--amber); }
+  .rq-refrow i { font-style:normal; color:var(--amber-dim); white-space:nowrap; }
+  /* phone */
+  .rq-sheet { position:fixed; inset:0; z-index:60; background:rgba(5,3,2,.85); display:flex; align-items:center; justify-content:center; padding:14px; }
+  .rq-sheet > div { width:min(420px,100%); }
+  .rq-toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); padding:9px 22px; background:var(--bar); border:1px solid; font-size:14px; z-index:999; pointer-events:none; white-space:nowrap; animation:rqUp .22s ease-out; }
+  @media (max-width: 700px) {
+    .rq-body { padding:10px 8px; }
+    .rq-form { transform:none; }
+    .rq-formhd { padding:12px 12px 6px; }
+    .rq-lines { padding:2px 10px 12px; }
+    .rq-line { gap:9px; flex-wrap:wrap; }
+    .rq-no { display:none; }
+    .rq-thumb { width:44px; height:44px; }
+    .rq-item { flex-basis:calc(100% - 60px); }
+    .rq-price { margin-left:53px; flex:1; }
+    .rq-tab { padding:6px 8px; font-size:11.5px; }
+    .rq-promo { flex-direction:column; padding:10px 8px; align-items:stretch; }
+    .rq-board { padding:10px; }
+    .rq-prow { flex-wrap:wrap; }
+    .rq-promote { width:100%; }
+    .rq-ref { width:auto; position:static; }
   }
-  .cs-card::after {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: 10px;
-    border: 2px solid var(--hover-color);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--hover-color) 30%, transparent);
-    opacity: 0;
-    transition: opacity 0.15s;
-    pointer-events: none;
-  }
-
-  .cs-card:hover { transform: translateY(-3px); }
-  .cs-card:hover::after { opacity: 1; }
-  .cs-back-btn{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.2);color:#ccc;font-size:14px;padding:7px 18px;border-radius:8px;cursor:pointer}
-  .cs-back-btn:hover{background:rgba(255,255,255,0.13);color:#fff}
-  .cs-buy-btn{border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px;padding:7px 0;width:100%;color:#fff;transition:filter 0.15s}
-  .cs-buy-btn:hover:not(:disabled){filter:brightness(1.25)}
-  .cs-buy-btn:disabled{opacity:0.35;cursor:not-allowed}
-  .cs-fuse-btn{border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px;padding:7px 0;width:100%;background:linear-gradient(90deg,#4400aa,#aa44ff);color:#fff;transition:filter 0.15s}
-  .cs-fuse-btn:hover:not(:disabled){filter:brightness(1.2)}
-  .cs-fuse-btn:disabled{opacity:0.35;cursor:not-allowed}
-  .cs-owned-badge{position:absolute;top:7px;right:9px;background:#0f1420;border:1px solid var(--line);border-radius:10px;padding:2px 8px;font-size:11px;color:#aaa;font-weight:700}
+  @keyframes rqSlip  { from { opacity:0; transform:translateY(-30px) rotate(-4deg); } to { opacity:1; transform:rotate(1.2deg); } }
+  @keyframes rqStamp { from { opacity:0; transform:rotate(-14deg) scale(2.4); } to { opacity:.85; transform:rotate(-14deg) scale(1); } }
+  @keyframes rqInk   { from { clip-path:inset(0 100% 0 0); } to { clip-path:inset(0 0 0 0); } }
+  @keyframes rqUp    { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%); } }
 `;

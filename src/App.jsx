@@ -215,7 +215,7 @@ export default function App() {
   );
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
-  if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} />;
+  if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} mainCardId={deck?.main?.id ?? null} />;
   if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} profile={profile} setProfile={setProfile} />;
 
   if (screen === 'gacha' || screen === 'gamble') return (
@@ -250,6 +250,7 @@ export default function App() {
       collection={cardInventory}
       setCollection={setCardInventory}
       gachaCollection={collection}
+      profile={profile}
     />
   );
 
