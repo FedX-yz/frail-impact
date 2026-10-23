@@ -14,13 +14,23 @@ onSettings(s => { master.gain.value = s.volume; });
 // synchronously; `loading` de-duplicates downloads.
 const ready = new Map();
 const loading = new Map();
+// Decoded audio is big (a 30 s song ≈ 10 MB), so apart from the short menu sounds only
+// the most recently used KEEP_DECODED tracks / voice lines stay in memory; an older one
+// is simply downloaded again (from the browser cache) the next time it plays.
+const KEEP_DECODED = 8;
+const recent = [];
+function remember(src) {
+  if (src.includes('/sounds/')) return;   // menu/UI sounds: tiny, kept for instant clicks
+  recent.push(src);
+  while (recent.length > KEEP_DECODED) ready.delete(recent.shift());
+}
 function loadBuffer(src) {
   if (ready.has(src)) return Promise.resolve(ready.get(src));
   if (!loading.has(src)) {
     loading.set(src, fetch(src)
       .then(r => { if (!r.ok) throw new Error(`${r.status} ${src}`); return r.arrayBuffer(); })
       .then(buf => _audioCtx.decodeAudioData(buf))
-      .then(decoded => { ready.set(src, decoded); return decoded; })
+      .then(decoded => { ready.set(src, decoded); loading.delete(src); remember(src); return decoded; })
       .catch(err => { loading.delete(src); throw err; }));
   }
   return loading.get(src);

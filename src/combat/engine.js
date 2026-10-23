@@ -1057,10 +1057,16 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function setStats(st) {
-    const ratio = s.player.hp / s.player.maxHp;
     s.stats = st;
-    s.player.maxHp = st.maxHp;
-    s.player.hp = Math.round(st.maxHp * ratio);
+    // This runs on every kill (XP changes the stats), so only touch HP when max HP really
+    // changed: keep the same % of it, and never round a living player down to 0 HP (that
+    // used to leave you at 0 HP with no regen until the next hit finished you).
+    const pl = s.player;
+    if (st.maxHp !== pl.maxHp) {
+      const ratio = pl.maxHp > 0 ? pl.hp / pl.maxHp : 1;
+      pl.maxHp = st.maxHp;
+      pl.hp = pl.hp > 0 ? Math.max(Math.min(1, st.maxHp), st.maxHp * ratio) : 0;
+    }
     if (!st.ult) { s.ult.charge = 0; s.ult.cd = 0; }
   }
 

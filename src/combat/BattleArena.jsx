@@ -25,6 +25,7 @@ const STATUS_PORTRAITS = {
 // SCROLL (test): the layers also slide sideways forever at `speed` px/s (the view travels to the
 // right; it eases to a stop while a boss is out), using the *_loop pictures (each painting + its mirror image, so it repeats seamlessly).
 const SCROLL = true;
+const LOOP_ASPECT = 4800 / 1682;   // width / height of the *_loop pictures
 const PARALLAX = [
   { src: `${BASE}backgrounds/city_sky.png`,  loop: `${BASE}backgrounds/city_sky_loop.png`,  depth: 6,  speed: 8 },
   { src: `${BASE}backgrounds/city_far.png`,  loop: `${BASE}backgrounds/city_far_loop.png`,  depth: 14, speed: 22 },
@@ -48,7 +49,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const nodes = useRef(new Map());
   const parallaxRefs = useRef([]);
   const parallax = useRef({ x: 0, y: 0 });
-  const scroll = useRef({ off: [0, 0, 0], v: 1, last: 0 });   // SCROLL: offsets, speed factor (0 = stopped), last frame time
+  const scroll = useRef({ off: [0, 0, 0], v: 1, last: 0, tile: [0, 0, 0], key: '', els: null });   // SCROLL: offsets, speed factor (0 = stopped), last frame time, tile widths
+  const scrollRefs = useRef([]);   // SCROLL: the wide strip inside each layer that slides
   const register = useCallback((id, el) => { if (el) nodes.current.set(id, el); else nodes.current.delete(id); }, []);
   const onUlt = useCallback(() => engine.activateUlt(), [engine]);
   const [, setFrame] = useState(0);
@@ -161,11 +163,29 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       const boss = s.phase === 'boss' || s.phase === 'bossIntro' || s.paused;
       sc.v += ((boss ? 0 : 1) - sc.v) * Math.min(1, dt * 1.6);
       par.x += (tx - par.x) * 0.06; par.y += (ty - par.y) * 0.06;
+      // one painting's width at the layer's height; only re-measured when the arena changes size
+      const key = `${s.W}x${s.H}`, strips = scrollRefs.current;
+      if (strips.some((el, i) => el !== sc.els?.[i])) { sc.els = [...strips]; sc.key = ''; }   // new strips (arena re-opened)
+      if (SCROLL && sc.key !== key) {
+        sc.key = key;
+        PARALLAX.forEach((l, i) => {
+          const strip = scrollRefs.current[i];
+          if (!strip) return;
+          sc.tile[i] = strip.offsetHeight * LOOP_ASPECT;
+          strip.style.width = `calc(100% + ${Math.ceil(sc.tile[i]) + 2}px)`;
+        });
+      }
       PARALLAX.forEach((l, i) => {
         const el = parallaxRefs.current[i];
         if (!el) return;
         el.style.transform = `translate3d(${(par.x * l.depth).toFixed(2)}px, ${(par.y * l.depth * 0.4).toFixed(2)}px, 0)`;
-        if (SCROLL) { sc.off[i] = (sc.off[i] - l.speed * s.k * sc.v * dt) % 1e6; /* minus: picture slides left = travelling right */ el.style.backgroundPositionX = `${sc.off[i].toFixed(1)}px`; }
+        // slide the strip left (= travelling right) and jump back one painting width, which looks identical.
+        // A transform is moved by the GPU; changing background-position repainted the whole layer every frame.
+        const strip = scrollRefs.current[i], T = sc.tile[i];
+        if (SCROLL && strip && T > 0) {
+          sc.off[i] = (sc.off[i] + l.speed * s.k * sc.v * dt) % T;
+          strip.style.transform = `translate3d(${(-sc.off[i]).toFixed(1)}px, 0, 0)`;
+        }
       });
     }
     for (const e of s.enemies) {
@@ -205,9 +225,11 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         }}
       >
         {!s.stage.bg && PARALLAX.map((l, i) => (
-          <div key={l.src} ref={el => { parallaxRefs.current[i] = el; }} style={{ position: 'absolute', inset: `-${l.depth + 4}px`, pointerEvents: 'none',
-            backgroundImage: `url(${SCROLL ? l.loop : l.src})`, backgroundSize: SCROLL ? 'auto 100%' : 'cover', backgroundRepeat: SCROLL ? 'repeat-x' : 'no-repeat',
-            backgroundPosition: 'center bottom', willChange: 'transform, background-position' }} />
+          <div key={l.src} ref={el => { parallaxRefs.current[i] = el; }} style={{ position: 'absolute', inset: `-${l.depth + 4}px`, pointerEvents: 'none', overflow: 'hidden',
+            backgroundImage: SCROLL ? undefined : `url(${l.src})`, backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center bottom', willChange: 'transform' }}>
+            {SCROLL && <div ref={el => { scrollRefs.current[i] = el; }} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '300%',
+              backgroundImage: `url(${l.loop})`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'left bottom', willChange: 'transform' }} />}
+          </div>
         ))}
         <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX}px,${shakeY}px)` }}>
           <div style={{ position: 'absolute', inset: 0, background: s.stage.bg ? 'rgba(10,14,30,0.45)' : 'rgba(10,14,30,0.22)', pointerEvents: 'none' }} />
