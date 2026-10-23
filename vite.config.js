@@ -99,7 +99,10 @@ function optimizeAssets() {
           fs.writeFileSync(path.join(outDir, webpRel), out)
           fs.unlinkSync(file)
           after += out.length
-          for (const f of codeFiles) code[f] = code[f].replace(pattern, webpRel)
+          // ?v=<content hash>: replacing a picture under the same name (new banner art) can't
+          // leave players looking at the old one from their browser cache
+          const v = crypto.createHash('sha1').update(out).digest('hex').slice(0, 8)
+          for (const f of codeFiles) code[f] = code[f].replace(pattern, `${webpRel}?v=${v}`)
         } else {
           const fmt = isGif ? 'gif' : /\.png$/i.test(r) ? 'png' : 'jpeg'
           const out = await cached(src, `same${max}${fmt}`, s => resized(s)[fmt](fmt === 'jpeg' ? { quality: 85 } : fmt === 'png' ? { compressionLevel: 9 } : {}).toBuffer())

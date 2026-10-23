@@ -15,7 +15,9 @@ import { CHARACTERS } from '../data/characters';
 
 // skill id → the skill's name on its card (for Room 16's copies)
 export const SKILL_NAMES = Object.fromEntries(CHARACTERS.filter(c => c.skill?.effect).map(c => [c.skill.effect, c.skill.name]));
-const COPY_POOL = Object.keys(SKILLS).filter(id => id !== 'copy');
+// Room 16 copies 5★ skills only (not the 6★ ones, e.g. Devour's % of current HP bite)
+const COPY_POOL = [...new Set(CHARACTERS.filter(c => c.rarity === 5 && c.skill?.effect && SKILLS[c.skill.effect]).map(c => c.skill.effect))]
+  .filter(id => id !== 'copy');
 
 const MAX_LAVA = 6, MAX_FIRE = 50, MAX_CRAWLERS = 4, MAX_SHIKI = 3;
 const ZONE_TICK = 0.5;            // lava / fire / spirits deal damage this often

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { playSFX, playPress } from '../utils/sfx';
 import { fmt } from '../combat/engine';
 import { cardBattleStats } from '../combat/stats';
-import { SKILL_UNLOCK, ULT_UNLOCK } from '../combat/kits';
+import { SKILL_UNLOCK, ULT_UNLOCK, abilityText } from '../combat/kits';
 import { BAL } from '../combat/balance';
 import { formatSub } from '../combat/sets';
 import BattleArena from '../combat/BattleArena';
@@ -101,13 +101,13 @@ export default function MainScreen({
   const kitInfo = mainCard && (
     <div style={{ fontSize: 11, color: '#778', lineHeight: 1.45, minWidth: 0, whiteSpace: mobile && portrait ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
       {mainCard.skill && (
-        <div style={{ color: stats.skill ? '#4ade80' : '#556' }} title={mainCard.skill.description}>
+        <div style={{ color: stats.skill ? '#4ade80' : '#556' }} title={abilityText(mainCard.skill, stats.si)}>
           ✦ {mainCard.skill.name} {stats.skill?.weak && <span style={{ color: '#fbbf24' }} title={`Weaker until LV${SKILL_UNLOCK}`}>½ until LV{SKILL_UNLOCK}</span>}
         </div>
       )}
       {mainCard.rarity >= 5 && !mainCard.skill && !mainCard.ult && <div style={{ color: '#667', fontStyle: 'italic' }}>✦ Kit coming soon</div>}
       {mainCard.ult && (
-        <div style={{ color: stats.ult ? '#c084fc' : '#556' }} title={mainCard.ult.description}>
+        <div style={{ color: stats.ult ? '#c084fc' : '#556' }} title={abilityText(mainCard.ult, stats.si)}>
           ⚡ {mainCard.ult.name} {!stats.ult ? <span style={{ color: '#f87171' }}>LV{ULT_UNLOCK}</span> : <span style={{ color: '#667' }}>[E]</span>}
         </div>
       )}

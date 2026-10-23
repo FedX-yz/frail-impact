@@ -6,6 +6,7 @@ import { useLiveSchedule } from '../utils/liveSchedule';
 import { playClose, preloadSound, playMusic, stopMusic, musicElapsed, playStamp, playScribble } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import FocusImg from '../components/FocusImg';
+import { abilityText } from '../combat/kits';
 import { getSettings } from '../utils/settings';
 
 const BASE = import.meta.env.BASE_URL;
@@ -1041,7 +1042,7 @@ zIndex: 10,
               <div className="rv-agent" style={{ animation: flash ? 'dropJolt 0.5s ease-out' : undefined }}>
                 <div className="rv-art">
                   {c.sprite ? <img src={c.sprite} alt={c.name} draggable={false} className="rv-cutout" />
-                    : <span className="rv-photo"><span className="rv-clip" /><img src={c.cardArt || c.characterImage || c.image} alt={c.name} draggable={false} /></span>}
+                    : <span className="rv-photo"><span className="rv-clip keep-round" /><img src={c.cardArt || c.characterImage || c.image} alt={c.name} draggable={false} /></span>}
                 </div>
                 <div className="rv-dossier">
                   <div className="rv-dhead"><span>FRAIL INITIATIVE · PERSONNEL</span><span className="rv-stars">{'★'.repeat(Math.min(c.rarity, 6))}</span></div>
@@ -1147,7 +1148,7 @@ zIndex: 10,
                     <span className="pr-paper">
                       <span className="pr-photo-wrap">
                       <span className="pr-photo">
-                        <span className="pr-clip" />
+                        <span className="pr-clip keep-round" />
                         {focus ? <FocusImg src={c.sprite || c.cardArt} focus={focus} at={[50, 42]} />
                           : c.cardArt ? <img src={c.cardArt} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 22%' }} />
                             : <img src={thumb(c.characterImage || c.image)} alt="" draggable={false} className="pr-framed"
@@ -1243,7 +1244,7 @@ zIndex: 10,
             {[['✦ Skill', selectedResult.skill], ['⚡ Ult', selectedResult.ult]].filter(([, a]) => a).map(([tag, a]) => (
               <div key={tag} style={{ background:'rgba(240,192,64,0.07)', border:'1px solid rgba(240,192,64,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:8 }}>
                 <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{tag}: {a.name}</div>
-                <div style={{ color:'#aaa', fontSize:12 }}>{a.description}</div>
+                <div style={{ color:'#aaa', fontSize:12 }}>{abilityText(a)}</div>
                 <div style={{ color:'#556', fontSize:11, marginTop:4 }}>{tag.includes('Ult') ? 'Unlocks at LV50 · charges from damage' : 'Always on from LV1 · full strength at LV20'}</div>
               </div>
             ))}

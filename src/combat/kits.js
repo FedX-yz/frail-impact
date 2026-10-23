@@ -25,7 +25,7 @@ export const SKILLS = {
                    lv1: { pct: 0.5 },
                    si: { pct: 0.2, shots: 0.5 },
                    desc: 'Click empty space to fire {shots} homing shot(s) at the nearest enemies for {pct} click DMG each.' },
-  frost_bolt:    { type: 'frost',     chance: 0.15, dur: 2, bonus: 0.3,
+  frost_bolt:    { type: 'frost',     chance: 0.2, dur: 2, bonus: 0.4,
                    lv1: { chance: 0.07, dur: 1.2, bonus: 0.15 },
                    si: { chance: 0.04, dur: 0.4, bonus: 0.08 },
                    desc: 'Clicks have a {chance} chance to freeze an enemy for {dur}s. Frozen enemies take +{bonus} DMG.' },
@@ -76,7 +76,7 @@ export const SKILLS = {
                lv1: { every: 30 },
                si: { every: -2 },
                desc: 'Copies a random 5★ skill (its weaker version) and switches to another every {every}s.' },
-  shadows:   { type: 'shadows',   pct: 0.6,
+  shadows:   { type: 'shadows',   pct: 0.9,
                lv1: { pct: 0.35 },
                si: { pct: 0.1 },
                desc: 'Combo 10 summons a Divine Dog, combo 25 a Toad that eats the next hit on you, combo 50 Nue. Shikigami hit for {pct} click DMG.' },
@@ -89,13 +89,13 @@ export const ULTS = {
   black_hole:     { type: 'blackhole', mult: 7, stun: 3, charge: 1,
                     si: { mult: 1.5, stun: 0.5 },
                     desc: 'Pulls every enemy into the centre, stuns them for {stun}s and deals {mult} click DMG.' },
-  swag_mode:      { type: 'transform', dur: 10, clickMult: 2.5, autoClicks: 6, charge: 1,
+  swag_mode:      { type: 'transform', dur: 10, clickMult: 1.6, autoClicks: 4, charge: 1,
                     si: { dur: 1.5, clickMult: 0.3 },
-                    desc: 'SWAG MODE for {dur}s: {clickMult}× click DMG and 6 automatic clicks per second.' },
-  permafrost:     { type: 'timestop',  dur: 6, mult: 3, charge: 1,
+                    desc: 'SWAG MODE for {dur}s: {clickMult}× click DMG and {autoClicks} automatic clicks per second.' },
+  permafrost:     { type: 'timestop',  dur: 6, mult: 6, charge: 1,
                     si: { dur: 1, mult: 0.75 },
                     desc: 'Stops time for {dur}s — every attack is cancelled — and deals {mult} click DMG to all enemies.' },
-  tidal_surge:    { type: 'surge',     mult: 6, coins: 30, charge: 1,
+  tidal_surge:    { type: 'surge',     mult: 12, coins: 30, charge: 1,
                     si: { mult: 1.25, coins: 10 },
                     desc: 'Deals {mult} click DMG to all enemies, fully heals you and drops a pile of coins.' },
   reality_break:  { type: 'execute',   dur: 3, mult: 20, threshold: 0.2, charge: 1,
@@ -106,9 +106,9 @@ export const ULTS = {
                     desc: "Eats every non-boss enemy, bites {bossPct} of the boss's max HP and fully heals you." },
 
   // ── Anemic Kaisen ──────────────────────────────────────────────────────
-  overtime:        { type: 'overtime',   dur: 10, mult: 1.5, collapse: 5, charge: 1,
+  overtime:        { type: 'overtime',   dur: 8, mult: 1, collapse: 4, charge: 1,
                      si: { dur: 1, collapse: 1 },
-                     desc: 'OVERTIME for {dur}s: every click is a ratio hit and deals {mult} DMG. When it ends, Collapse hits every enemy for {collapse} click DMG.' },
+                     desc: 'OVERTIME for {dur}s: every click is a ratio hit (a guaranteed crit with bonus crit DMG). When it ends, Collapse hits every enemy for {collapse} click DMG.' },
   distortion:      { type: 'distortion', dur: 10, slashes: 3, mult: 0.42, charge: 1,
                      si: { dur: 1, mult: 0.07 },
                      desc: 'For {dur}s every click also fires {slashes} slashes through your cursor at random angles, each hitting everything on its line for {mult} click DMG.' },
@@ -130,7 +130,7 @@ export const ULTS = {
   ora:             { type: 'ora',        dur: 45, punches: 10, pct: 0.3, charge: 1.3,
                      si: { punches: 1, pct: 0.03 },
                      desc: 'Pick 1 of 3 skills to use at full strength for {dur}s, with a punch barrage: {punches} punches a second for {pct} click DMG each.' },
-  mahoraga:        { type: 'mahoraga',   hp: 2.5, mult: 4, charge: 1.4,
+  mahoraga:        { type: 'mahoraga',   hp: 2.5, mult: 6, charge: 1.4,
                      si: { hp: 0.4, mult: 0.8 },
                      desc: 'Summons Mahoraga ({hp}× your max HP, slams for {mult} click DMG). You are suspended and can only watch. It adapts to every attack that hits it, and its wheel turns every 6s, making it stronger. It must clear the field (boss included). If it dies, you die.' },
 };
@@ -170,6 +170,14 @@ export function describeKit(kit, si = 0) {
   return kit.desc.replace(/\{(\w+)\}/g, (_, key) => (key in k ? showVal(key, k[key]) : key))
     // "{every}th" → 1st / 2nd / 3rd / 4th…
     .replace(/\b(\d+)th\b/g, (_, n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'));
+}
+
+// What a card's skill or ult does, with the real numbers (the `description` text in
+// characters.js is older and can be out of date, so it's only the fallback)
+export function abilityText(ability, si = 0) {
+  if (!ability) return '';
+  const kit = SKILLS[ability.effect] ?? ULTS[ability.effect];
+  return kit ? describeKit(kit, si) : (ability.description ?? '');
 }
 
 // One line saying what the next superimposition improves, e.g. "range 110 → 128, DMG 50% → 62%"

@@ -41,7 +41,8 @@ html, body, #root { height: 100%; }
 #root { text-shadow: 0 0 4px rgba(255, 140, 40, 0.1); }
 
 /* Terminal: square corners on everything outside the fight (the battle keeps its round shapes) */
-#root *:not(.battle-arena, .battle-arena *) { border-radius: 0 !important; }
+/* (.keep-round opts one element out: paperclips and the like) */
+#root *:not(.battle-arena, .battle-arena *, .keep-round) { border-radius: 0 !important; }
 .term-cursor { animation: termBlink 1.05s steps(1) infinite; }
 @keyframes termBlink { 50% { opacity: 0; } }
 ::selection { background: #ff8a1e; color: #090502; }

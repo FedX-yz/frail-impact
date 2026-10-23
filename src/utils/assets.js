@@ -6,5 +6,5 @@
 // In `npm run dev` there are no thumbnails, so the original image is used.
 export function thumb(src) {
   if (!import.meta.env.PROD || !src || !src.includes('characters/')) return src;
-  return src.replace('characters/', 'characters/thumb/').replace(/\.(png|jpe?g|gif|webp)$/i, '.webp');
+  return src.replace('characters/', 'characters/thumb/').replace(/\.(png|jpe?g|gif|webp)(\?.*)?$/i, '.webp$2');   // keeps a ?v= version
 }

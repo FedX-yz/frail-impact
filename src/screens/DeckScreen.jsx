@@ -124,7 +124,7 @@ const pool = CHARACTERS
         <TermTitle path="DECK" />
         {!mobile && <div style={{ color:'#445', fontSize:12, marginLeft:4 }}>main must be 5★ or 6★ · 3 of a set in supports = set bonus</div>}
         <div style={{ flex:1 }} />
-        <div style={{ color:'#445', fontSize:13 }}>{CHARACTERS.filter(c => cardCounts[c.id] > 0).length} unique cards</div>
+        <div style={{ color:'#445', fontSize:13, whiteSpace:'nowrap' }}>{CHARACTERS.filter(c => cardCounts[c.id] > 0).length}{mobile ? '' : ' unique'} cards</div>
       </div>
 
       <div style={{ flex:1, display:'flex', flexDirection: mobile ? 'column' : 'row', overflow:'hidden' }}>

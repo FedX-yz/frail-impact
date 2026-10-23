@@ -3,11 +3,13 @@ import { playClose, sfx, playPress } from '../utils/sfx';
 import { getSettings, setSetting } from '../utils/settings';
 import JobApplication from '../story/JobApplication';
 import TermTitle from '../components/TermTitle';
+import useIsMobile from '../hooks/useIsMobile';
 
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
 
 export default function SettingsScreen({ navigate, devMode, toggleDev, profile, setProfile }) {
+  const { mobile } = useIsMobile();
   const [confirmReset, setConfirmReset] = useState(false);
   const [resign,       setResign]       = useState(false);
   const [scare,        setScare]        = useState(false);
@@ -101,24 +103,24 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
         display:'flex', 
         alignItems:'center', 
         justifyContent: 'space-between', 
-        padding:'10px 16px', 
+        padding: mobile ? '8px 8px' : '10px 16px', gap: 6,
         background:'var(--bar)', borderBottom:'2px solid #ff8c00', 
         flexShrink:0 
       }}>
         {/* FAKE BACK BUTTON (Top Left) */}
         <button 
           onClick={triggerScare} 
-          style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}
+          style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding: mobile ? '6px 8px' : '7px 18px', borderRadius:8, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}
         >
           [&nbsp;back&nbsp;]
         </button>
 
-        <TermTitle path="SETTINGS" onClick={tapTitle} />
+        <TermTitle path="SETTINGS" onClick={tapTitle} small={mobile} />
 
         {/* REAL BACK BUTTON (Top Right) */}
         <button 
           onPointerDown={playClose} onClick={() => navigate('main')} 
-          style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding:'7px 18px', borderRadius:8, cursor:'pointer' }}
+          style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.2)', color:'#ccc', fontSize:14, padding: mobile ? '6px 8px' : '7px 18px', borderRadius:8, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}
         >
           [&nbsp;back&nbsp;]
         </button>
