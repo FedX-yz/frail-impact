@@ -92,7 +92,7 @@ function doPulls(count, pity4, pity5, banner, force5 = false) {
       rarity = 3;
     }
 
-    let pool = CHARACTERS.filter(c => c.rarity === rarity);
+    let pool = CHARACTERS.filter(c => c.rarity === rarity && !c.unpullable);   // unpullable: not released yet
 
     if (
       banner.featuredIds.length > 0 &&
@@ -100,7 +100,7 @@ function doPulls(count, pity4, pity5, banner, force5 = false) {
       (force5 || Math.random() < banner.boostedChance)
     ) {
       const featuredOfRarity = CHARACTERS.filter(c =>
-        banner.featuredIds.includes(c.id) && c.rarity === rarity
+        banner.featuredIds.includes(c.id) && c.rarity === rarity && !c.unpullable
       );
       if (featuredOfRarity.length > 0) pool = featuredOfRarity;
     }
@@ -338,7 +338,7 @@ export default function GachaScreen({
   }, [phase, queueIdx]);
 
   const startPulls = cnt => {
-    if ((phase !== 'idle' && phase !== 'results') || currency < cnt) return;
+    if ((phase !== 'idle' && phase !== 'results') || currency < cnt || activeBanner.comingSoon) return;   // comingSoon: banner shown, pulls closed
     setSummaryBatch([]); setS5CoinsEarned(0);
     setCurrency(c => c - cnt);
     const { results, newPity4, newPity5 } = doPulls(cnt, pity4, pity5, activeBanner, force5);
@@ -856,6 +856,8 @@ zIndex: 10,
       <div style={{ position:'absolute', left:20, bottom:20, zIndex:3, pointerEvents:'none' }}>
         <div style={{ color:activeBanner.accentColor, fontSize:'clamp(18px,3vw,32px)', fontWeight:900 }}>{activeBanner.name}</div>
         <div style={{ color:'rgba(255,255,255,0.5)', fontSize:13 }}>{activeBanner.subtitle}</div>
+        {activeBanner.comingSoon && <div style={{ display:'inline-block', marginTop:6, fontFamily:'var(--font-hit)', fontSize:'clamp(16px,2.6vw,26px)', letterSpacing:2, color:activeBanner.accentColor,
+          border:`3px solid ${activeBanner.accentColor}`, borderRadius:6, padding:'0 10px', transform:'rotate(-4deg)', background:'rgba(0,0,0,0.45)' }}>COMING SOON</div>}
         <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>{isPermanent(activeBanner) ? 'Permanent banner' : endsAt[activeBanner.id] === Infinity ? 'Limited · no end date yet' : `ends in: ${timeLeft}`}</div>
       </div>
     )}
@@ -902,7 +904,7 @@ zIndex: 10,
       </div>
 
       {/* Pull buttons */}
-      <div style={{ position: 'relative', lineHeight: 0, userSelect: 'none', width: 'min(96vw, 580px)' }}>
+      <div style={{ position: 'relative', lineHeight: 0, userSelect: 'none', width: 'min(96vw, 580px)', opacity: activeBanner.comingSoon ? 0.35 : 1, filter: activeBanner.comingSoon ? 'grayscale(0.8)' : 'none' }}>
         {/* Base — always visible */}
         <img src={`${BASE}ui/ui_pullbtn.png`} alt="pull buttons" draggable={false}
           style={{ width: '100%', objectFit: 'contain', display: 'block' }} />
@@ -923,16 +925,16 @@ zIndex: 10,
         {/* Click areas */}
         <button
           className="pull-btn-overlay"
-          disabled={currency < 1}
-          style={{ left: 0, width: '46%', opacity: currency < 1 ? 0.4 : 1 }}
+          disabled={currency < 1 || activeBanner.comingSoon}
+          style={{ left: 0, width: '46%', opacity: currency < 1 || activeBanner.comingSoon ? 0.4 : 1 }}
           onMouseEnter={() => setHovBtn1(true)}
           onMouseLeave={() => setHovBtn1(false)}
           onClick={() => startPulls(1)}
         />
         <button
           className="pull-btn-overlay"
-          disabled={currency < 10}
-          style={{ right: 0, width: '46%', opacity: currency < 10 ? 0.4 : 1 }}
+          disabled={currency < 10 || activeBanner.comingSoon}
+          style={{ right: 0, width: '46%', opacity: currency < 10 || activeBanner.comingSoon ? 0.4 : 1 }}
           onMouseEnter={() => setHovBtn2(true)}
           onMouseLeave={() => setHovBtn2(false)}
           onClick={() => startPulls(10)}

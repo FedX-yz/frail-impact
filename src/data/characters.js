@@ -536,6 +536,76 @@ export const CHARACTERS = [
     },
   },
 
+  // ── 6★ Platinum Series (the good guys; a Gold Series for the bad guys comes later).
+  // Placeholders: no kits, no titles yet, and `unpullable` keeps them out of every pull.
+  // Bonk and Ramsf's framed cards are placeholders made from their full-body art.
+  {
+    id: 37,
+    name: 'Ice',
+    subtitle: 'Platinum Series',     // title TBD
+    rarity: 6,
+    series: 'platinum',
+    unpullable: true,                // not in any pull yet (remove when it's ready)
+    element: null,
+    color: '#a5f3fc',
+    image:           `${BASE}characters/ice-platinum.png`,
+    characterImage:  `${BASE}characters/ice-platinum.png`,
+    cardArt:         `${BASE}sprites/ice-platinum.png`,
+    sprite:          `${BASE}sprites/ice-platinum.png`,
+    portraitFocus:   [50, 12, 3],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/6star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 1600, atk: 200, def: 100 },   // placeholder
+    skill: null,                     // kit coming later
+    ult: null,
+    passive: null,
+  },
+  {
+    id: 38,
+    name: 'Bonk',
+    subtitle: 'Platinum Series',     // title TBD
+    rarity: 6,
+    series: 'platinum',
+    unpullable: true,                // not in any pull yet (remove when it's ready)
+    element: null,
+    color: '#f87171',
+    image:           `${BASE}characters/bonk-platinum.png`,
+    characterImage:  `${BASE}characters/bonk-platinum.png`,
+    cardArt:         `${BASE}sprites/bonk-platinum.png`,
+    sprite:          `${BASE}sprites/bonk-platinum.png`,
+    portraitFocus:   [41, 6, 3.2],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/6star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 1600, atk: 200, def: 100 },   // placeholder
+    skill: null,                     // kit coming later
+    ult: null,
+    passive: null,
+  },
+  {
+    id: 39,
+    name: 'Ramsf',
+    subtitle: 'Platinum Series',     // title TBD
+    rarity: 6,
+    series: 'platinum',
+    unpullable: true,                // not in any pull yet (remove when it's ready)
+    element: null,
+    color: '#f472b6',
+    image:           `${BASE}characters/ramsf-platinum.png`,
+    characterImage:  `${BASE}characters/ramsf-platinum.png`,
+    cardArt:         `${BASE}sprites/ramsf-platinum.png`,
+    sprite:          `${BASE}sprites/ramsf-platinum.png`,
+    portraitFocus:   [50, 15, 3],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/6star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 1600, atk: 200, def: 100 },   // placeholder
+    skill: null,                     // kit coming later
+    ult: null,
+    passive: null,
+  },
+
   // ── 4★ ──────────────────────────────────────────────────────────
 
   {

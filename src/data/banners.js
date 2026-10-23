@@ -74,6 +74,18 @@ export const BANNERS = [
       uiFrame: { size: [4412, 2310], card: [690, 357, 3139, 1932] },
     },
     {
+      // Placeholder until the Platinum cards have kits: shows as COMING SOON and can't be pulled on
+      id: 'platinum-series',
+      name: 'Platinum Series',
+      subtitle: 'Limited · 6★ Platinum Series · coming soon',
+      accentColor: '#e2e8f0',
+      featuredIds: [37, 38, 39],
+      boostedRarity: 6,
+      boostedChance: 0.5,
+      comingSoon: true,
+      uiAssets: { bg: null, char1: null, char2: null, text: null },
+    },
+    {
       id: 'unending-hunger',
       name: 'Unending Hunger',
       subtitle: 'The Stomach grumbles..',

@@ -72,6 +72,9 @@ files and finish in seconds.
   layers the same size, and add `uiFrame: { size: [width, height], card: [x, y, w, h] }` where
   `card` is the rectangle the banner card covers (the background's edges). Characters can then
   stick out on every side, and the game adds the "ends in:" timer itself.
+- **Holding a card back:** `unpullable: true` on a card keeps it out of every pull (it can
+  still be given in developer mode). `comingSoon: true` on a banner shows it with a COMING SOON
+  stamp and closes its pull buttons. The Platinum Series (6★ Ice, Bonk, Ramsf) uses both for now.
 - **A status-frame portrait:** add the image to `public/ui/` and its card id to
   `STATUS_PORTRAITS` in `src/combat/BattleArena.jsx`. That beats `portraitFocus`;
   cards with neither use their card art.
