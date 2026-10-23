@@ -14,7 +14,7 @@ import { rollSubs }    from './combat/sets';
 import { createBattle } from './combat/engine';
 import { computePlayerStats } from './combat/stats';
 import { SKILL_UNLOCK, ULT_UNLOCK } from './combat/kits';
-import { FACILITIES, facilityCost, maxed } from './combat/hq';
+import { FACILITIES, facilityCost, maxed, trainCost, catchUpMult } from './combat/hq';
 
 const DEV_KEY = 'frail_dev';
 const devFromStorage = () => {
@@ -138,6 +138,17 @@ export default function App() {
     deck, pity4, pity5, killCount, stage, stageKills, story, profile,
   });
 
+  // Training Hall: spend coins to raise an agent `n` levels (as many as you can afford)
+  const trainAgent = (id, n = 1) => {
+    const lv0 = cardInventory[id]?.level ?? 1;
+    let lv = lv0, spent = 0;
+    while (lv - lv0 < n && spent + trainCost(lv) <= coins) { spent += trainCost(lv); lv++; }
+    if (lv === lv0) return 0;
+    setCoins(c => c - spent);
+    setCardInventory(prev => ({ ...prev, [id]: { si: 0, xp: 0, ...prev[id], level: (prev[id]?.level ?? 1) + (lv - lv0) } }));
+    return lv - lv0;
+  };
+
   const buyFacility = (id) => {
     const f = FACILITIES.find(x => x.id === id), lv = hq[id] ?? 0;
     if (!f || maxed(f, lv)) return false;
@@ -174,8 +185,11 @@ export default function App() {
     // XP goes to the main card (5★/6★)
     const mc = deckRef.current?.main;
     if (xp && mc && mc.rarity >= 5) {
+      // catch-up: behind your best agent → more XP (combat/hq.js)
+      const top = Math.max(1, ...Object.values(cardInvRef.current).map(e => e?.level ?? 1));
+      const gain = Math.round(xp * catchUpMult(cardInvRef.current[mc.id]?.level ?? 1, top));
       const addXp = (entry = { si: 0, xp: 0, level: 1 }) => {
-        let level = entry.level ?? 1, cur = (entry.xp ?? 0) + xp;
+        let level = entry.level ?? 1, cur = (entry.xp ?? 0) + gain;
         while (cur >= level * 100) { cur -= level * 100; level++; }
         return { ...entry, xp: cur, level };
       };
@@ -220,7 +234,7 @@ export default function App() {
   );
 
   if (screen === 'home')     return <HomeScreen navigate={navigate} />;
-  if (screen === 'hq')       return <HQScreen navigate={navigate} coins={coins} hq={hq} buy={buyFacility} />;
+  if (screen === 'hq')       return <HQScreen navigate={navigate} coins={coins} hq={hq} buy={buyFacility} collection={collection} cardInventory={cardInventory} trainAgent={trainAgent} mainId={deck?.main?.id ?? null} />;
   if (screen === 'cards')    return <CardsScreen navigate={navigate} collection={collection} cardInventory={cardInventory} mainCardId={deck?.main?.id ?? null} />;
   if (screen === 'settings') return <SettingsScreen navigate={navigate} devMode={devMode} toggleDev={toggleDev} profile={profile} setProfile={setProfile} />;
 

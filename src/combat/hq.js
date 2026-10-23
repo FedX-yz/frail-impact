@@ -56,3 +56,15 @@ export function hqBonuses(hq = {}) {
     payPct:    eff('payroll'),
   };
 }
+
+// ── Training Hall: coins → agent levels ─────────────────────────────────────
+// Raising an agent from `level` to level+1 costs TRAIN_COST × level². LV1→50 ≈ 1.7M
+// coins: a lot early on, about one stage's coins around stage 50, so a new pull can
+// be caught up late in the game.
+export const TRAIN_COST = 40;
+export const trainCost = (level) => Math.round(TRAIN_COST * level * level);
+// Catch-up: an agent below your highest-level agent earns this much more XP in
+// battle: +10% per level behind, up to ×5 (e.g. 20 levels behind = ×3).
+export const CATCH_UP_PER_LEVEL = 0.10;
+export const CATCH_UP_MAX = 5;
+export const catchUpMult = (level, top) => Math.min(CATCH_UP_MAX, 1 + Math.max(0, top - level) * CATCH_UP_PER_LEVEL);

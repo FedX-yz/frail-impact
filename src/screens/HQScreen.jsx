@@ -2,7 +2,9 @@
 // every fight. Same amber look as the other menus: one card per room, grouped by floor,
 // a summary of what's built, and a short activity readout of recent upgrades.
 import { useState } from 'react';
-import { FACILITIES, facilityCost, maxed, describeEffect } from '../combat/hq';
+import { FACILITIES, facilityCost, maxed, describeEffect, trainCost, catchUpMult } from '../combat/hq';
+import { CHARACTERS } from '../data/characters';
+import { thumb } from '../utils/assets';
 import { fmt } from '../combat/engine';
 import { playClose, sfx } from '../utils/sfx';
 import useIsMobile from '../hooks/useIsMobile';
@@ -19,7 +21,7 @@ const byId = id => FACILITIES.find(f => f.id === id);
 const Coin = ({ size = 16 }) => <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: size, height: size, imageRendering: 'pixelated', verticalAlign: 'middle', flexShrink: 0 }} />;
 const clock = () => new Date().toTimeString().slice(0, 5);
 
-export default function HQScreen({ navigate, coins, hq, buy }) {
+export default function HQScreen({ navigate, coins, hq, buy, collection = [], cardInventory = {}, trainAgent, mainId }) {
   const { mobile } = useIsMobile();
   const [feed, setFeed] = useState([]);   // recent upgrades: { t, s, ok }
   const [flash, setFlash] = useState(null);
@@ -36,6 +38,19 @@ export default function HQScreen({ navigate, coins, hq, buy }) {
     }
   };
   const built = FACILITIES.filter(f => (hq[f.id] ?? 0) > 0);
+
+  // Training Hall: your agents (5★/6★), main card first, then highest level
+  const owned = new Set([...collection.map(c => c.id), ...Object.entries(cardInventory).filter(([, e]) => e?.count > 0).map(([id]) => Number(id))]);
+  const lvOf = id => cardInventory[id]?.level ?? 1;
+  const agents = CHARACTERS.filter(c => c.rarity >= 5 && owned.has(c.id))
+    .sort((a, b) => (b.id === mainId) - (a.id === mainId) || lvOf(b.id) - lvOf(a.id));
+  const top = Math.max(1, ...agents.map(c => lvOf(c.id)));
+  const costFor = (lv, n) => { let c = 0; for (let i = 0; i < n; i++) c += trainCost(lv + i); return c; };
+  const train = (c, n) => {
+    const got = trainAgent(c.id, n);
+    if (got) { sfx('combo', 1); setFeed(l => [{ t: clock(), s: `${c.name} trained → LV ${lvOf(c.id) + got}`, ok: true }, ...l].slice(0, 4)); }
+    else { sfx('miss'); setFeed(l => [{ t: clock(), s: `${c.name}: not enough coins to train`, ok: false }, ...l].slice(0, 4)); }
+  };
   const ready = FACILITIES.filter(f => !maxed(f, hq[f.id] ?? 0) && coins >= facilityCost(f, hq[f.id] ?? 0)).length;
 
   const summary = (
@@ -64,6 +79,31 @@ export default function HQScreen({ navigate, coins, hq, buy }) {
 
       <div className="hm-body">
         <div className="hm-floors">
+          <section className="hm-floor">
+            <div className="hm-flhd"><b>B2</b> TRAINING HALL<span /></div>
+            <div className="hm-train">
+              <div className="hm-trainhd">Coins buy levels for any agent. Agents below your best (LV {top}) also earn extra XP in battle: +10% per level behind, up to ×5.</div>
+              {agents.length === 0 && <div className="hm-none dim">No agents yet. Recruit some first.</div>}
+              {agents.map(c => {
+                const lv = lvOf(c.id), e = cardInventory[c.id] ?? {}, xpPct = Math.min(100, (e.xp ?? 0) / (lv * 100) * 100);
+                const boost = catchUpMult(lv, top), c1 = trainCost(lv), c10 = costFor(lv, 10);
+                return (
+                  <div key={c.id} className="hm-agent">
+                    <img src={thumb(c.image)} alt="" className="hm-ava" style={{ borderColor: c.rarity >= 6 ? '#ff4d6d' : '#e0a800' }} />
+                    <div className="hm-ainfo">
+                      <div className="hm-aname">{c.name}{c.id === mainId && <span className="hm-tag">MAIN</span>}{boost > 1.001 && <span className="hm-tag xp">×{boost.toFixed(1)} XP</span>}</div>
+                      <div className="hm-asub">{c.subtitle}</div>
+                      <div className="hm-alv">LV <b>{lv}</b><span className="hm-xp"><span style={{ width: `${xpPct}%` }} /></span></div>
+                    </div>
+                    <div className="hm-abtns">
+                      <button className="hm-tbtn" disabled={coins < c1} onClick={() => train(c, 1)}>+1 LV<span><Coin size={13} />{fmt(c1)}</span></button>
+                      <button className="hm-tbtn" disabled={coins < c10} onClick={() => train(c, 10)}>+10 LV<span><Coin size={13} />{fmt(c10)}</span></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
           {FLOORS.map(fl => (
             <section key={fl.label} className="hm-floor">
               <div className="hm-flhd"><b>{fl.label}</b> {fl.name}<span /></div>
@@ -110,6 +150,21 @@ const CSS = `
   .hm-flhd { display:flex; align-items:center; gap:10px; font-size:11px; letter-spacing:2px; color:var(--amber-dim); margin-bottom:8px; }
   .hm-flhd b { font-weight:400; color:#1a0d02; background:#ff9a2e; padding:1px 7px; letter-spacing:1px; text-shadow:none; }
   .hm-flhd span { flex:1; border-bottom:1px dashed var(--line); }
+  .hm-train { border:1px solid var(--line); background:rgba(0,0,0,.35); max-height:330px; overflow-y:auto; }
+  .hm-trainhd { font-size:11.5px; color:var(--amber-dim); padding:8px 12px; border-bottom:1px solid var(--line); line-height:1.4; }
+  .hm-agent { display:flex; align-items:center; gap:12px; padding:8px 12px; border-bottom:1px solid rgba(90,51,19,.5); }
+  .hm-ava { width:44px; height:44px; object-fit:cover; object-position:50% 15%; border:2px solid; flex-shrink:0; }
+  .hm-ainfo { flex:1; min-width:0; }
+  .hm-aname { font-size:14px; color:#ffcf8a; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .hm-tag { font-size:9.5px; letter-spacing:1px; padding:0 5px; background:#ff9a2e; color:#1a0d02; text-shadow:none; }
+  .hm-tag.xp { background:#6ef59b; color:#062010; }
+  .hm-asub { font-size:10.5px; color:var(--amber-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hm-alv { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--amber-dim); } .hm-alv b { font-weight:400; font-size:15px; color:var(--amber); }
+  .hm-xp { flex:1; max-width:160px; height:4px; border:1px solid var(--line); } .hm-xp span { display:block; height:100%; background:#6ef59b; }
+  .hm-abtns { display:flex; gap:6px; flex-shrink:0; }
+  .hm-tbtn { font-family:inherit; font-size:12px; padding:5px 9px; cursor:pointer; background:#ff9a2e; color:#1a0d02; border:none; text-shadow:none; display:flex; flex-direction:column; align-items:center; gap:1px; min-width:74px; }
+  .hm-tbtn span { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; }
+  .hm-tbtn:disabled { background:transparent; color:var(--amber-dim); border:1px solid var(--line); cursor:default; }
   .hm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:12px; }
   .hm-card { border:1px solid var(--line); background:rgba(0,0,0,.35); display:flex; flex-direction:column; transition:border-color .2s, box-shadow .2s; }
   .hm-card.on { border-color:var(--amber-dim); box-shadow: inset 0 0 30px rgba(255,140,40,.06); }
@@ -146,5 +201,6 @@ const CSS = `
     .hm-side { width:auto; position:static; align-self:stretch; }
     .hm-floors { align-self:stretch; }
     .hm-grid { grid-template-columns:1fr; }
+    .hm-agent { flex-wrap:wrap; } .hm-abtns { width:100%; } .hm-tbtn { flex:1; }
   }
 `;

@@ -246,6 +246,7 @@ Deck screen's **Battle Stats** box shows the result:
 - **DEF** = main card DEF + 25% of each support's DEF. Damage taken is cut by DEF ÷ (DEF + 300).
 - Main card level: +2% ATK and +1% HP/DEF per level. Superimposition: up to +60% (3★/4★) or +75% (5★/6★) stats, and 5★/6★ kits get stronger (`si` in `kits.js`).
 - HQ (the **HQ** button under the battle, `src/combat/hq.js`): coins upgrade rooms. Armory ×1.10 ATK per level, Infirmary ×1.08 HP, Security −1% damage taken, Analytics +1% crit rate / +5% crit DMG, Ops Room +4% ult charge, Payroll +5% coins and XP. Costs and caps are in `FACILITIES`. (Old saves: Train levels became Armory levels.)
+- HQ → Training Hall: coins buy levels for any agent (`trainCost` in `hq.js`: 40 × level² per level). In battle, an agent below your highest-level agent gets +10% XP per level behind (up to ×5).
 - Enemy HP grows ×1.28 per stage up to stage 10, then ×1.17 (`HP_GROWTH_LATE` in `balance.js`); kill XP grows +10% per stage.
 
 ### Developer sandbox
