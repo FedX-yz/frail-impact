@@ -22,10 +22,13 @@ const STATUS_PORTRAITS = {
 // Battle background: three layers of the city painting, back to front, each shifting with
 // the cursor by `depth` px (farther = less) for a parallax effect. A stage with its own
 // `bg` (story levels) shows that one picture instead.
+// SCROLL (test): the layers also slide sideways forever at `speed` px/s (positive = to the
+// right), using the *_loop pictures (each painting + its mirror image, so it repeats seamlessly).
+const SCROLL = true;
 const PARALLAX = [
-  { src: `${BASE}backgrounds/city_sky.png`,  depth: 6 },
-  { src: `${BASE}backgrounds/city_far.png`,  depth: 14 },
-  { src: `${BASE}backgrounds/city_near.png`, depth: 28 },
+  { src: `${BASE}backgrounds/city_sky.png`,  loop: `${BASE}backgrounds/city_sky_loop.png`,  depth: 6,  speed: 8 },
+  { src: `${BASE}backgrounds/city_far.png`,  loop: `${BASE}backgrounds/city_far_loop.png`,  depth: 14, speed: 22 },
+  { src: `${BASE}backgrounds/city_near.png`, loop: `${BASE}backgrounds/city_near_loop.png`, depth: 28, speed: 55 },
 ];
 const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
 const SHIKI_ICON = { dog: '🐺', toad: '🐸', nue: '🦅' };
@@ -154,7 +157,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       par.x += (tx - par.x) * 0.06; par.y += (ty - par.y) * 0.06;
       PARALLAX.forEach((l, i) => {
         const el = parallaxRefs.current[i];
-        if (el) el.style.transform = `translate3d(${(par.x * l.depth).toFixed(2)}px, ${(par.y * l.depth * 0.4).toFixed(2)}px, 0)`;
+        if (!el) return;
+        el.style.transform = `translate3d(${(par.x * l.depth).toFixed(2)}px, ${(par.y * l.depth * 0.4).toFixed(2)}px, 0)`;
+        if (SCROLL) el.style.backgroundPositionX = `${((performance.now() / 1000) * l.speed * s.k).toFixed(1)}px`;
       });
     }
     for (const e of s.enemies) {
@@ -195,7 +200,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       >
         {!s.stage.bg && PARALLAX.map((l, i) => (
           <div key={l.src} ref={el => { parallaxRefs.current[i] = el; }} style={{ position: 'absolute', inset: `-${l.depth + 4}px`, pointerEvents: 'none',
-            backgroundImage: `url(${l.src})`, backgroundSize: 'cover', backgroundPosition: 'center bottom', willChange: 'transform' }} />
+            backgroundImage: `url(${SCROLL ? l.loop : l.src})`, backgroundSize: SCROLL ? 'auto 100%' : 'cover', backgroundRepeat: SCROLL ? 'repeat-x' : 'no-repeat',
+            backgroundPosition: 'center bottom', willChange: 'transform, background-position' }} />
         ))}
         <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX}px,${shakeY}px)` }}>
           <div style={{ position: 'absolute', inset: 0, background: s.stage.bg ? 'rgba(10,14,30,0.45)' : 'rgba(10,14,30,0.22)', pointerEvents: 'none' }} />
