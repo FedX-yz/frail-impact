@@ -19,7 +19,14 @@ const STATUS_PORTRAITS = {
   10: `${BASE}ui/ui_statusforbiddenone.png`,
   99: `${BASE}ui/ui_statushox.png`,
 };
-const BATTLE_BG = `${BASE}backgrounds/bg1.png`;
+// Battle background: three layers of the city painting, back to front, each shifting with
+// the cursor by `depth` px (farther = less) for a parallax effect. A stage with its own
+// `bg` (story levels) shows that one picture instead.
+const PARALLAX = [
+  { src: `${BASE}backgrounds/city_sky.png`,  depth: 6 },
+  { src: `${BASE}backgrounds/city_far.png`,  depth: 14 },
+  { src: `${BASE}backgrounds/city_near.png`, depth: 28 },
+];
 const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
 const SHIKI_ICON = { dog: '🐺', toad: '🐸', nue: '🦅' };
 
@@ -36,6 +43,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const frameRef = useRef(null);
   // enemy id → DOM node; positions are written straight to these every frame
   const nodes = useRef(new Map());
+  const parallaxRefs = useRef([]);
+  const parallax = useRef({ x: 0, y: 0 });
   const register = useCallback((id, el) => { if (el) nodes.current.set(id, el); else nodes.current.delete(id); }, []);
   const onUlt = useCallback(() => engine.activateUlt(), [engine]);
   const [, setFrame] = useState(0);
@@ -138,6 +147,16 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   // Move every enemy by setting its transform directly (no React re-render
   // needed for movement). Runs after each frame's render, before paint.
   useLayoutEffect(() => {
+    // parallax: layers drift opposite to the cursor (eased), farther layers less
+    if (!s.stage.bg && s.W) {
+      const P = s.player.pos, par = parallax.current;
+      const tx = P ? (P.x / s.W - 0.5) * -2 : 0, ty = P ? (P.y / s.H - 0.5) * -2 : 0;
+      par.x += (tx - par.x) * 0.06; par.y += (ty - par.y) * 0.06;
+      PARALLAX.forEach((l, i) => {
+        const el = parallaxRefs.current[i];
+        if (el) el.style.transform = `translate3d(${(par.x * l.depth).toFixed(2)}px, ${(par.y * l.depth * 0.4).toFixed(2)}px, 0)`;
+      });
+    }
     for (const e of s.enemies) {
       const el = nodes.current.get(e.id);
       if (!el) continue;
@@ -170,12 +189,16 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         style={{
           flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden',
           border: '2px solid #cc8800', borderRadius: 6,
-          backgroundImage: `url(${s.stage.bg ?? BATTLE_BG})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#0f1625',
+          backgroundImage: s.stage.bg ? `url(${s.stage.bg})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#0f1625',
           touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
         }}
       >
+        {!s.stage.bg && PARALLAX.map((l, i) => (
+          <div key={l.src} ref={el => { parallaxRefs.current[i] = el; }} style={{ position: 'absolute', inset: `-${l.depth + 4}px`, pointerEvents: 'none',
+            backgroundImage: `url(${l.src})`, backgroundSize: 'cover', backgroundPosition: 'center bottom', willChange: 'transform' }} />
+        ))}
         <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX}px,${shakeY}px)` }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,14,30,0.45)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', inset: 0, background: s.stage.bg ? 'rgba(10,14,30,0.45)' : 'rgba(10,14,30,0.22)', pointerEvents: 'none' }} />
 
           {/* ── Attack areas ─────────────────────────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4, overflow: 'visible' }}>
