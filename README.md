@@ -211,10 +211,11 @@ and the Room 16 skill picker.
 
 ### Menu look
 
-The menu colors (desk background, top bars, panels, borders) are a handful of settings at the
-top of `src/index.css` (`--desk`, `--bar`, `--panel`, `--panel-deep`, `--line`). Each one notes
-the old navy value, so switching back is changing those lines. The hand-drawn menu buttons,
-coins and gems aren't touched by it.
+The menus look like an amber terminal screen: the colours are a few settings at the top of
+`src/index.css` (`--desk`, `--bar`, `--panel`, `--panel-deep`, `--line`, `--font-ui`), with the old
+navy values noted there for switching back. The faint scanlines and vignette over everything are
+`src/components/CrtOverlay.jsx` (Settings → Screen filter turns them off). The hand-drawn menu
+buttons, coins and gems aren't changed.
 
 ### Fonts
 

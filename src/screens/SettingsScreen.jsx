@@ -147,6 +147,7 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
             <Toggle label="Combat sounds" sub="Hits, crits, kills, explosions" on={prefs.combatSfx}
               onChange={v => { change('combatSfx', v); if (v) setTimeout(() => sfx('crit'), 30); }} />
             <Toggle label="Screen shake" sub="When you get hit, crit or kill something big" on={prefs.shake} onChange={v => change('shake', v)} />
+            <Toggle label="Screen filter" sub="Terminal scanlines and glow over the menus" on={prefs.crt} onChange={v => change('crt', v)} />
             <Toggle label="CCTV battle camera" sub="Watch fights through a security camera: scanlines, REC, timestamp" on={prefs.cctv} onChange={v => change('cctv', v)} />
           </div>
 

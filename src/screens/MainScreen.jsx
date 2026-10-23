@@ -191,7 +191,7 @@ export default function MainScreen({
   // On touch screens the hover image flashes while your finger is down.
   const navArt = (style) => (
     <div style={{ position: 'relative', overflow: 'hidden', ...style }}>
-      <img src={MENU_BG} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none' }} />
+      <img src={MENU_BG} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block', pointerEvents: 'none', filter: 'drop-shadow(0 0 6px rgba(255,110,0,0.3))' }} />
       {NAV_CONFIG.map(cfg => hoveredNav === cfg.label && (
         <img key={cfg.label} src={cfg.hoverImg} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }} />
       ))}
@@ -217,7 +217,7 @@ export default function MainScreen({
       <style>{`
         ${mobile ? '' : `* { cursor: url('${BASE}ui/mouse.png') 0 0, auto !important; }`}
         img { -webkit-user-drag:none; user-select:none; }
-        .pill { display:flex; align-items:center; gap:6px; background:#0f1420; border:2px solid; border-radius:20px; padding:3px 12px 3px 6px; font-weight:700; font-size:${mobile ? 14 : 17}px; }
+        .pill { display:flex; align-items:center; gap:6px; background:#0b0602; border:1px solid; border-radius:2px; box-shadow: inset 0 0 8px rgba(255,122,0,0.18); padding:3px 12px 3px 6px; font-weight:700; font-size:${mobile ? 14 : 17}px; }
         .train-btn { border:2px solid #f0c040; background:#2a2000; color:#f0c040; border-radius:6px; cursor:pointer; font-size:13px; font-weight:700; padding:7px 12px; white-space:nowrap; display:flex; gap:6px; align-items:center; flex-shrink:0; touch-action:manipulation; }
         .train-btn:disabled { opacity:0.4; cursor:not-allowed; }
         .train-btn:hover:not(:disabled) { background:#3a2c00; }

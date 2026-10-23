@@ -1,24 +1,26 @@
 /* Global styles. The game is always dark, whatever the device's light/dark setting. */
 :root {
   /* The game's fonts (loaded in index.html). Change one here and it changes everywhere. */
-  --font-ui: 'Cinzel', Georgia, serif;                           /* menus, buttons, labels, cards: everything by default */
+  --font-ui: 'Special Elite', 'Courier New', monospace;          /* menus, buttons, labels, cards: everything by default */
   --font-dialogue: 'Special Elite', 'Courier New', monospace;    /* story dialogue, codec calls, story menus, timers */
   --font-narration: 'Nothing You Could Do', cursive;             /* story narration (lines nobody says) */
   --font-dramatic: 'Grenze Gotisch', Georgia, serif;             /* stage and boss announcements, names on pull reveals */
   --font-hit: 'Rubik Distressed', Impact, sans-serif;            /* damage numbers and the combo counter */
   --font-glitch: 'Rubik Glitch', Impact, sans-serif;             /* things breaking: the crash screen, story defeats */
 
-  /* Menu look: the Frail Initiative office at night (warm desk, dark folders).
-     To go back to the old navy look, swap these for the values in the comments. */
-  --bg-solid: #120e0c;                                                   /* was #1a2035 */
-  --desk: radial-gradient(ellipse 70% 55% at 50% -8%, rgba(255,190,110,0.13), transparent 70%),
-          repeating-linear-gradient(92deg, rgba(255,255,255,0.016) 0 2px, transparent 2px 7px),
-          repeating-linear-gradient(88deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 13px),
-          linear-gradient(180deg, #1c1612 0%, #130f0c 60%, #0c0a08 100%);   /* was #1a2035 */
-  --bar: linear-gradient(180deg, #241c16, #18130f);                      /* top bars, was #141928 */
-  --panel: #1e1813;                                                      /* panels, was #141928 */
-  --panel-deep: #16120f;                                                 /* inner panels, was #0f1625 */
-  --line: #3d3127;                                                       /* panel borders, was #2a2a3a / #334 */
+  /* Menu look: an amber-phosphor terminal (Frail Initiative OPS), toned down.
+     The scanline/vignette filter on top is components/CrtOverlay.jsx (Settings → Screen filter).
+     Old navy look: --bg-solid #1a2035, --desk #1a2035, --bar/--panel #141928, --panel-deep #0f1625,
+     --line #2a2a3a, --font-ui 'Cinzel'. */
+  --amber: #ffb35a;
+  --amber-dim: #c27a33;
+  --bg-solid: #090502;
+  --desk: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(255,120,20,0.07), transparent 75%),
+          linear-gradient(180deg, #0e0803 0%, #090502 60%, #060301 100%);
+  --bar: linear-gradient(180deg, #150c04, #0d0703);
+  --panel: #110a04;
+  --panel-deep: #0c0703;
+  --line: #5a3313;
   --label: 'Special Elite', 'Courier New', monospace;                    /* small section labels */
   font-family: var(--font-ui);
   line-height: 1.5;
@@ -34,6 +36,9 @@
 }
 
 html, body, #root { height: 100%; }
+
+/* a faint amber glow on text, like a phosphor screen (inline text-shadows still win) */
+#root { text-shadow: 0 0 5px rgba(255, 140, 40, 0.18); }
 
 body {
   margin: 0;
