@@ -172,22 +172,18 @@ export default function MainScreen({
     </div>
   );
 
+  // Supports: one slim line of chips (full details on hover, and in Deck) so the battle keeps its room
   const supportsPanel = !mobile && deck?.supports?.some(Boolean) && (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-        {deck.supports.map((card, i) => card && (
-          <div key={i} style={{ background: '#0a1020', border: '1px solid #1a2a40', borderRadius: 4, padding: '5px 9px', fontSize: 11 }}>
-            <div style={{ color: '#5588ff', fontWeight: 700 }}>{card.name}
-              <span style={{ color: '#aaa', fontWeight: 400, marginLeft: 6 }}>+{Math.round(cardBattleStats(card, cardInventory[card.id]).atk * BAL.SUPPORT_ATK)} ATK</span>
-            </div>
-            <div style={{ color: '#778' }}>{(cardInventory[card.id]?.subs ?? []).map(formatSub).join(' · ') || card.passive?.description}</div>
-          </div>
-        ))}
-      </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', fontSize: 11, height: 22 }}>
+      <span style={{ color: 'var(--amber-dim)', letterSpacing: 1, flexShrink: 0 }}>SUPPORTS</span>
+      {deck.supports.map((card, i) => card && (
+        <span key={i} title={(cardInventory[card.id]?.subs ?? []).map(formatSub).join(' · ') || card.passive?.description || ''}
+          style={{ border: '1px solid var(--line)', padding: '1px 7px', color: 'var(--amber)', flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {card.name} <span style={{ color: '#6ef59b' }}>+{Math.round(cardBattleStats(card, cardInventory[card.id]).atk * BAL.SUPPORT_ATK)}</span>
+        </span>
+      ))}
       {stats.sets.map(set => (
-        <div key={set.id} style={{ fontSize: 11, color: set.color, background: '#0a1020', border: `1px solid ${set.color}55`, borderRadius: 4, padding: '4px 9px' }}>
-          ◆ {set.name}: <span style={{ color: '#bbb' }}>{set.desc}</span>
-        </div>
+        <span key={set.id} title={set.desc} style={{ border: `1px solid ${set.color}88`, color: set.color, padding: '1px 7px', flexShrink: 0 }}>◆ {set.name}</span>
       ))}
     </div>
   );
