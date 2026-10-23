@@ -90,20 +90,18 @@ export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1, loop = false 
 }
 // Voiced story lines: one at a time, a new one (or stopVoice) cuts the last off.
 let voice = null;
-// Resolves to the clip's length in seconds (null if it couldn't play).
 export function playVoice(src) {
   stopVoice();
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
   const h = { stopped: false };
   voice = h;
-  return loadBuffer(src).then(decoded => {
-    if (h.stopped) return null;
+  loadBuffer(src).then(decoded => {
+    if (h.stopped) return;
     const s = _audioCtx.createBufferSource(), g = _audioCtx.createGain();
     s.buffer = decoded; g.gain.value = 1.4;
     s.connect(g); g.connect(master); s.start();
     h.source = s;
-    return decoded.duration;
-  }).catch(() => null);
+  }).catch(() => {});
 }
 export function stopVoice() {
   if (!voice) return;

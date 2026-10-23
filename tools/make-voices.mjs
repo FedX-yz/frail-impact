@@ -1,9 +1,8 @@
 // Makes the audio for voiced story lines (cast.js → voice) — run it after changing
 // any line a voiced character says:   node tools/make-voices.mjs   (--force redoes all)
 //
-// Needs ffmpeg built with rubberband, espeak-ng + MBROLA us2 (the caller) and Kokoro (the narrator):
+// Needs espeak-ng with the MBROLA us2 voice, and ffmpeg built with rubberband:
 //   Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us2 ffmpeg
-//   Kokoro:         see tools/kokoro_say.py (pip install + two model files)
 // The files go to public/<voice.dir>/<hash>.mp3 (see src/story/voice.js).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -11,17 +10,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { SCENES } from '../src/story/scenes.js';
 import { CAST } from '../src/story/cast.js';
-import { voiceFile, plainCrawl, VOICES } from '../src/story/voice.js';
+import { voiceFile } from '../src/story/voice.js';
 
 const force = process.argv.includes('--force');
 // voice presets: espeak voice/speed/pitch, then ffmpeg effects
 const PRESETS = {
   // the unknown caller: low, doubled an octave down, phone-band, slightly crushed, wavering, echoing
-  // the intro narrator: Kokoro neural voice (natural, British man, unhurried), a soft room echo
-  narrator: {
-    kokoro: ['bm_george', 'en-gb', '0.92'],
-    filter: '[0:a]aresample=44100,highpass=f=60,aecho=0.8:0.85:50|90:0.12|0.07,loudnorm=I=-17:TP=-1.5,apad=pad_dur=0.4',
-  },
   creepy: {
     espeak: ['-v', 'mb-us2', '-s', '125', '-p', '25'],
     filter: '[0:a]aresample=44100,asplit=2[a][b];[a]rubberband=pitch=0.82:formant=preserved[a1];[b]rubberband=pitch=0.5,volume=0.55[b1];' +
@@ -32,24 +26,19 @@ const PRESETS = {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'voices-'));
 let made = 0, kept = 0;
-// every voiced line: [who, text] of a cast member with a voice, and paragraphs of a crawl with `voice`
-const lines = [];
 for (const [scene, steps] of Object.entries(SCENES)) {
   for (const step of steps) {
-    if (Array.isArray(step) && CAST[step[0]]?.voice && step[1]) lines.push([scene, step[0], CAST[step[0]].voice, step[1]]);
-    if (step?.crawl && VOICES[step.voice]) step.crawl.forEach(p => lines.push([scene, step.voice, VOICES[step.voice], plainCrawl(p)]));
-  }
-}
-{
-  for (const [scene, who, v, text] of lines) {
+    if (!Array.isArray(step)) continue;
+    const [who, text] = step;
+    const v = CAST[who]?.voice;
+    if (!v || !text) continue;
     const out = path.join('public', voiceFile(v.dir, text));
     if (fs.existsSync(out) && !force) { kept++; continue; }
     fs.mkdirSync(path.dirname(out), { recursive: true });
     const p = PRESETS[v.preset ?? 'creepy'];
     const say = text.replaceAll('Manager {manager}', 'Manager').replaceAll('{manager}', 'Manager');   // the voice can't know the player's name
     const wav = path.join(tmp, 'line.wav');
-    if (p.kokoro) execFileSync('python3', [path.join('tools', 'kokoro_say.py'), ...p.kokoro, wav, say]);
-    else execFileSync('espeak-ng', [...p.espeak, '-w', wav, say]);
+    execFileSync('espeak-ng', [...p.espeak, '-w', wav, say]);
     execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', wav, '-filter_complex', p.filter, '-ar', '44100', '-ac', '1', '-b:a', '96k', out]);
     console.log(`${scene}  ${who}: ${say.slice(0, 60)}  →  ${out}`);
     made++;

@@ -8,11 +8,3 @@ export function lineHash(text) {
   return h.toString(16).padStart(8, '0');
 }
 export const voiceFile = (dir, text) => `${dir}/${lineHash(text)}.mp3`;
-
-// Intro crawl markup ({red:words}, see VNPlayer): the text without it, for timing and voicing
-export const CRAWL_MARK = /\{(red|havoc|gold|zone|green|title|em|dim|shake):([^}]+)\}/g;
-export const plainCrawl = (p) => p.replace(CRAWL_MARK, '$2');
-// Voices that aren't cast members (a crawl's `voice`: 'narrator')
-export const VOICES = {
-  narrator: { dir: 'audio/voice/narrator', preset: 'narrator' },
-};

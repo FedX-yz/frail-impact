@@ -5,7 +5,7 @@ import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
 import { playSFX, playPress, playMusic, stopMusic, playVoice, stopVoice } from '../utils/sfx';
-import { voiceFile, plainCrawl, CRAWL_MARK as MARK, VOICES } from './voice';
+import { voiceFile } from './voice';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
 
@@ -25,7 +25,7 @@ function run(steps, from, prev, signed = false) {
     if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? '') }, choice: null, wait: 0 };
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
-    if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl, crawlVoice: step.voice ?? null };   // intro text on black
+    if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl };   // intro text on black
     if (step.application && !signed) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx), once
     if (step.if !== undefined) {   // conditional jump
       if (testFlag(s.flags, step.if) && step.goto) { const j = labelAt(step.goto); if (j >= 0) { i = j; continue; } }
@@ -234,7 +234,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
           </div>
         </div>
       )}
-      {st.crawl && <IntroCrawl key={st.i} paragraphs={st.crawl} voice={VOICES[st.crawlVoice] ?? null} tap={crawlTap} skip={skip} onDone={endCrawl} tall={tall} />}
+      {st.crawl && <IntroCrawl key={st.i} paragraphs={st.crawl} tap={crawlTap} skip={skip} onDone={endCrawl} tall={tall} />}
       {st.application && (
         <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)); }} />
       )}
@@ -245,6 +245,8 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 // {style:words} inside a crawl paragraph: the words light up in that style a moment
 // after the paragraph appears. Styles (codecStyle.js → .cw-*): red, havoc, gold, zone, green,
 // title, em, dim, shake. Plain text around them stays white.
+const MARK = /\{(red|havoc|gold|zone|green|title|em|dim|shake):([^}]+)\}/g;
+const plainCrawl = (p) => p.replace(MARK, '$2');
 function marked(p) {
   const out = [];
   let last = 0, m, k = 0;
@@ -260,28 +262,19 @@ function marked(p) {
 
 // Paragraphs of white text fading in one by one on black, then everything fades out.
 // Tap / Space: show the next paragraph now (or, once all are in, fade out). SKIP: done.
-function IntroCrawl({ paragraphs, voice, tap, skip, onDone, tall }) {
+function IntroCrawl({ paragraphs, tap, skip, onDone, tall }) {
   const [n, setN] = useState(0);          // paragraphs shown
-  const [dur, setDur] = useState({});      // paragraph → its voice line's length (s)
   const [out, setOut] = useState(false);  // fading out
   const read = (p) => 1600 + plainCrawl(p ?? '').length * 55;   // ms to read a paragraph
   const done = useRef(false);
   const finish = useCallback(() => { if (!done.current) { done.current = true; onDone(); } }, [onDone]);
-  useEffect(() => { if (skip) { stopVoice(); finish(); } }, [skip, finish]);
-  // the narrator reads each paragraph as it appears (tools/make-voices.mjs makes the files)
-  useEffect(() => {
-    if (!voice || n === 0) return;
-    const i = n - 1;
-    playVoice(asset(voiceFile(voice.dir, plainCrawl(paragraphs[i])))).then(d => { if (d) setDur(x => ({ ...x, [i]: d })); });
-  }, [n, voice, paragraphs]);
+  useEffect(() => { if (skip) finish(); }, [skip, finish]);
   // next paragraph after the last one has been read; after the last, fade out
   useEffect(() => {
     if (out) { const id = setTimeout(finish, 1800); return () => clearTimeout(id); }
-    // the next one comes after the last has been read, or read out (whichever is longer)
-    const wait = n === 0 ? 900 : Math.max(read(paragraphs[n - 1]), dur[n - 1] ? dur[n - 1] * 1000 + 900 : 0);
-    const id = setTimeout(() => (n < paragraphs.length ? setN(n + 1) : setOut(true)), wait);
+    const id = setTimeout(() => (n < paragraphs.length ? setN(n + 1) : setOut(true)), n === 0 ? 900 : read(paragraphs[n - 1]));
     return () => clearTimeout(id);
-  }, [n, out, paragraphs, finish, dur]);
+  }, [n, out, paragraphs, finish]);
   useEffect(() => {
     if (!tap) return;
     if (n < paragraphs.length) setN(n + 1); else setOut(true);
