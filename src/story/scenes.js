@@ -43,7 +43,7 @@ export const SCENES = {
     // Music: put a track at public/audio/story/intro.mp3 (it loops until the next { music }).
     { music: 'audio/story/intro.mp3' },
     // {style:words} lights words up: red, havoc (glitchy red), gold, zone (worn gold), green, title, em, dim, shake
-    { crawl: [
+    { voice: 'narrator', crawl: [
       '{em:Decades ago} a {green:virus} spread throughout the world, mutating humans and other life forms alike into terrifying and powerful creatures. Since then, those creatures have shifted society into chaos, massacring humans in mass to satisfy their hunger.',
       'Only a small percentage of the total human population remain today, {em:lowering with each passing day.}',
       'These creatures were called {havoc:"Havoc"}, and their claimed territories from humans are assigned as {zone:"Frail Environments"}.',

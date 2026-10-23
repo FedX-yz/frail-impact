@@ -10,12 +10,18 @@ import path from 'node:path';
 import os from 'node:os';
 import { SCENES } from '../src/story/scenes.js';
 import { CAST } from '../src/story/cast.js';
-import { voiceFile } from '../src/story/voice.js';
+import { voiceFile, plainCrawl, VOICES } from '../src/story/voice.js';
 
 const force = process.argv.includes('--force');
 // voice presets: espeak voice/speed/pitch, then ffmpeg effects
 const PRESETS = {
   // the unknown caller: low, doubled an octave down, phone-band, slightly crushed, wavering, echoing
+  // the intro narrator: calm, a bit deep, a little room echo, no distortion
+  narrator: {
+    espeak: ['-v', 'mb-en1', '-s', '138', '-p', '38'],
+    filter: '[0:a]aresample=44100,rubberband=pitch=0.93:formant=preserved,highpass=f=70,lowpass=f=8000,' +
+            'equalizer=f=160:t=q:w=1:g=3,aecho=0.8:0.85:40|75:0.16|0.09,loudnorm=I=-17:TP=-1.5,apad=pad_dur=0.4',
+  },
   creepy: {
     espeak: ['-v', 'mb-us2', '-s', '125', '-p', '25'],
     filter: '[0:a]aresample=44100,asplit=2[a][b];[a]rubberband=pitch=0.82:formant=preserved[a1];[b]rubberband=pitch=0.5,volume=0.55[b1];' +
@@ -26,12 +32,16 @@ const PRESETS = {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'voices-'));
 let made = 0, kept = 0;
+// every voiced line: [who, text] of a cast member with a voice, and paragraphs of a crawl with `voice`
+const lines = [];
 for (const [scene, steps] of Object.entries(SCENES)) {
   for (const step of steps) {
-    if (!Array.isArray(step)) continue;
-    const [who, text] = step;
-    const v = CAST[who]?.voice;
-    if (!v || !text) continue;
+    if (Array.isArray(step) && CAST[step[0]]?.voice && step[1]) lines.push([scene, step[0], CAST[step[0]].voice, step[1]]);
+    if (step?.crawl && VOICES[step.voice]) step.crawl.forEach(p => lines.push([scene, step.voice, VOICES[step.voice], plainCrawl(p)]));
+  }
+}
+{
+  for (const [scene, who, v, text] of lines) {
     const out = path.join('public', voiceFile(v.dir, text));
     if (fs.existsSync(out) && !force) { kept++; continue; }
     fs.mkdirSync(path.dirname(out), { recursive: true });
