@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "revision": 2,
-  "savedAt": "2026-10-16T07:12:09.217Z",
+  "revision": 3,
+  "savedAt": "2026-10-23T07:04:43.000Z",
   "permanent": [
     "standard"
   ],
@@ -22,6 +22,12 @@
       "id": "zcv5ur",
       "banner": "unending-hunger",
       "start": "2026-10-16T07:12:04.530Z",
+      "end": null
+    },
+    {
+      "id": "plat1",
+      "banner": "platinum-series",
+      "start": "2026-10-23T07:04:43.000Z",
       "end": null
     }
   ]
