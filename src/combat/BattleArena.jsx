@@ -23,7 +23,7 @@ const STATUS_PORTRAITS = {
 // the cursor by `depth` px (farther = less) for a parallax effect. A stage with its own
 // `bg` (story levels) shows that one picture instead.
 // SCROLL (test): the layers also slide sideways forever at `speed` px/s (positive = to the
-// right), using the *_loop pictures (each painting + its mirror image, so it repeats seamlessly).
+// right; it eases to a stop while a boss is out), using the *_loop pictures (each painting + its mirror image, so it repeats seamlessly).
 const SCROLL = true;
 const PARALLAX = [
   { src: `${BASE}backgrounds/city_sky.png`,  loop: `${BASE}backgrounds/city_sky_loop.png`,  depth: 6,  speed: 8 },
@@ -48,6 +48,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const nodes = useRef(new Map());
   const parallaxRefs = useRef([]);
   const parallax = useRef({ x: 0, y: 0 });
+  const scroll = useRef({ off: [0, 0, 0], v: 1, last: 0 });   // SCROLL: offsets, speed factor (0 = stopped), last frame time
   const register = useCallback((id, el) => { if (el) nodes.current.set(id, el); else nodes.current.delete(id); }, []);
   const onUlt = useCallback(() => engine.activateUlt(), [engine]);
   const [, setFrame] = useState(0);
@@ -154,12 +155,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     if (!s.stage.bg && s.W) {
       const P = s.player.pos, par = parallax.current;
       const tx = P ? (P.x / s.W - 0.5) * -2 : 0, ty = P ? (P.y / s.H - 0.5) * -2 : 0;
+      // SCROLL: eases to a stop while a boss is coming / out, and back up after
+      const sc = scroll.current, now = performance.now(), dt = sc.last ? Math.min(0.1, (now - sc.last) / 1000) : 0;
+      sc.last = now;
+      const boss = s.phase === 'boss' || s.phase === 'bossIntro' || s.paused;
+      sc.v += ((boss ? 0 : 1) - sc.v) * Math.min(1, dt * 1.6);
       par.x += (tx - par.x) * 0.06; par.y += (ty - par.y) * 0.06;
       PARALLAX.forEach((l, i) => {
         const el = parallaxRefs.current[i];
         if (!el) return;
         el.style.transform = `translate3d(${(par.x * l.depth).toFixed(2)}px, ${(par.y * l.depth * 0.4).toFixed(2)}px, 0)`;
-        if (SCROLL) el.style.backgroundPositionX = `${((performance.now() / 1000) * l.speed * s.k).toFixed(1)}px`;
+        if (SCROLL) { sc.off[i] = (sc.off[i] + l.speed * s.k * sc.v * dt) % 1e6; el.style.backgroundPositionX = `${sc.off[i].toFixed(1)}px`; }
       });
     }
     for (const e of s.enemies) {
