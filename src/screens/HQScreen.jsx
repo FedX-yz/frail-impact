@@ -1,241 +1,150 @@
-// Frail Initiative HQ as a facility-management terminal. Rooms (combat/hq.js) are rows
-// in a table; pick one with the mouse / ↑↓ / its number, upgrade with Enter, the
-// [ UPGRADE ] button, or by typing a command (help lists them). Every action is logged.
-import { useEffect, useMemo, useRef, useState } from 'react';
+// Frail Initiative HQ: coins upgrade rooms (combat/hq.js); their bonuses apply to
+// every fight. Same amber look as the other menus: one card per room, grouped by floor,
+// a summary of what's built, and a short activity readout of recent upgrades.
+import { useState } from 'react';
 import { FACILITIES, facilityCost, maxed, describeEffect } from '../combat/hq';
 import { fmt } from '../combat/engine';
-import { playClose, playPress, sfx } from '../utils/sfx';
+import { playClose, sfx } from '../utils/sfx';
 import useIsMobile from '../hooks/useIsMobile';
+import TermTitle from '../components/TermTitle';
 import { Icon } from '../components/Icon';
 
-const num = n => Math.floor(n).toLocaleString('en-US');
-const bar = (lv, max, w = 10) => {
-  if (!max) return `${'■'.repeat(Math.min(w, lv))}${lv > w ? '+' : ''}`.padEnd(w, '·');
-  const f = Math.round(lv / max * w);
-  return '■'.repeat(f) + '·'.repeat(w - f);
-};
-const find = (q) => {
-  q = (q || '').trim().toLowerCase();
-  if (!q) return null;
-  const i = parseInt(q, 10);
-  if (!Number.isNaN(i)) return FACILITIES[i - 1] ?? null;
-  return FACILITIES.find(f => f.id.startsWith(q) || f.name.toLowerCase().startsWith(q)) ?? null;
-};
-const HELP = [
-  'COMMANDS',
-  '  upgrade <room|#>   upgrade a room          (also: up, buy, build)',
-  '  upgrade           upgrade the selected room (or press Enter)',
-  '  info <room|#>      details for a room',
-  '  status            what all rooms give right now',
-  '  list              the room table',
-  '  clear             clear this log',
-  '  exit              back to the ops screen   (also: back, q)',
+const BASE = import.meta.env.BASE_URL;
+const FLOORS = [
+  { label: 'B1', name: 'FIELD SUPPORT', rooms: ['armory', 'infirmary', 'security'] },
+  { label: '2F', name: 'OPERATIONS', rooms: ['analytics', 'ops'] },
+  { label: '3F', name: 'ADMINISTRATION', rooms: ['payroll'] },
 ];
+const byId = id => FACILITIES.find(f => f.id === id);
+const Coin = ({ size = 16 }) => <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: size, height: size, imageRendering: 'pixelated', verticalAlign: 'middle', flexShrink: 0 }} />;
+const clock = () => new Date().toTimeString().slice(0, 5);
 
-export default function HQScreen({ navigate, coins, hq, buy, stats, profile }) {
+export default function HQScreen({ navigate, coins, hq, buy }) {
   const { mobile } = useIsMobile();
-  const [sel, setSel] = useState(0);
-  const [cmd, setCmd] = useState('');
-  const [log, setLog] = useState(() => [
-    { t: 'sys', s: 'FRAIL INITIATIVE // FACILITY MANAGEMENT SYSTEM v2.31' },
-    { t: 'sys', s: `SESSION OPENED · ${new Date().toISOString().slice(0, 10)} · AUTHORIZED PERSONNEL ONLY` },
-    { t: 'dim', s: mobile ? 'Tap a room, then UPGRADE.' : 'Pick a room (click, ↑↓ or 1-6) and press Enter, or type "help".' },
-  ]);
-  const logRef = useRef(null), inputRef = useRef(null);
-  const user = (profile?.name || 'FIELD MANAGER').toUpperCase();
-
-  const push = (...lines) => setLog(l => [...l, ...lines].slice(-80));
-  useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [log]);
+  const [feed, setFeed] = useState([]);   // recent upgrades: { t, s, ok }
+  const [flash, setFlash] = useState(null);
 
   const upgrade = (f) => {
     const lv = hq[f.id] ?? 0;
-    if (maxed(f, lv)) { sfx('miss'); push({ t: 'err', s: `  ERROR: ${f.name} IS FULLY UPGRADED (LV ${lv})` }); return; }
-    const cost = facilityCost(f, lv);
-    if (coins < cost) { sfx('miss'); push({ t: 'err', s: `  ERROR: INSUFFICIENT FUNDS — need ${num(cost)} ¢, have ${num(coins)} ¢` }); return; }
-    if (!buy(f.id)) return;
-    sfx('combo', 0);
-    push(
-      { t: 'dim', s: '  AUTHORIZING… OK' },
-      { t: 'ok', s: `  ${f.name.padEnd(10)} LV ${lv} → LV ${lv + 1}    ${lv ? describeEffect(f, lv) : 'none'} → ${describeEffect(f, lv + 1)}` },
-      { t: 'dim', s: `  FUNDS      −${num(cost)} ¢   (${num(coins - cost)} ¢ left)` },
-    );
-  };
-
-  const info = (f) => {
-    const lv = hq[f.id] ?? 0;
-    push(
-      { t: 'out', s: `  [${f.room}] ${f.name} — ${f.flavor}` },
-      { t: 'out', s: `  LEVEL ${lv}${f.max ? ` / ${f.max}` : ''} · NOW ${lv ? describeEffect(f, lv) : 'not built'}` },
-      maxed(f, lv) ? { t: 'dim', s: '  FULLY UPGRADED' } : { t: 'out', s: `  NEXT ${describeEffect(f, lv + 1)} · COST ${num(facilityCost(f, lv))} ¢` },
-    );
-  };
-
-  const run = (raw) => {
-    const line = raw.trim();
-    push({ t: 'cmd', s: `C:\\FRAIL\\HQ> ${line}` });
-    if (!line) return;
-    const [verb, ...rest] = line.split(/\s+/);
-    const arg = rest.join(' ');
-    const v = verb.toLowerCase();
-    if (['upgrade', 'up', 'buy', 'build', 'u'].includes(v)) {
-      const f = arg ? find(arg) : FACILITIES[sel];
-      if (!f) { sfx('miss'); push({ t: 'err', s: `  ERROR: NO ROOM "${arg}" — try "list"` }); return; }
-      setSel(FACILITIES.indexOf(f)); upgrade(f);
-    } else if (v === 'info' || v === 'i') {
-      const f = arg ? find(arg) : FACILITIES[sel];
-      if (!f) { push({ t: 'err', s: `  ERROR: NO ROOM "${arg}"` }); return; }
-      info(f);
-    } else if (v === 'status' || v === 'stat') {
-      const built = FACILITIES.filter(f => (hq[f.id] ?? 0) > 0);
-      push(...(built.length ? built.map(f => ({ t: 'out', s: `  ${f.name.padEnd(10)} LV ${String(hq[f.id]).padStart(2)}   ${describeEffect(f, hq[f.id])}` })) : [{ t: 'dim', s: '  nothing built yet' }]),
-        { t: 'dim', s: `  TEAM: ATK ${stats.atk} · HP ${stats.maxHp} · crit ${Math.round(stats.critRate * 100)}%` });
-    } else if (v === 'list' || v === 'ls' || v === 'dir') {
-      push(...FACILITIES.map((f, i) => ({ t: 'out', s: `  ${String(i + 1).padStart(2, '0')}  ${f.name.padEnd(10)} LV ${String(hq[f.id] ?? 0).padStart(2)}   ${maxed(f, hq[f.id] ?? 0) ? 'MAX' : `${num(facilityCost(f, hq[f.id] ?? 0))} ¢`}` })));
-    } else if (v === 'help' || v === '?' || v === 'h') {
-      push(...HELP.map(s => ({ t: 'dim', s })));
-    } else if (v === 'clear' || v === 'cls') {
-      setLog([]);
-    } else if (['exit', 'back', 'q', 'quit', 'logout'].includes(v)) {
-      playClose(); navigate('main');
-    } else if (find(line)) {
-      const f = find(line); setSel(FACILITIES.indexOf(f)); info(f);
+    if (buy(f.id)) {
+      sfx('combo', 0);
+      setFlash({ id: f.id, n: Date.now() });
+      setFeed(l => [{ t: clock(), s: `${f.name} → LV ${lv + 1} · ${describeEffect(f, lv + 1)}`, ok: true }, ...l].slice(0, 4));
     } else {
-      sfx('miss'); push({ t: 'err', s: `  '${verb}' is not recognized as a command. Type "help".` });
+      sfx('miss');
+      setFeed(l => [{ t: clock(), s: `${f.name}: not enough coins`, ok: false }, ...l].slice(0, 4));
     }
   };
+  const built = FACILITIES.filter(f => (hq[f.id] ?? 0) > 0);
+  const ready = FACILITIES.filter(f => !maxed(f, hq[f.id] ?? 0) && coins >= facilityCost(f, hq[f.id] ?? 0)).length;
 
-  // keyboard: ↑↓ / 1-6 pick a room, Enter upgrades it (or runs the typed command)
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => (s + 1) % FACILITIES.length); playPress(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => (s + FACILITIES.length - 1) % FACILITIES.length); playPress(); }
-      else if (e.key === 'Escape') { playClose(); navigate('main'); }
-      else if (/^[1-6]$/.test(e.key) && !cmd) { e.preventDefault(); setSel(Number(e.key) - 1); playPress(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [cmd, navigate]);
-
-  const f = FACILITIES[sel];
-  const lv = hq[f.id] ?? 0, done = maxed(f, lv), cost = facilityCost(f, lv);
-  const ready = useMemo(() => FACILITIES.filter(x => !maxed(x, hq[x.id] ?? 0) && coins >= facilityCost(x, hq[x.id] ?? 0)).length, [hq, coins]);
+  const summary = (
+    <div className="hm-side">
+      <div className="hm-sidehd">HQ BONUSES · EVERY FIGHT</div>
+      {built.length === 0
+        ? <div className="hm-none">Nothing built yet. Rooms cost coins, and what they give applies to every fight, endless and story.</div>
+        : built.map(f => <div key={f.id} className="hm-sum"><Icon name={f.id} size={18} /><span>{f.name}</span><b>{describeEffect(f, hq[f.id])}</b></div>)}
+      <div className="hm-sidehd" style={{ marginTop: 16 }}>ACTIVITY</div>
+      {feed.length === 0
+        ? <div className="hm-none dim">&gt; awaiting orders<span className="term-cursor">_</span></div>
+        : feed.map((l, i) => <div key={`${l.t}-${i}-${l.s}`} className={`hm-feed${l.ok ? '' : ' bad'}${i === 0 ? ' new' : ''}`}><i>{l.t}</i> {l.s}</div>)}
+    </div>
+  );
 
   return (
-    <div className="ht-root" onClick={() => !mobile && inputRef.current?.focus()}>
+    <div className="hm-root">
       <style>{CSS}</style>
-      <div className="ht-screen">
-        <div className="ht-head">
-          <span>FRAIL INITIATIVE // FACILITY MANAGEMENT</span>
-          <span className="ht-r">USER: {user} · FUNDS: <b>{num(coins)} ¢</b></span>
-        </div>
-        <div className="ht-rule">{'═'.repeat(160)}</div>
+      <div className="hm-top">
+        <button className="hm-btn" onPointerDown={playClose} onClick={() => navigate('main')}>[&nbsp;back&nbsp;]</button>
+        <TermTitle path="HQ" small={mobile} />
+        <div className="hm-coins"><Coin size={20} /><span>{fmt(coins)}</span></div>
+        <div style={{ flex: 1 }} />
+        {!mobile && <span className={`hm-ready${ready ? ' on' : ''}`}>{ready ? `${ready} upgrade${ready === 1 ? '' : 's'} affordable` : 'earn coins in the field to upgrade'}</span>}
+      </div>
 
-        <div className="ht-main">
-          <div className="ht-table">
-            <div className="ht-row ht-th"><span>#</span><span>ROOM</span><span>LV</span>{!mobile && <span>STATUS</span>}<span className="ht-eff">EFFECT</span><span className="ht-cost">COST</span></div>
-            {FACILITIES.map((x, i) => {
-              const l = hq[x.id] ?? 0, m = maxed(x, l), c = facilityCost(x, l);
-              return (
-                <button key={x.id} className={`ht-row${i === sel ? ' sel' : ''}${!m && coins >= c ? ' can' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); setSel(i); playPress(); if (mobile) return; inputRef.current?.focus(); }}
-                  onDoubleClick={() => upgrade(x)}>
-                  <span>{String(i + 1).padStart(2, '0')}</span>
-                  <span>{x.name}</span>
-                  <span>{String(l).padStart(2, '0')}</span>
-                  {!mobile && <span className="ht-bar">[{bar(l, x.max)}]</span>}
-                  <span className="ht-eff">{l ? describeEffect(x, l) : '— offline —'}</span>
-                  <span className="ht-cost">{m ? 'MAX' : `${fmt(c)} ¢`}</span>
-                </button>
-              );
-            })}
-            <div className="ht-foot">{ready ? `${ready} upgrade${ready === 1 ? '' : 's'} affordable` : 'no upgrades affordable — earn coins in the field'}</div>
-          </div>
-
-          <div className="ht-detail">
-            <div className="ht-dhead">┌─ {f.room} ─ {f.name} {'─'.repeat(8)}</div>
-            <div className="ht-dbody">
-              <div className="ht-icon"><Icon name={f.id} size={mobile ? 54 : 72} /></div>
-              <div className="ht-dtext">
-                <div className="ht-flav">"{f.flavor}"</div>
-                <div>LEVEL ... {lv}{f.max ? ` / ${f.max}` : ''}</div>
-                <div>NOW ..... <span className="ht-g">{lv ? describeEffect(f, lv) : 'offline'}</span></div>
-                {!done && <div>NEXT .... {describeEffect(f, lv + 1)}</div>}
-                <div>COST .... {done ? '—' : `${num(cost)} ¢`}</div>
+      <div className="hm-body">
+        <div className="hm-floors">
+          {FLOORS.map(fl => (
+            <section key={fl.label} className="hm-floor">
+              <div className="hm-flhd"><b>{fl.label}</b> {fl.name}<span /></div>
+              <div className="hm-grid">
+                {fl.rooms.map(id => {
+                  const f = byId(id), lv = hq[id] ?? 0, done = maxed(f, lv), cost = facilityCost(f, lv), can = !done && coins >= cost;
+                  return (
+                    <div key={`${id}-${flash?.id === id ? flash.n : 0}`} className={`hm-card${lv ? ' on' : ''}${flash?.id === id ? ' flash' : ''}`}>
+                      <div className="hm-cardhd"><span>{f.room}</span><b>{f.name}</b></div>
+                      <div className="hm-cardbody">
+                        <div className={`hm-icon${lv ? '' : ' off'}`}><Icon name={id} size={mobile ? 50 : 56} /></div>
+                        <div className="hm-info">
+                          <div className="hm-lv">LV <b>{lv}</b>{f.max ? <span> / {f.max}</span> : null}</div>
+                          {f.max ? <div className="hm-bar"><span style={{ width: `${lv / f.max * 100}%` }} /></div> : <div className="hm-bar inf"><span style={{ width: `${Math.min(100, lv * 4)}%` }} /></div>}
+                          <div className="hm-now">{lv ? describeEffect(f, lv) : 'not built yet'}</div>
+                          {!done && <div className="hm-next">next: {describeEffect(f, lv + 1)}</div>}
+                        </div>
+                      </div>
+                      <div className="hm-flavor">{f.flavor}</div>
+                      <button className="hm-up" disabled={!can} onClick={() => upgrade(f)}>
+                        {done ? 'FULLY UPGRADED' : <>{lv ? 'UPGRADE' : 'BUILD'}<span className="hm-cost"><Coin size={15} />{fmt(cost)}</span></>}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-            <button className="ht-go" disabled={done || coins < cost} onClick={(e) => { e.stopPropagation(); upgrade(f); }}>
-              {done ? '[ FULLY UPGRADED ]' : coins < cost ? `[ NEED ${num(cost - coins)} ¢ MORE ]` : `[ ${lv ? 'UPGRADE' : 'BUILD'} ▸ ${fmt(cost)} ¢ ]`}
-            </button>
-            <div className="ht-dfoot">└{'─'.repeat(40)}</div>
-          </div>
+            </section>
+          ))}
         </div>
-
-        <div className="ht-log" ref={logRef}>
-          {log.map((l, i) => <div key={i} className={`ht-l ${l.t}${i >= log.length - 3 ? ' new' : ''}`}>{l.s}</div>)}
-        </div>
-        <form className="ht-prompt" onSubmit={(e) => { e.preventDefault(); run(cmd.trim() ? cmd : `upgrade ${FACILITIES[sel].id}`); setCmd(''); }}>
-          <span>C:\FRAIL\HQ&gt;&nbsp;</span>
-          <input ref={inputRef} value={cmd} onChange={e => setCmd(e.target.value)} spellCheck={false} autoComplete="off" autoCapitalize="off"
-            autoFocus={!mobile} aria-label="command" placeholder={mobile ? 'type a command (help)' : ''} />
-        </form>
-        <div className="ht-keys">
-          <button onClick={() => { playClose(); navigate('main'); }}>[ESC] EXIT</button>
-          {!mobile && <span>[↑↓] SELECT · [ENTER] UPGRADE · [1-6] JUMP · "help"</span>}
-        </div>
+        {summary}
       </div>
     </div>
   );
 }
 
 const CSS = `
-  .ht-root { width:100%; height:100dvh; background:#070402; display:flex; align-items:stretch; justify-content:center; color:var(--amber); font-family:var(--font-ui); overflow:hidden; }
-  .ht-screen { flex:1; min-width:0; max-width:1240px; display:flex; flex-direction:column; min-height:0; padding:14px 22px 10px;
-    text-shadow: 0 0 6px rgba(255,150,50,.45); }
-  .ht-head { display:flex; justify-content:space-between; gap:12px; font-size:14px; letter-spacing:1px; flex-wrap:wrap; }
-  .ht-head b { font-weight:400; color:#ffd59a; }
-  .ht-rule { overflow:hidden; white-space:nowrap; color:var(--amber-dim); line-height:1; margin:4px 0 10px; }
-  .ht-main { display:flex; gap:22px; flex-shrink:0; }
-  .ht-table { flex:1.5; min-width:0; }
-  .ht-row { display:grid; grid-template-columns: 34px 120px 34px 150px 1fr 90px; gap:10px; align-items:center; width:100%; text-align:left;
-    background:none; border:none; color:inherit; font:inherit; font-size:14px; padding:5px 8px; cursor:pointer; text-shadow:inherit; }
-  .ht-row.ht-th { cursor:default; color:var(--amber-dim); font-size:11px; letter-spacing:2px; border-bottom:1px dashed var(--amber-dim); }
-  .ht-row:not(.ht-th):hover { background:rgba(255,154,46,.1); }
-  .ht-row.sel { background:#ff9a2e; color:#140a04; text-shadow:none; }
-  .ht-row.sel .ht-eff, .ht-row.sel .ht-bar { color:#140a04; }
-  .ht-row.can:not(.sel) .ht-cost { color:#6ef59b; text-shadow:0 0 6px rgba(110,245,155,.5); }
-  .ht-cost { text-align:right; }
-  .ht-bar { color:var(--amber-dim); letter-spacing:1px; }
-  .ht-eff { color:#ffd59a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .ht-foot { font-size:11px; color:var(--amber-dim); padding:6px 8px; border-top:1px dashed var(--amber-dim); margin-top:2px; }
-  .ht-detail { flex:1; min-width:0; font-size:14px; }
-  .ht-dhead, .ht-dfoot { white-space:nowrap; overflow:hidden; color:var(--amber-dim); }
-  .ht-dbody { display:flex; gap:16px; align-items:center; padding:10px 6px 10px 14px; border-left:1px solid var(--amber-dim); }
-  .ht-icon { line-height:0; filter: grayscale(1) sepia(1) saturate(5) hue-rotate(-12deg) brightness(1.05); }
-  .ht-dtext { display:flex; flex-direction:column; gap:3px; min-width:0; }
-  .ht-flav { color:var(--amber-dim); font-size:12px; margin-bottom:4px; }
-  .ht-g { color:#6ef59b; }
-  .ht-go { margin:4px 0 4px 14px; background:#ff9a2e; color:#140a04; border:none; font:inherit; font-size:14px; letter-spacing:1px; padding:8px 14px; cursor:pointer; text-shadow:none; }
-  .ht-go:disabled { background:transparent; color:var(--amber-dim); border:1px dashed var(--amber-dim); cursor:default; }
-  .ht-log { flex:1; min-height:80px; overflow-y:auto; margin-top:12px; padding-top:8px; border-top:1px solid var(--amber-dim); font-size:13px; line-height:1.55; white-space:pre-wrap; }
-  .ht-l.cmd { color:#ffd59a; } .ht-l.sys { color:var(--amber); } .ht-l.dim { color:var(--amber-dim); }
-  .ht-l.ok { color:#6ef59b; text-shadow:0 0 6px rgba(110,245,155,.45); } .ht-l.err { color:#ff6b5a; text-shadow:0 0 6px rgba(255,90,70,.45); }
-  .ht-l.new { animation: htType .35s steps(24) both; }
-  .ht-prompt { display:flex; align-items:center; font-size:14px; padding:6px 0 4px; flex-shrink:0; }
-  .ht-prompt input { flex:1; min-width:0; background:transparent; border:none; outline:none; color:#ffd59a; font:inherit; font-size:14px; caret-color:#ff9a2e; caret-shape:block; text-shadow:inherit; padding:0; }
-  .ht-prompt input::placeholder { color:var(--amber-dim); opacity:.6; }
-  .ht-keys { display:flex; gap:16px; align-items:center; font-size:11px; color:var(--amber-dim); padding-top:4px; border-top:1px dashed var(--amber-dim); flex-shrink:0; }
-  .ht-keys button { background:none; border:1px solid var(--amber-dim); color:var(--amber); font:inherit; font-size:11px; padding:3px 8px; cursor:pointer; }
-  @keyframes htType { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  .hm-root { width:100%; height:100dvh; display:flex; flex-direction:column; overflow:hidden; background:var(--desk); color:var(--amber); font-family:var(--font-ui); user-select:none; }
+  .hm-top { display:flex; align-items:center; gap:12px; padding:8px 14px; background:var(--bar); border-bottom:2px solid #ff8c00; flex-shrink:0; }
+  .hm-btn { background:transparent; border:1px solid var(--amber-dim); color:var(--amber); font-size:13px; padding:5px 12px; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .hm-coins { display:flex; align-items:center; gap:6px; border:1px solid var(--amber-dim); padding:2px 10px 2px 6px; font-size:14px; }
+  .hm-ready { font-size:12px; color:var(--amber-dim); } .hm-ready.on { color:#6ef59b; }
+  .hm-body { flex:1; min-height:0; overflow-y:auto; display:flex; gap:22px; padding:16px 22px 26px; align-items:flex-start; }
+  .hm-floors { flex:1; min-width:0; display:flex; flex-direction:column; gap:16px; }
+  .hm-flhd { display:flex; align-items:center; gap:10px; font-size:11px; letter-spacing:2px; color:var(--amber-dim); margin-bottom:8px; }
+  .hm-flhd b { font-weight:400; color:#1a0d02; background:#ff9a2e; padding:1px 7px; letter-spacing:1px; text-shadow:none; }
+  .hm-flhd span { flex:1; border-bottom:1px dashed var(--line); }
+  .hm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:12px; }
+  .hm-card { border:1px solid var(--line); background:rgba(0,0,0,.35); display:flex; flex-direction:column; transition:border-color .2s, box-shadow .2s; }
+  .hm-card.on { border-color:var(--amber-dim); box-shadow: inset 0 0 30px rgba(255,140,40,.06); }
+  .hm-card:hover { border-color:#ff9a2e; }
+  .hm-card.flash { animation: hmFlash .6s ease-out; }
+  .hm-cardhd { display:flex; align-items:center; gap:10px; padding:6px 10px; border-bottom:1px solid var(--line); background:rgba(255,154,46,.06); }
+  .hm-cardhd span { font-size:10px; letter-spacing:1px; color:var(--amber-dim); }
+  .hm-cardhd b { font-weight:400; font-size:15px; letter-spacing:2px; color:#ffcf8a; }
+  .hm-cardbody { display:flex; gap:12px; align-items:center; padding:12px 12px 6px; }
+  .hm-icon { line-height:0; flex-shrink:0; } .hm-icon.off { filter: grayscale(.85) brightness(.75); }
+  .hm-info { flex:1; min-width:0; }
+  .hm-lv { font-size:12px; color:var(--amber-dim); } .hm-lv b { font-weight:400; font-size:20px; color:var(--amber); } .hm-lv span { color:var(--amber-dim); }
+  .hm-bar { height:6px; border:1px solid var(--amber-dim); margin:4px 0 6px; } .hm-bar span { display:block; height:100%; background:#ff9a2e; box-shadow:0 0 8px rgba(255,140,40,.6); }
+  .hm-bar.inf { border-style:dashed; }
+  .hm-now { font-size:13px; color:#6ef59b; }
+  .hm-next { font-size:11px; color:var(--amber-dim); margin-top:2px; }
+  .hm-flavor { font-size:11px; color:var(--amber-dim); font-style:italic; padding:0 12px 8px; }
+  .hm-up { margin:0 12px 12px; font-family:inherit; font-size:13px; letter-spacing:1px; padding:8px 12px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#ff9a2e; color:#1a0d02; border:none; text-shadow:none; box-shadow:0 3px 0 #8a4a10; }
+  .hm-up:active:not(:disabled) { transform:translateY(2px); box-shadow:0 1px 0 #8a4a10; }
+  .hm-up:disabled { background:transparent; color:var(--amber-dim); border:1px solid var(--line); box-shadow:none; cursor:default; }
+  .hm-cost { display:inline-flex; align-items:center; gap:4px; }
+  .hm-side { width:290px; flex-shrink:0; border:1px solid var(--amber-dim); background:rgba(0,0,0,.3); padding:14px 16px; position:sticky; top:0; }
+  .hm-sidehd { font-size:11px; letter-spacing:2px; color:var(--amber-dim); border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:8px; }
+  .hm-sum { display:flex; align-items:center; gap:8px; font-size:12px; padding:5px 0; border-bottom:1px solid rgba(90,51,19,.5); }
+  .hm-sum span { width:78px; color:var(--amber-dim); } .hm-sum b { flex:1; font-weight:400; color:#6ef59b; text-align:right; }
+  .hm-none { font-size:12px; line-height:1.5; } .hm-none.dim { color:var(--amber-dim); }
+  .hm-feed { font-size:12px; line-height:1.5; color:#6ef59b; } .hm-feed.bad { color:#ff6b5a; } .hm-feed i { font-style:normal; color:var(--amber-dim); }
+  .hm-feed.new { animation: hmType .35s steps(20) both; }
+  @keyframes hmFlash { 0% { background:rgba(255,200,120,.3); } 100% { } }
+  @keyframes hmType { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
   @media (max-width: 760px) {
-    .ht-root { overflow-y:auto; }
-    .ht-screen { padding:10px 10px 8px; min-height:auto; }
-    .ht-log { flex:none; height:190px; }
-    .ht-head { font-size:11px; }
-    .ht-main { flex-direction:column; gap:10px; }
-    .ht-row { grid-template-columns: 24px 1fr 26px 74px; font-size:13px; gap:6px; padding:6px 6px; }
-    .ht-row .ht-eff { display:none; }
-    .ht-row.ht-th { font-size:10px; }
-    .ht-detail { font-size:13px; }
-    .ht-log { font-size:11.5px; min-height:70px; }
+    .hm-body { flex-direction:column; padding:12px 10px 24px; }
+    .hm-side { width:auto; position:static; align-self:stretch; }
+    .hm-floors { align-self:stretch; }
+    .hm-grid { grid-template-columns:1fr; }
   }
 `;
