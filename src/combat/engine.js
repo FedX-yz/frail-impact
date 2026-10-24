@@ -356,7 +356,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       e.target = randomPoint({ x: e.x, y: e.y }, K(220));
     }
     if (!e.target) return;
-    const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1) * (e.tier === 'treasure' ? 1 : M('enemySpeed')) * (e.mad >= 5 ? 0.65 : 1);   // MAD: staggering
+    const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1) * (e.tier === 'treasure' ? 1 : M('enemySpeed')) * (e.mad >= 5 ? 0.65 : 1) * (e.slow ?? 1);   // MAD: staggering; slow: Bio's water / garden
     const dx = e.target.x - e.x, dy = e.target.y - e.y, d = Math.hypot(dx, dy) || 1;
     const step = Math.min(d, spd * dt);
     e.x += dx / d * step; e.y += dy / d * step;
@@ -482,8 +482,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (a.kind === 'shot') {
           const sp = a.speed * dt * rt.shotSpeed(a, dt);   // Infinity slows shots down
           a.x += a.ux * sp; a.y += a.uy * sp;
-          if (s.fire.length && rt.shotBlocked(a)) {         // Doro's fire walls burn them up
-            effect({ kind: 'burst', x: a.x, y: a.y, r: K(18), color: '#fb923c' }); finishAttack(a); continue;
+          if ((s.fire.length || s.kit.ward) && rt.shotBlocked(a)) {   // Doro's fire walls burn them up, Bio's Round Deer erases them
+            if (s.fire.length) effect({ kind: 'burst', x: a.x, y: a.y, r: K(18), color: '#fb923c' });
+            finishAttack(a); continue;
           }
           if (!a.hitDone && T && dist(T.x, T.y, a.x, a.y) <= a.r + K(6) + T.r) {
             a.hitDone = true;
@@ -604,6 +605,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     // mirrored: hits you land yourself come back at you, and it takes nothing
     if (e.refl?.state === 'on' && s.direct) { reflectHit(e, dmg); return 0; }
     if (e.fortT > 0) dmg *= 1 - BAL.FORTIFY;   // a Medic's buff
+    if (e.vuln) dmg *= e.vuln;                 // Bio: bound by the Toad / standing in the shadow garden
     e.lastHit = s.time;
     const pv = rt.passive();
     if (e.frozen > 0 && pv?.type === 'frost') dmg *= 1 + pv.bonus;
@@ -1013,7 +1015,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!s.W || s.paused || s.choosing) return;   // choosing = Room 16 picking a skill
     // hit-stop: freeze the action for a few frames on big kills
     if (s.hitStop > 0) { s.hitStop -= Math.min(rawDt, 0.05); return; }
-    const dt = Math.min(rawDt, 0.05) * s.dev.timeScale;
+    const dt = Math.min(rawDt, 0.05) * s.dev.timeScale * rt.timeScale();   // (Bio's hand-sign wheel slows the world)
     s.time += dt;
     const pl = s.player;
     s.ult.cd = Math.max(0, s.ult.cd - dt);
@@ -1263,7 +1265,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   const choose = (i) => rt.choose(i);   // Room 16's ult: pick a skill
 
-  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), curPassive: () => rt.passive(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, specialUp, activateUlt, setStats, loadStage, announce, setReserved, dev };
+  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), curPassive: () => rt.passive(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, specialUp, signAim: (dx, dy) => rt.signAim(dx, dy), activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

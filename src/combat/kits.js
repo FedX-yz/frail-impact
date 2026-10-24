@@ -82,13 +82,23 @@ export const SKILLS = {
                               lv1: { chance: 0.08 }, si: { chance: 0.03, dps: 0.05 },
                               desc: 'Kills have a {chance} chance to leave a lava puddle ({radius} range, {dur}s) that burns for {dps} click DMG per second.' } },
   shadows:       { type: 'tenshadows', style: 'special', barCost: 30, maxBars: 4,
-                   dogPct: 0.42, dogDur: 8, nuePct: 2.1, nueDur: 8, serpentPct: 38, devour: 0.35, elephantPct: 25, stun: 2,
-                   lv1: { dogPct: 0.25, nuePct: 1.2, serpentPct: 22, elephantPct: 14 },
-                   si: { dogPct: 0.06, nuePct: 0.3, serpentPct: 5, elephantPct: 3.5 },
-                   desc: 'Ten Shadows. Your own hits fill a SHADOW meter ({maxBars} bars). M2 spends every full bar and summons the shikigami for that many: 1 · Divine Dogs, a white and a black wolf that hunt what you point at ({dogPct} click DMG a bite; summon them again while they are out and they fuse into Divine Dog: Totality, whose bite also tears into whatever stands next to its prey). 2 · Nue, lightning on what you point at ({nuePct} click DMG, chains). 3 · Great Serpent, erupts under your cursor and crushes its prey ({serpentPct} click DMG, swallows anything left under {devour} HP). 4 · Max Elephant, drops on your cursor and floods everything around it ({elephantPct} click DMG, {stun}s stun).',
-                   passive: { type: 'rabbits', chance: 0.12,
-                              lv1: { chance: 0.07 }, si: { chance: 0.02 },
-                              desc: 'Rabbit Escape: when a hit would land on you, a {chance} chance a burst of shadow rabbits takes it instead.' } },
+                   dogPct: 0.5, dogDur: 8, toadPct: 4, bind: 3,                    // 1 bar
+                   nuePct: 2.2, nueDur: 8, oxPct: 8, deerHeal: 0.25, wardDur: 5,   // 2 bars
+                   serpentPct: 40, devour: 0.35, tigerPct: 10,                       // 3 bars
+                   elephantPct: 23, stun: 2, floodDur: 6,                           // 4 bars
+                   gardenNeed: 4, domainDur: 10,                                    // Chimera Shadow Garden
+                   lv1: { dogPct: 0.3, toadPct: 2.4, nuePct: 1.3, oxPct: 4.8, deerHeal: 0.15, serpentPct: 24, tigerPct: 6, elephantPct: 13.5, domainDur: 7 },
+                   si: { dogPct: 0.07, toadPct: 0.5, nuePct: 0.3, oxPct: 1, deerHeal: 0.02, serpentPct: 5, tigerPct: 1.2, elephantPct: 3, domainDur: 0.5 },
+                   desc: 'THE TEN SHADOWS. Your own hits fill a SHADOW meter ({maxBars} bars). Tap M2 (or Q) to summon the shadow your full bars buy: 1 Divine Dogs, 2 Nue, 3 Great Serpent, 4 Max Elephant. Hold M2 to make a hand sign instead: the world slows, a wheel of all eight shadows opens around your cursor, flick toward one and let go. '
+                     + '1 bar · DIVINE DOGS: a white and a black wolf hunt what you point at ({dogPct} click DMG a bite); summon them again while they are out and they fuse into TOTALITY, whose bite tears into everything next to its prey. '
+                     + '1 bar · TOAD: its tongue grabs the enemy you summon it on (or the pest farthest away) for {toadPct}, reels it in and BINDS it for {bind}s (bound enemies take +30% DMG); then it sits by your cursor and swallows one hit meant for you. '
+                     + '2 bars · NUE: lightning on what you point at ({nuePct}, chains). PIERCING OX: charges across the whole screen through your summon, {oxPct} to everything in its path and harder the farther it runs, throwing them into walls. ROUND DEER: heals {deerHeal} of your HP, clears debuffs, and for {wardDur}s a ward around your cursor erases enemy shots. '
+                     + '3 bars · GREAT SERPENT: rises under its prey ({serpentPct}) and swallows it whole under {devour} HP, or at any HP if it is bound. TIGER FUNERAL: pounces on the strongest enemy near your cursor and mauls it 4 times ({tigerPct}, up to double on hurt prey, +25% on bound or stunned prey); the weak do not get up. '
+                     + '4 bars · MAX ELEPHANT: drops out of the sky, {elephantPct} to everything around it, {stun}s stun, and leaves a flood: Nue lightning that lands in the water runs through all of it (THUNDER FLOOD), and an Ox that runs through it becomes a wave. '
+                     + 'Call {gardenNeed} different shadows to ready DOMAIN EXPANSION: CHIMERA SHADOW GARDEN (hold M2, let go in the middle): {domainDur}s of shadow floor, enemies slowed and taking +15% DMG, the meter fills twice as fast, every shadow costs a bar less, and your clicks pull shadow hands up out of the floor.',
+                   passive: { type: 'rabbits', chance: 0.15,
+                              lv1: { chance: 0.08 }, si: { chance: 0.02 },
+                              desc: 'Rabbit Escape: when a hit would land on you, a {chance} chance a burst of shadow rabbits takes it instead (and whatever was on top of you loses you).' } },
 
   // ── CHARGE: spam M2 to charge, M1 fires ────────────────────────────────
   souls:         { type: 'souls',     style: 'charge', cap: 20, throwPct: 0.62,
@@ -206,23 +216,23 @@ export const ULTS = {
   ora:             { type: 'ora',        dur: 45, punches: 10, pct: 0.6, charge: 1.3,
                      si: { punches: 1, pct: 0.05 },
                      desc: 'Pick 1 of 3 skills to use at full strength for {dur}s, with a punch barrage: {punches} punches a second for {pct} click DMG each.' },
-  mahoraga:        { type: 'mahoraga',   hp: 2.5, mult: 10, dur: 25, berserkAt: 4, gunPct: 0.6, charge: 1.4,
-                     si: { hp: 0.4, mult: 1.3, gunPct: 0.08 },
-                     desc: 'With this treasure I summon… Eight-Handled Sword Divergent Sila Divine General MAHORAGA for up to {dur}s ({hp}× your max HP, slams for {mult} click DMG, the shockwave hits the rest for less). Click to command it: it charges whatever you click. It adapts to every attack that hits it, and its wheel turns for every new kind of attack and every 4s, each turn making it stronger. After {berserkAt} turns it goes BERSERK and draws its twin pistols and shoots whatever you point at ({gunPct} click DMG a shot, 6 a second). If it falls, so do you.' },
+  mahoraga:        { type: 'mahoraga',   hp: 2.5, mult: 10, dur: 25, berserkAt: 4, gunPct: 0.6, finale: 15, charge: 1.4,
+                     si: { hp: 0.4, mult: 1.3, gunPct: 0.08, finale: 2 },
+                     desc: 'With this treasure I summon… Eight-Handled Sword Divergent Sila Divine General MAHORAGA for {dur}s ({hp}× your max HP, slams for {mult} click DMG, the shockwave hits the rest for less). Enemies attack it instead of you. Click an enemy and it LEAPS onto it and slams down. It adapts to every kind of attack that hits it (the third time, that kind can no longer hurt it); its wheel turns for every new kind and every 4s, each turn making it stronger. After {berserkAt} turns it goes BERSERK: twin pistols on whatever you point at ({gunPct} click DMG a shot, 6 a second) and a bullet storm with every leap. Summon it with a full SHADOW meter for the full ritual: it takes the whole meter and arrives with its wheel already turned twice. When its time is up it leaves with a WORLD-CUTTING SLASH ({finale} click DMG along the line, a third of that to everything else). If it falls, so do you.' },
 };
 
 // Each S level after S1 also cuts the ult cooldown by this much (S5 = −32%)
 export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
-const PCT_KEYS = new Set(['per', 'devour', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
+const PCT_KEYS = new Set(['per', 'devour', 'deerHeal', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['dogPct', 'nuePct', 'serpentPct', 'elephantPct', 'gunPct', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+const MULT_KEYS = new Set(['dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt') return String(Math.round(v));
+  if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
 }
@@ -274,7 +284,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', nuePct: 'Nue', serpentPct: 'Serpent', elephantPct: 'Elephant', gunPct: 'pistols', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

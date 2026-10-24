@@ -156,6 +156,9 @@ const SFX_FILES = {
   ult:     null,   // ult fires
   boom:    null,   // explosion (volatile elites)
   miss:    null,   // click on empty space
+  // Bio (Ten Shadows / Mahoraga)
+  summon: null, sign: null, tick: null, bark: null, howl: null, thunder: null, ox: null, deer: null, hiss: null, roar: null,
+  trumpet: null, splash: null, tongue: null, domain: null, wheel: null, gun: null, leap: null, charge: null, worldslash: null,
 };
 Object.values(SFX_FILES).filter(Boolean).forEach(f => loadBuffer(`${BASE}sounds/${f}`).catch(() => {}));
 
@@ -193,6 +196,25 @@ function crunch(freq, dur, vol, q = 1, delay = 0) {
   src.start(t); src.stop(t + dur + 0.02);
 }
 const vary = (x, amt = 0.12) => x * (1 + (Math.random() * 2 - 1) * amt);
+// an oscillator following [time, freq] points (howls, roars, trumpets), with an optional vibrato
+function sweep(type, pts, dur, vol, delay = 0, vib = 0) {
+  const t = now() + delay;
+  const o = _audioCtx.createOscillator(), g = _audioCtx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(pts[0][1], t);
+  for (const [at, f] of pts.slice(1)) o.frequency.linearRampToValueAtTime(f, t + at);
+  if (vib) {
+    const l = _audioCtx.createOscillator(), lg = _audioCtx.createGain();
+    l.frequency.value = 6.5; lg.gain.value = vib; l.connect(lg); lg.connect(o.frequency);
+    l.start(t); l.stop(t + dur + 0.02);
+  }
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+  g.gain.setValueAtTime(vol, t + dur * 0.7);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t + dur + 0.02);
+}
 
 const SYNTH = {
   hit:     () => { crunch(vary(1800), 0.05, 0.35, 2); tone('triangle', vary(420), 180, 0.06, 0.18); },
@@ -205,10 +227,32 @@ const SYNTH = {
   ult:     () => { tone('sawtooth', 110, 880, 0.45, 0.16); crunch(1200, 0.5, 0.3, 0.5, 0.05); },
   boom:    () => { crunch(160, 0.5, 0.8, 0.5); tone('sine', 120, 35, 0.5, 0.35); },
   miss:    () => { tone('sine', vary(260), 200, 0.04, 0.05); },
+  // Bio: something rising out of a pool of shadow
+  summon:  () => { crunch(240, 0.35, 0.45, 0.8); tone('sine', 190, 55, 0.42, 0.3); tone('sine', 95, 45, 0.5, 0.2, 0.05); },
+  sign:    () => { tone('sine', 140, 300, 0.32, 0.12); crunch(700, 0.35, 0.18, 0.6); },   // hands coming together
+  tick:    () => { tone('triangle', 1250, 950, 0.035, 0.07); },
+  bark:    () => { [0, 0.13].forEach(d => { tone('sawtooth', vary(430), 170, 0.09, 0.15, d); crunch(950, 0.07, 0.22, 1.2, d); }); },
+  howl:    () => { sweep('triangle', [[0, 290], [0.25, 540], [0.8, 470], [1.1, 330]], 1.15, 0.16, 0, 9); sweep('sawtooth', [[0, 145], [0.25, 270], [1.1, 165]], 1.15, 0.05, 0, 5); },
+  thunder: () => { crunch(3200, 0.1, 0.55, 0.7); crunch(170, 0.65, 0.5, 0.4, 0.04); tone('sine', 75, 38, 0.6, 0.25, 0.04); },
+  ox:      () => { crunch(110, 0.8, 0.55, 0.5); tone('sawtooth', 72, 44, 0.7, 0.18); for (let i = 0; i < 6; i++) crunch(90, 0.06, 0.45, 1.5, i * 0.09); },
+  deer:    () => { [1046, 1318, 1568, 2093].forEach((f, i) => tone('sine', f, f * 0.995, 0.9, 0.08, i * 0.07)); },
+  hiss:    () => { crunch(5200, 0.45, 0.22, 0.8); tone('sine', 230, 65, 0.55, 0.28, 0.33); crunch(260, 0.4, 0.4, 0.5, 0.36); },
+  roar:    () => { sweep('sawtooth', [[0, 85], [0.14, 150], [0.6, 68]], 0.7, 0.2, 0, 14); crunch(420, 0.6, 0.38, 0.5); },
+  trumpet: () => { sweep('square', [[0, 290], [0.09, 640], [0.5, 580], [0.72, 430]], 0.75, 0.09, 0, 12); sweep('sawtooth', [[0, 145], [0.09, 320], [0.72, 215]], 0.75, 0.05); },
+  splash:  () => { crunch(800, 0.6, 0.5, 0.3); crunch(2600, 0.35, 0.22, 0.5, 0.05); for (let i = 0; i < 4; i++) tone('sine', vary(650), vary(1300), 0.05, 0.05, 0.12 + i * 0.07); },
+  tongue:  () => { tone('sine', 320, 950, 0.09, 0.14); tone('sine', 950, 210, 0.12, 0.12, 0.14); },
+  domain:  () => { tone('sawtooth', 55, 52, 1.7, 0.16); tone('sine', 110, 52, 1.7, 0.24); crunch(200, 1.3, 0.35, 0.4); [880, 1320].forEach((f, i) => tone('sine', f, f, 1.2, 0.05, 0.3 + i * 0.15)); },
+  // Mahoraga
+  wheel:   () => { crunch(1500, 0.06, 0.6, 2); tone('square', 165, 120, 0.12, 0.18); tone('sine', 880, 872, 0.45, 0.1, 0.03); tone('sine', 1320, 1310, 0.35, 0.05, 0.03); },
+  gun:     () => { crunch(vary(2300), 0.06, 0.5, 0.8); tone('square', 190, 60, 0.07, 0.16); },
+  leap:    () => { tone('sine', 210, 640, 0.24, 0.12); crunch(1300, 0.22, 0.24, 0.6); },
+  charge:  () => { sweep('sawtooth', [[0, 80], [0.55, 640]], 0.55, 0.12); crunch(3000, 0.55, 0.15, 0.4); },
+  worldslash: () => { crunch(6500, 0.5, 0.6, 0.4); crunch(300, 0.9, 0.6, 0.4, 0.04); tone('sine', 1900, 180, 0.55, 0.2); tone('sine', 60, 30, 0.9, 0.3, 0.05); },
 };
 
 // Too many sounds at once turn into mush: limit how often each can play
-const MIN_GAP = { hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06 };
+const MIN_GAP = { hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06,
+  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5 };
 const lastPlayed = {};
 export function sfx(name, arg) {
   if (!getSettings().combatSfx || getSettings().volume <= 0) return;

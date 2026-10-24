@@ -3,8 +3,8 @@
 // engine.js calls the hooks below (onKill, onCombo, absorbHit, …).
 //
 // Shared systems:
-//   s.allies  – things on your side: Tyran's crawlers, Bio's shikigami, Doro's
-//               fire arrow, Ivy's spirits (drawn from s.kit.souls)
+//   s.allies  – things on your side: Tyran's crawlers, Bio's shikigami (tenShadows.js),
+//               Doro's fire arrow, Ivy's spirits (drawn from s.kit.souls)
 //   s.zones   – ground that burns enemies: Ice's lava
 //   s.fire    – Doro's fire-trail segments (also stop enemy shots)
 //   s.mahoraga – Bio's ult: enemies attack it instead of you
@@ -14,6 +14,7 @@ import { playSFX } from '../utils/sfx';
 
 const BASE = import.meta.env.BASE_URL;
 import { SKILLS, scaleKit } from './kits';
+import { createTenShadows } from './tenShadows';
 import { CHARACTERS } from '../data/characters';
 
 // Every skill has a main move (its `style`: click / special / charge / hold / drag) and a
@@ -25,10 +26,9 @@ export const SKILL_NAMES = Object.fromEntries(CHARACTERS.filter(c => c.skill?.ef
 const COPY_POOL = [...new Set(CHARACTERS.filter(c => c.rarity === 5 && c.skill?.effect && SKILLS[c.skill.effect]).map(c => c.skill.effect))]
   .filter(id => id !== 'copy');
 
-const MAX_LAVA = 6, MAX_FIRE = 50, MAX_CRAWLERS = 10, MAX_SHIKI = 3;
+const MAX_LAVA = 6, MAX_FIRE = 50, MAX_CRAWLERS = 10;
 const HOLD_MIN = 0.25;          // shorter than this is just a click, not a charged release
 const ZONE_TICK = 0.5;            // lava / fire / spirits deal damage this often
-const SHIKI = ['dog', 'toad', 'nue'];
 // Jerry's repel: launch speed (slides about speed / friction px), how fast it
 // slows down, and how fast it has to be going for a wall or an enemy to crush it
 const REPEL_SPEED = 1400, REPEL_FRICTION = 5, CRUSH_SPEED = 260;
@@ -175,17 +175,12 @@ export function createKitRuntime(api) {
     const toad = s.allies.find(a => a.kind === 'toad');
     if (toad) {
       s.allies = s.allies.filter(a => a !== toad);
-      floater('🐸 SWALLOWED', toad.x, toad.y - K(30), '#86efac', true);
+      floater('🐸 THE TOAD SWALLOWED IT', toad.x, toad.y - K(30), '#86efac', true);
       effect({ kind: 'burst', x: toad.x, y: toad.y, r: K(50), color: '#22c55e' });
       return true;
     }
     const pv = passive();
-    // Bio: Rabbit Escape — a burst of shadow rabbits takes the hit
-    if (pv?.type === 'rabbits' && P && kind !== 'poison' && Math.random() < pv.chance) {
-      effect({ kind: 'rabbits', x: P.x, y: P.y, life: 0.9 });
-      floater('RABBIT ESCAPE', P.x, P.y - K(40), '#e2e8f0', true);
-      return true;
-    }
+    if (ts.absorb(pv, kind)) return true;   // Bio: Rabbit Escape
     if (pv?.type === 'infinity' && P && s.kit.inf >= 10 && (kind === 'shot' || kind === 'dash' || kind === 'bite')) {
       s.kit.inf = Math.max(0, s.kit.inf - 25); s.kit.infUsed = s.time;
       floater('∞', P.x, P.y - K(40), '#93c5fd', true);
@@ -299,10 +294,10 @@ export function createKitRuntime(api) {
     s.kit.inf = Math.max(0, s.kit.inf - 15 * dt); s.kit.infUsed = s.time;
     return 0.15;
   }
-  // Doro's fire walls burn up enemy shots
+  // Doro's fire walls burn up enemy shots; Bio's Round Deer erases them
   function shotBlocked(a) {
     for (const f of s.fire) if (distToSegment(a.x, a.y, f.x1, f.y1, f.x2, f.y2) <= a.r + K(10)) return true;
-    return false;
+    return ts.shotBlocked(a);
   }
 
   // ── Clicking ─────────────────────────────────────────────────────────────
@@ -329,6 +324,7 @@ export function createKitRuntime(api) {
     if (mods?.ratio) effect({ kind: 'ratio', x: e.x, y: e.y, r: radius(e) });
     const pv = passive();
     if (mods?.ratio && pv?.type === 'ratioHeal') api.heal(pv.heal * s.player.maxHp);
+    if (skill()?.type === 'tenshadows') ts.afterClick(e, auto);   // Chimera Shadow Garden: shadow hands
   }
   // Stephen: a crit click slices a line through the target
   function onCritClick(e) {
@@ -346,13 +342,8 @@ export function createKitRuntime(api) {
   }
   // true = swallow the click (you're suspended while Mahoraga fights)
   function onPointerDown(x, y) {
-    if (s.mahoraga) {
-      // you don't fight while it's out — you command it: click an enemy and it charges
-      const m = s.mahoraga, list = foes().filter(e => !(e.down > 0));
-      const e = api.enemyAt(x, y) ?? (() => { const n = nearest(x, y, list); return n && dist(x, y, n.x, n.y) <= K(130) ? n : null; })();
-      if (e) { m.target = e.id; m.rush = 0.7; m.lookT = 1.2; effect({ kind: 'ring', x: e.x, y: e.y, r: radius(e) * 1.4, color: '#fde047', life: 0.35 }); }
-      return true;
-    }
+    if (s.mahoraga) return ts.commandMahoraga(x, y);   // you don't fight while it's out — you command it
+    if (ts.busy()) return true;                          // Bio's hands are busy with a hand sign
     const act = s.ult.active;
     if (act?.type === 'distortion') {
       const L = Math.hypot(s.W, s.H);
@@ -375,8 +366,8 @@ export function createKitRuntime(api) {
   // Something took damage: Bio's entanglement copies a share onto the other linked enemies
   function onDamage(e, dmg, linked) {
     // Ten Shadows: hits you land yourself pour into the shadow meter
-    const ts = skill();
-    if (ts?.type === 'tenshadows' && s.direct && dmg > 0) s.kit.shadow = Math.min(ts.maxBars * ts.barCost, (s.kit.shadow ?? 0) + dmg / Math.max(1, s.stats.clickDmg));
+    const tsk = skill();
+    if (tsk?.type === 'tenshadows') ts.onDamage(tsk, dmg);
     const en = s.kit.entangle;
     if (!en || linked || dmg <= 0 || !en.ids.includes(e.id)) return;
     let n = 0;
@@ -393,7 +384,7 @@ export function createKitRuntime(api) {
     s.ult.active = null; s.ult.charge = 0; s.ult.cd = 0; s.timeStop = 0;
     s.special.cd = 0; s.special.cdMax = 0;
     s.player.m2 = null; s.player.held = null;
-    s.enemies.forEach(e => { e.burn = null; e.mad = 0; });
+    s.enemies.forEach(e => { e.burn = null; e.mad = 0; e.slow = undefined; e.vuln = undefined; e.boundT = 0; });
   }
 
   // ── M2 (special), charge and hold moves ──────────────────────────────────
@@ -469,23 +460,7 @@ export function createKitRuntime(api) {
         shake(0.35); sfx('boom');
         return true;
       }
-      case 'dogs': {   // Bio (Ten Shadows): two Divine Dogs
-        if (!startCooldown(sk, x, y)) return false;
-        s.allies = s.allies.filter(a => !(a.kind === 'dog' && a.summoned));   // a fresh pair replaces the old one
-        for (let i = 0; i < 2; i++) s.allies.push({ id: nextId(), kind: 'dog', summoned: true, x: x + (i ? K(30) : -K(30)), y, pct: sk.pct, life: sk.dur, biteT: i * 0.2, target: null });
-        effect({ kind: 'burst', x, y, r: K(70), color: '#6366f1' });
-        floater('🐺🐺 DIVINE DOGS', x, y - K(50), '#a5b4fc', true);
-        sfx('shield');
-        return true;
-      }
-      case 'tenshadows': {   // Bio: spend every full bar of shadow on the shikigami for that many
-        if (s.time - (s.kit.summonT ?? -9) < 0.35) return false;
-        const bars = Math.min(sk.maxBars, Math.floor((s.kit.shadow ?? 0) / sk.barCost));
-        if (bars < 1) { floater('not enough shadow', x, y - K(30), '#a5b4fc'); return false; }
-        s.kit.shadow -= bars * sk.barCost; s.kit.summonT = s.time;
-        summonShikigami(bars, sk, x, y);
-        return true;
-      }
+      case 'tenshadows': return ts.press(sk, x, y);   // Bio: a hand sign (tap = summon, hold = the wheel)
       case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
         if (!startCooldown(sk, x, y)) return false;
         s.kit.maws = s.kit.maws ?? [];
@@ -514,6 +489,7 @@ export function createKitRuntime(api) {
   const CHARGE_HOLD = 1;   // seconds of holding M2 before it starts charging by itself
   function specialRelease(held, x, y) {
     const sk = skill();
+    if (sk?.type === 'tenshadows') { ts.release(sk); return; }
     if (sk?.style !== 'charge' || held < CHARGE_HOLD) return;   // a tap only stocks up (done on press)
     fire(x, y);
   }
@@ -618,51 +594,12 @@ export function createKitRuntime(api) {
   function specialInfo() {
     const sk = skill();
     if (!sk) return null;
-    if (sk.type === 'tenshadows') {
-      const cap = sk.maxBars * sk.barCost, sh = s.kit.shadow ?? 0;
-      return { kind: 'count', n: Math.floor(sh / sk.barCost), max: sk.maxBars, fill: sh / cap, color: '#818cf8' };
-    }
+    if (sk.type === 'tenshadows') return ts.info(sk);
     if (sk.style === 'special') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
     if (sk.type === 'souls')    return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
     if (sk.type === 'crawlers') return { kind: 'count', n: s.kit.crawlN, max: Math.round(sk.cap), color: '#c084fc' };
     if (sk.type === 'platinum') return { kind: 'count', n: s.kit.punches, max: Math.round(sk.cap), color: '#f472b6' };
     return null;
-  }
-
-  // Bio's Ten Shadows: 1 Divine Dogs (twice → Totality), 2 Nue, 3 Great Serpent, 4 Max Elephant
-  const SHIKI_NAMES = ['', 'DIVINE DOGS', 'NUE', 'GREAT SERPENT', 'MAX ELEPHANT'];
-  function summonShikigami(n, sk, x, y) {
-    effect({ kind: 'puddle', x, y, r: K(60 + n * 25), life: 0.8 });
-    if (n === 1) {
-      const dogs = s.allies.filter(a => a.kind === 'dog' && a.summoned);
-      const tot = dogs.find(d => d.totality);
-      if (tot) {   // Totality is already out: it lasts longer
-        tot.life += sk.dogDur * 0.6;
-        floater('TOTALITY HOWLS', tot.x, tot.y - K(50), '#e2e8f0', true);
-      } else if (dogs.length) {   // the dogs fuse
-        const life = Math.max(...dogs.map(d => d.life)) + 4;
-        s.allies = s.allies.filter(a => !(a.kind === 'dog' && a.summoned));
-        s.allies.push({ id: nextId(), kind: 'dog', summoned: true, totality: true, x, y, pct: sk.dogPct * 2.6, life, biteT: 0, target: null });
-        api.announce('DIVINE DOG: TOTALITY', '#e2e8f0');
-        effect({ kind: 'ring', x, y, r: K(110), color: '#e2e8f0', life: 0.5 });
-        shake(0.3); sfx('bigKill');
-        return;
-      } else {
-        for (let i = 0; i < 2; i++) s.allies.push({ id: nextId(), kind: 'dog', summoned: true, white: i === 0, x: x + (i ? K(30) : -K(30)), y, pct: sk.dogPct, life: sk.dogDur, biteT: i * 0.2, target: null });
-      }
-    } else if (n === 2) {
-      s.allies = s.allies.filter(a => a.kind !== 'nue2');
-      s.allies.push({ id: nextId(), kind: 'nue2', x, y: y - K(60), pct: sk.nuePct, life: sk.nueDur, zapT: 0.3, ang: 0 });
-    } else if (n === 3) {
-      const t = focus(170) ?? (() => { const e = nearest(x, y); return e && dist(x, y, e.x, e.y) <= K(220) ? e : null; })();
-      s.kit.serpents = s.kit.serpents ?? [];
-      s.kit.serpents.push({ id: nextId(), x: t?.x ?? x, y: t?.y ?? y, t: 0, life: 1.5, target: t?.id ?? null, struck: false, sk });
-    } else {
-      s.kit.drops = s.kit.drops ?? [];
-      s.kit.drops.push({ id: nextId(), x, y, t: 0, fall: 0.6, r: K(230), landed: false, sk });
-    }
-    floater(SHIKI_NAMES[n], x, y - K(60), '#c7d2fe', true);
-    sfx('shield');
   }
 
   // ── Kills & combo ────────────────────────────────────────────────────────
@@ -690,26 +627,11 @@ export function createKitRuntime(api) {
       }
     } else if (pv.type === 'lavaKill' && Math.random() < pv.chance) {
       addLava(e.x, e.y, K(pv.radius), pv.dur, pv.dps);
-    } else if (pv.type === 'shadows' && Math.random() < pv.chance) {
-      summonShiki(Math.random() < 0.5 && !s.allies.some(a => a.kind === 'toad') ? 2 : 3, pv);
     } else if (pv.type === 'killHeal') {
       api.heal(pv.heal * s.player.maxHp);
     }
   }
   function onCombo() { /* (Ten Shadows used to summon at combo milestones; now it's a chance on kills) */ }
-  // m: index into SHIKI (2 = toad, 3 = nue)
-  function summonShiki(m, sk) {
-    const P = s.player.pos ?? center();
-    const kind = ['dog', 'dog', 'toad', 'nue'][m];
-    const shiki = s.allies.filter(a => SHIKI.includes(a.kind));
-    if (shiki.length >= MAX_SHIKI) s.allies = s.allies.filter(a => a !== shiki[0]);
-    const base = { id: nextId(), kind, x: P.x, y: P.y, pct: sk.pct };
-    if (kind === 'dog')  s.allies.push({ ...base, life: 15, biteT: 0, target: null });
-    if (kind === 'toad') s.allies.push({ ...base, life: 25 });
-    if (kind === 'nue')  s.allies.push({ ...base, life: 12, ang: 0, zapT: 0.6 });
-    floater({ dog: '🐺 DIVINE DOG', toad: '🐸 TOAD', nue: '🦅 NUE' }[kind], P.x, P.y - K(50), '#a5b4fc', true);
-  }
-
   function addLava(x, y, r, life, dps, big = false) {
     if (!big) {
       const small = s.zones.filter(z => z.kind === 'lava' && !z.big);
@@ -788,18 +710,9 @@ export function createKitRuntime(api) {
         s.choosing = { options: opts };        // the game waits for your pick
         return true;
       }
-      case 'mahoraga': {
-        const hp = s.player.maxHp * u.hp;
-        s.mahoraga = { x: P.x, y: P.y, hp, maxHp: hp, mult: u.mult, slamT: 1.6, target: null, adapt: {}, wheel: 0, turns: 0, turnT: 4, invuln: 1.6, t: 0,
-          timeout: u.dur ?? 25, berserkAt: u.berserkAt ?? 4, gunPct: u.gunPct ?? 0.6, berserk: false, gunT: 0, gunSide: 1, rush: 0 };
-        s.ult.active = { type: 'mahoraga', t: 1e9, dur: 1e9 };
-        s.combo.n = 0;
-        s.kit.cutin = { kind: 'summon', t: 0, life: 1.6 };   // Bio's card art slams in
-        effect({ kind: 'flash', color: '#fde047', life: 0.6 });
-        effect({ kind: 'puddle', x: P.x, y: P.y, r: K(120), life: 1.2 });
-        shake(0.5); sfx('bigKill');
+      case 'mahoraga':   // Bio: Eight-Handled Sword Divergent Sila Divine General Mahoraga (tenShadows.js)
+        ts.summonMahoraga(u, P);
         return true;
-      }
       default: return false;
     }
   }
@@ -822,6 +735,10 @@ export function createKitRuntime(api) {
     api.announce(`ORA ORA ORA — ${SKILL_NAMES[id] ?? id}`, '#f472b6');
   }
   const strongest = () => foes().reduce((b, e) => (!b || (e.tier === 'boss') > (b.tier === 'boss') || ((e.tier === 'boss') === (b.tier === 'boss') && e.hp > b.hp) ? e : b), null);
+
+  // Bio's Ten Shadows + Mahoraga live in tenShadows.js
+  const ts = createTenShadows({ s, api, K, rand, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId,
+    skill, kitHit, ultHit, foes, fighting, radius, center, focus, nearest, bestAngle, lineThrough, launch, heavy });
 
   // ── Every frame ──────────────────────────────────────────────────────────
   function update(dt) {
@@ -1000,57 +917,8 @@ export function createKitRuntime(api) {
       kit.tentacles = kit.tentacles.filter(tn => tn.t < tn.life);
     }
 
-    // a cut-in (Mahoraga's summon / berserk) runs its course
-    if (kit.cutin) { kit.cutin.t += dt; if (kit.cutin.t >= kit.cutin.life) kit.cutin = null; }
-
-    // Ten Shadows: the Great Serpent rises, strikes, and sinks back
-    if (kit.serpents?.length) {
-      for (const sp of kit.serpents) {
-        sp.t += dt;
-        const t = s.enemies.find(e => e.id === sp.target);
-        if (t && !sp.struck) { sp.x = t.x; sp.y = t.y; }
-        if (!sp.struck && sp.t >= 0.4) {
-          sp.struck = true;
-          const sk2 = sp.sk;
-          if (t && !(t.down > 0) && live) {
-            kitHit(t, sk2.serpentPct, { color: '#a5b4fc', label: 'SERPENT ' });
-            if (t.hp > 0 && s.enemies.includes(t) && t.tier !== 'boss' && !t.group && t.hp / t.maxHp <= sk2.devour) {
-              floater('SWALLOWED', t.x, t.y - K(40), '#c7d2fe', true);
-              api.killEnemy(t);
-            } else if (t.hp > 0 && t.tier !== 'boss') t.frozen = Math.max(t.frozen ?? 0, 1.5);
-          }
-          let n = 0;
-          foes().filter(e => e !== t && dist(e.x, e.y, sp.x, sp.y) <= K(115) + radius(e) * 0.5)
-            .forEach(e => kitHit(e, sk2.serpentPct * 0.25, { color: '#a5b4fc', quiet: n++ >= 3 }));
-          effect({ kind: 'shards', x: sp.x, y: sp.y, r: K(110), color: '#312e81', n: 14 });
-          shake(0.4); sfx('bigKill');
-        }
-      }
-      kit.serpents = kit.serpents.filter(sp => sp.t < sp.life);
-    }
-    // Ten Shadows: Max Elephant falls on the cursor and floods everything around it
-    if (kit.drops?.length) {
-      for (const dp of kit.drops) {
-        dp.t += dt;
-        if (!dp.landed && dp.t >= dp.fall) {
-          dp.landed = true;
-          const sk2 = dp.sk;
-          let n = 0;
-          if (live) foes().filter(e => dist(e.x, e.y, dp.x, dp.y) <= dp.r + radius(e) * 0.5).forEach(e => {
-            kitHit(e, sk2.elephantPct, { color: '#93c5fd', label: 'FLOOD ', quiet: n++ >= 4 });
-            if (e.hp > 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group) {
-              e.frozen = Math.max(e.frozen ?? 0, sk2.stun);
-              launch(e, { x: dp.x, y: dp.y }, 0.55);
-            }
-          });
-          [0, 0.12, 0.24].forEach((d, i) => effect({ kind: 'ring', x: dp.x, y: dp.y, r: dp.r * (0.55 + 0.25 * i), color: '#60a5fa', life: 0.6 + d }));
-          effect({ kind: 'shards', x: dp.x, y: dp.y, r: dp.r * 0.7, color: '#93c5fd', n: 26 });
-          effect({ kind: 'flash', color: '#1d4ed8', life: 0.45 });
-          shake(0.85); sfx('boom');
-        }
-      }
-      kit.drops = kit.drops.filter(dp => dp.t < dp.fall + 1.2);
-    }
+    // Bio: the Ten Shadows (hand sign, shikigami, floods, the garden) — and its cut-ins
+    if (sk?.type === 'tenshadows' || kit.cutin || kit.oxen?.length || kit.serpents?.length || kit.tigers?.length || kit.drops?.length || kit.tongues?.length || kit.floods?.length || kit.ward || kit.domain || kit.slowing || kit.sign) ts.update(sk, dt, live);
 
     // Doro's fire arrows land
     if (kit.arrows?.length) {
@@ -1254,7 +1122,7 @@ export function createKitRuntime(api) {
     }
 
     updateAllies(dt, live);
-    if (s.mahoraga) updateMahoraga(dt);
+    if (s.mahoraga) ts.updateMahoraga(dt);
     s.ult.blocked = ultBlocked();
   }
 
@@ -1277,62 +1145,8 @@ export function createKitRuntime(api) {
           effect({ kind: 'burst', x: a.x, y: a.y, r: a.r, color: '#a855f7' });
           sfx('kill'); if (a.big) shake(0.2);
         }
-      } else if (a.kind === 'dog') {
-        // they hunt whatever you point at (the enemy nearest your cursor), otherwise the closest one
-        a.lookT = (a.lookT ?? 0) - dt;
-        let t = s.enemies.find(e => e.id === a.target);
-        if (a.lookT <= 0) { a.lookT = 0.4; const f = focus(320); if (f) { t = f; a.target = f.id; } }
-        if (!t || t.tier === 'treasure' || t.down > 0) { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
-        if (t) {
-          const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-          const reach = radius(t) + K(14);
-          if (d > reach) { a.x += dx / d * Math.min(d - reach, K(330) * dt); a.y += dy / d * Math.min(d - reach, K(330) * dt); }
-          a.biteT -= dt;
-          if (d <= reach + K(4) && a.biteT <= 0 && live) {
-            a.biteT = a.totality ? 0.4 : 0.45;
-            kitHit(t, a.pct, { color: a.totality ? '#e2e8f0' : '#a5b4fc', label: '🐺' });
-            effect({ kind: 'stab', x: t.x, y: t.y, r: radius(t), life: 0.2 });
-            if (a.totality) {   // Totality's jaws are big enough to catch what's next to it too
-              const R = radius(t) + K(60);
-              let n = 0;
-              foes().filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.5).forEach(e => kitHit(e, a.pct * 0.5, { color: '#e2e8f0', quiet: n++ >= 2 }));
-              effect({ kind: 'ring', x: t.x, y: t.y, r: R, color: '#e2e8f0', life: 0.25 });
-            }
-          }
-        }
-      } else if (a.kind === 'toad') {
-        const tx = P.x - K(46), ty = P.y + K(30);
-        a.x += (tx - a.x) * Math.min(1, dt * 8); a.y += (ty - a.y) * Math.min(1, dt * 8);
-      } else if (a.kind === 'nue') {
-        a.ang += dt * 2.2;
-        a.x = P.x + Math.cos(a.ang) * K(110); a.y = P.y + Math.sin(a.ang) * K(70) - K(30);
-        a.zapT -= dt;
-        if (a.zapT <= 0 && live) {
-          a.zapT = 0.8;
-          const near = foes().filter(e => dist(e.x, e.y, a.x, a.y) <= K(460));
-          if (near.length) {
-            const e = pick(near);
-            kitHit(e, a.pct * 1.3, { color: '#fde047', label: '⚡' });
-            effect({ kind: 'zap', x1: a.x, y1: a.y, x2: e.x, y2: e.y, life: 0.25 });
-          }
-        }
-      } else if (a.kind === 'nue2') {
-        // Ten Shadows' Nue: circles above your cursor, calls lightning on what you point at
-        a.ang += dt * 2;
-        a.x += (P.x + Math.cos(a.ang) * K(70) - a.x) * Math.min(1, dt * 5);
-        a.y += (P.y - K(90) + Math.sin(a.ang) * K(25) - a.y) * Math.min(1, dt * 5);
-        a.zapT -= dt;
-        if (a.zapT <= 0 && live) {
-          a.zapT = 0.6;
-          const t = focus(260) ?? (() => { const e = nearest(P.x, P.y); return e && dist(P.x, P.y, e.x, e.y) <= K(420) ? e : null; })();
-          if (t) {
-            effect({ kind: 'bolt', x: t.x, y: t.y, x0: a.x, y0: a.y, life: 0.3 });
-            kitHit(t, a.pct, { color: '#fde047', label: '⚡' });
-            foes().filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= K(170)).sort((p, q) => dist(t.x, t.y, p.x, p.y) - dist(t.x, t.y, q.x, q.y)).slice(0, 2)
-              .forEach(e => { effect({ kind: 'zap', x1: t.x, y1: t.y, x2: e.x, y2: e.y, life: 0.25 }); kitHit(e, a.pct * 0.5, { color: '#fde047', quiet: true }); });
-            sfx('crit');
-          }
-        }
+      } else if (ts.updateAlly(a, dt, live, P)) {
+        // Bio's shikigami (dogs, Nue, the Toad, Round Deer)
       } else if (a.kind === 'arrow') {
         let t = s.enemies.find(e => e.id === a.targetId);
         if (!t || t.down > 0) { t = strongest(); a.targetId = t?.id ?? null; }
@@ -1356,103 +1170,11 @@ export function createKitRuntime(api) {
     s.allies = s.allies.filter(a => a.life > 0);
   }
 
-  // ── Mahoraga ─────────────────────────────────────────────────────────────
-  const ADAPT_NAMES = { circle: 'SLAMS', slash: 'SLASHES', shot: 'SHOTS', dash: 'DASHES', bite: 'BITES', poison: 'POISON' };
-  function updateMahoraga(dt) {
-    const m = s.mahoraga;
-    m.t += dt; m.invuln = Math.max(0, m.invuln - dt);
-    if (s.phase === 'clear') { endMahoraga('won'); return; }
-    const list = foes().filter(e => !(e.down > 0));
-    if (m.t >= m.timeout) { endMahoraga('left'); return; }
-    m.rush = Math.max(0, m.rush - dt);
-    // the wheel has turned enough: BERSERK (twin pistols, harder hits)
-    if (!m.berserk && m.wheel >= m.berserkAt) {
-      m.berserk = true; m.invuln = 1.2; m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.3);
-      s.kit.cutin = { kind: 'berserk', t: 0, life: 1.7 };
-      effect({ kind: 'flash', color: '#dc2626', life: 0.7 });
-      shake(0.8); sfx('boom');
-    }
-    if (!list.length) {   // nothing to fight: it comes back to you and waits
-      const P = s.player.pos ?? center(), dx = P.x - m.x, dy = P.y - m.y, d = Math.hypot(dx, dy) || 1;
-      if (d > K(60)) { const st = Math.min(d - K(60), K(200) * dt); m.x += dx / d * st; m.y += dy / d * st; }
-      return;
-    }
-    // the wheel turns on its own too, so a long fight always ends one way or the other
-    m.turnT -= dt;
-    if (m.turnT <= 0) { m.turnT = 4; m.turns++; m.wheel++; floater('☸', m.x, m.y - K(70), '#fde047', true); }
-    let t = list.find(e => e.id === m.target);
-    // point at an enemy (cursor near it) and Mahoraga goes for it
-    m.lookT = (m.lookT ?? 0) - dt;
-    if (m.lookT <= 0) { m.lookT = 0.5; const f = focus(200, list); if (f) { t = f; m.target = f.id; } }
-    if (!t) {
-      // bosses first once they're out, otherwise whatever's closest
-      const bosses = list.filter(e => e.tier === 'boss');
-      t = nearest(m.x, m.y, bosses.length ? bosses : list);
-      m.target = t?.id ?? null;
-    }
-    if (!t) return;
-    const adapts = Object.values(m.adapt).reduce((a, n) => a + Math.min(n, 3), 0) + m.turns;
-    const dx = t.x - m.x, dy = t.y - m.y, d = Math.hypot(dx, dy) || 1;
-    const reach = radius(t) + K(36);
-    if (d > reach) { const st = Math.min(d - reach, K(250) * (1 + adapts * 0.04) * (m.rush > 0 ? 3 : 1) * dt); m.x += dx / d * st; m.y += dy / d * st; }
-    // berserk: the twin pistols, 6 shots a second at its target
-    if (m.berserk && s.time > 0) {
-      m.gunT -= dt;
-      while (m.gunT <= 0) {
-        m.gunT += 1 / 6;
-        m.gunSide *= -1;
-        const gx = m.x + m.gunSide * K(48), gy = m.y + K(10);
-        // the pistols go for whatever you point at (its fists already have the one in front of it)
-        const P = s.player.pos, others = list.filter(e => e !== t), g = P && others.length ? nearest(P.x, P.y, others) : t;
-        s.shots.push({ id: nextId(), x: gx, y: gy, target: g.id, speed: K(1100), mult: m.gunPct, color: '#f87171', label: '', maho: true });
-        m.flashT = 0.08; m.flashSide = m.gunSide;
-      }
-    }
-    if (m.flashT > 0) m.flashT -= dt;
-    m.slamT -= dt;
-    if (m.slamT <= 0 && d <= reach + K(8)) {
-      m.slamT = 0.55;
-      const R = K(100);
-      foes().filter(e => !(e.down > 0) && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6)
-        .forEach(e => ultHit(e, m.mult * (1 + 0.12 * adapts) * (m.berserk ? 1.25 : 1) * (e === t ? 1 : 0.3), m.berserk ? '#f87171' : '#fde047', '☸'));   // the shockwave catches the rest for less
-      effect({ kind: 'burst', x: t.x, y: t.y, r: R, color: '#fde047' });
-      effect({ kind: 'shards', x: t.x, y: t.y, r: R * 0.8, color: '#fde047', n: 8 });
-      shake(0.18); sfx('bigKill');
-    }
-  }
-  function hitMahoraga(raw, kind) {
-    const m = s.mahoraga;
-    if (!m || m.invuln > 0) return;
-    const n = m.adapt[kind] ?? 0;
-    const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction) * Math.pow(0.6, Math.min(n, 3))));
-    m.hp -= dmg; m.invuln = 0.3;
-    floater(`-${dmg}`, m.x, m.y - K(50), '#ff6b6b', true);
-    if (n < 3) {
-      m.adapt[kind] = n + 1;
-      // something new: the wheel turns (hits of a kind it already knows only make it tougher)
-      if (n === 0) { m.wheel++; floater(`☸ ADAPTED TO ${ADAPT_NAMES[kind] ?? kind.toUpperCase()}`, m.x, m.y - K(78), '#fde047', true); }
-    }
-    if (m.hp <= 0) {
-      s.mahoraga = null; s.ult.active = null;
-      api.announce('MAHORAGA FELL…', '#ef4444');
-      effect({ kind: 'flash', color: '#000000', life: 0.6 });
-      api.startDefeat();
-    }
-  }
-  function endMahoraga(reason) {
-    if (!s.mahoraga) return;
-    const m = s.mahoraga;
-    s.mahoraga = null;
-    if (s.ult.active?.type === 'mahoraga') s.ult.active = null;
-    s.player.invuln = Math.max(s.player.invuln, 1.5);
-    effect({ kind: 'puddle', x: m.x, y: m.y, r: K(120), life: 1 });
-    if (reason === 'left') floater('The General returns to the shadows…', m.x, m.y - K(40), '#fde68a', true);
-  }
-
   // Stage cleared / lost / (re)loaded: wipe what's on the field
   function reset(why) {
     s.allies = []; s.zones = []; s.fire = [];
-    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = []; s.kit.maws = []; s.kit.tentacles = []; s.kit.serpents = []; s.kit.drops = []; s.kit.cutin = null;
+    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = []; s.kit.maws = []; s.kit.tentacles = [];
+    ts.reset();
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
     s.kit.barrage = null; s.kit.emberPt = null; s.kit.entangle = null;
@@ -1462,7 +1184,10 @@ export function createKitRuntime(api) {
   return {
     skill, passive, onDamage, switchCard, focus, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
     clickMods, afterClick, onCritClick, onMiss, onPointerDown, onKill, onCombo,
-    ultBlocked, activateUlt, endUlt, choose, hitMahoraga,
+    ultBlocked, activateUlt, endUlt, choose,
+    hitMahoraga: (raw, kind) => ts.hitMahoraga(raw, kind),
+    // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
+    signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale(),
     update, reset, origin, slide,
   };
 }

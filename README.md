@@ -195,7 +195,8 @@ Every skill and ult number is in `src/combat/kits.js` (with a weaker `lv1` versi
 and per-superimposition `si` steps). The older kits run in `engine.js`; the Anemic
 Kaisen kits run in `src/combat/kitRuntime.js`, which adds a few shared systems:
 allies (crawlers, shikigami, spirits, Mahoraga), lava zones, fire walls, aimed ults
-and the Room 16 skill picker.
+and the Room 16 skill picker. Bio's Ten Shadows and Mahoraga have their own files:
+`src/combat/tenShadows.js` (the rules) and `src/combat/TenShadowsFx.jsx` (the drawing).
 
 | Card | Skill | Ult |
 | --- | --- | --- |
@@ -205,7 +206,7 @@ and the Room 16 skill picker.
 | Tyran | every 6th kill → exploding crawler | 10s: clicks fire 3 slashes through the cursor |
 | Ivy | kills → orbiting spirits (getting hit loses one) | Uzumaki: spends all spirits, scales with how many |
 | Doro | fast cursor movement leaves fire walls that stop shots | Fuga: fire arrow at the strongest enemy + arena burn |
-| Bio (Ten Shadows) | combo 10/25/50 → Dog / Toad (eats a hit) / Nue | Mahoraga: you're suspended; it must clear the field; if it dies you die |
+| Bio (Ten Shadows) | your hits fill a 4-bar shadow meter; tap M2 = the shadow your bars buy, hold M2 = a hand-sign wheel of all eight (Divine Dogs → Totality, Toad, Nue, Piercing Ox, Round Deer, Great Serpent, Tiger Funeral, Max Elephant), with combos (Thunder Flood, bound prey); 4 different shadows unlock Chimera Shadow Garden; passive Rabbit Escape | Mahoraga: click an enemy and it leaps on it; it adapts (3× = immune), its wheel turns, then berserk twin pistols + bullet storms; leaves with a World-Cutting Slash; if it dies you die |
 | Boiyoujustgotoofed | 7:3 ratio bar: time the click for a big guaranteed crit | Overtime: every click is a ratio hit, then Collapse |
 | Astrec (Heavenly Restriction) | enemies aim where you were 0.5s ago; fast auto-attacks | Sorcerer Killer: charges from kills; faster autos + executes |
 

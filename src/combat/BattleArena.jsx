@@ -8,8 +8,10 @@ import FocusImg from '../components/FocusImg';
 import CctvOverlay from './CctvOverlay';
 import TapButton from '../components/TapButton';
 import { Icon, SvgIcon } from '../components/Icon';
-import { GAME_ICONS } from '../data/gameIcons';
 import { withIcons } from '../utils/withIcons';
+import { TS_EFFECTS } from './tenShadows';
+import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, MahoragaLayer, TsChips, TS_CSS,
+  MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK } from './TenShadowsFx';
 
 const BASE = import.meta.env.BASE_URL;
 const STATUS_PORTRAITS = {
@@ -32,11 +34,6 @@ const PARALLAX = [
   { src: `${BASE}backgrounds/city_far.png`,  loop: `${BASE}backgrounds/city_far_loop.png`,  depth: 14, speed: 22 },
   { src: `${BASE}backgrounds/city_near.png`, loop: `${BASE}backgrounds/city_near_loop.png`, depth: 28, speed: 55 },
 ];
-const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
-const MAHORAGA_BERSERK_IMG = `${BASE}allies/mahoraga-berserk.png`;       // the berserk General (cut out of the cut-in art)
-const CUTIN_SUMMON = `${BASE}cardart/bio-shadows-card.png`;               // "…WITH THIS TREASURE I SUMMON!"
-const CUTIN_BERSERK = `${BASE}cutins/mahoraga-berserk.png`;
-const SHIKI_ICON = { dog: '🐺', toad: '🐸', nue: '🦅' };
 
 // Load attack-pose pictures up front so the first wind-up doesn't show a blank
 Object.values(ENEMY_TYPES).forEach(t => {
@@ -147,6 +144,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
   const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); engine.special(x, y); } };   // M2: the card's special move
   const onSpecial = useCallback((down) => (down ? engine.special() : engine.specialUp()), [engine]);
+  // phone: sliding the thumb on the SPECIAL button points Bio's hand-sign wheel
+  const onSpecialMove = useCallback((dx, dy) => engine.signAim(dx, dy), [engine]);
 
   const s = engine.state;
   const k = s.k;
@@ -173,7 +172,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const OVER = new Set(['bolt', 'rabbits', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
+  const OVER = new Set(['bolt', 'rabbits', 'hand', 'claws', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -267,6 +266,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           {/* ── Malevolent Shrine: the domain closes in from where you cast it ── */}
           {s.ult.active?.type === 'shrine' && <ShrineDomain dom={s.ult.active} W={s.W} H={s.H} k={k} time={s.time} />}
           {s.ult.active?.type === 'devourer' && <DevourerSky dv={s.ult.active} W={s.W} H={s.H} k={k} time={s.time} />}
+          {/* Bio: Domain Expansion — Chimera Shadow Garden */}
+          {s.kit.domain && <ChimeraGarden dom={s.kit.domain} W={s.W} H={s.H} k={k} time={s.time} />}
           {/* Hox as your main: the arena edges breathe a faint eldritch dark */}
           {s.stats.skill?.type === 'maw' && <div className="eldritch-vignette" />}
 
@@ -288,6 +289,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               const fade = Math.min(1, z.t / 0.25, (z.life - z.t) / 0.6);
               return <circle key={z.id} cx={z.x} cy={z.y} r={z.r} fill="url(#lavaGrad)" opacity={Math.max(0, fade)} stroke="#fb923c" strokeWidth={2} strokeOpacity={0.6 * fade} />;
             })}
+            {/* Bio: Max Elephant's floods, Round Deer's ward, Toad-bound prey, the garden's floor under the enemies */}
+            <TsGround s={s} k={k} P={P} time={s.time} />
             {/* Hox: Eldritch Presence — a void around your cursor, eyes on its rim watching the nearest enemy */}
             {curPassive?.type === 'presence' && P && !s.mahoraga && (
               <EldritchAura P={P} R={curPassive.radius * k} k={k} time={s.time} look={s.enemies.length ? s.enemies.reduce((b, e) => (!b || Math.hypot(e.x - P.x, e.y - P.y) < Math.hypot(b.x - P.x, b.y - P.y) ? e : b), null) : null} />
@@ -353,29 +356,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 </div>
               );
             }
-            // Ten Shadows: a white and a black Divine Dog; Totality is one huge black wolf; Nue crackles
-            if (a.kind === 'dog' && a.summoned) {
-              const tg = s.enemies.find(e => e.id === a.target), flip = !!tg && tg.x < a.x;
-              return (
-                <div key={a.id} className={`shiki summoned dog${a.totality ? ' totality' : ''}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none',
-                  opacity: a.life < 1 ? a.life : 1, filter: a.totality ? 'drop-shadow(0 0 12px #e0e7ff) drop-shadow(0 0 3px #ef4444)' : a.white ? 'drop-shadow(0 0 7px #6366f1) drop-shadow(0 2px 3px #000)' : 'drop-shadow(0 0 7px #e0e7ff) drop-shadow(0 2px 3px #000)' }}>
-                  {a.totality
-                    ? <ShikiArt name="dog" size={96 * k} fill="#05040f" rim="#f1f5f9" flip={flip} />
-                    : <ShikiArt name="dog" size={50 * k} fill={a.white ? '#f8fafc' : '#07061a'} rim={a.white ? '#1e1b4b' : '#c7d2fe'} flip={flip} />}
-                </div>
-              );
-            }
-            if (a.kind === 'nue2') return (
-              <div key={a.id} className="shiki summoned nue2" style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 9, pointerEvents: 'none', opacity: a.life < 1 ? a.life : 1 }}>
-                <ShikiArt name="nue" size={70 * k} fill="#07061a" rim="#fde047" />
-              </div>
-            );
-            if (SHIKI_ICON[a.kind]) return (
-              <div key={a.id} className={`shiki ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', fontSize: (a.kind === 'nue' ? 40 : 44) * k,
-                opacity: a.life < 1 ? a.life : 1, color: '#c7d2fe' }}><Icon name={a.kind} /></div>
-            );
             return null;
           })}
+          {/* Bio's shikigami: Divine Dogs / Totality, Nue, the Toad, Round Deer */}
+          <TsAllies s={s} k={k} />
 
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
           <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
@@ -463,9 +447,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 </g>
               );
             })()}
-            {/* Ten Shadows: the Great Serpent and Max Elephant */}
-            {(s.kit.serpents ?? []).map(sp => <Serpent key={sp.id} sp={sp} k={k} />)}
-            {(s.kit.drops ?? []).map(dp => <Elephant key={dp.id} dp={dp} k={k} H={s.H} />)}
+            {/* Ten Shadows: the Toad's tongue, the Great Serpent, Tiger Funeral, Piercing Ox, Max Elephant */}
+            <TsOver s={s} k={k} time={s.time} />
+            {curSkill?.type === 'tenshadows' && !touchMode && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
             {/* Hox: the Abyssal Maw opening under the cursor, jaws closing */}
             {(s.kit.maws ?? []).map(m => <Maw key={m.id} m={m} k={k} />)}
             {/* Hox's ult: tentacles bursting from the sides */}
@@ -573,43 +557,13 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           <div key={f.id} style={{ position: 'absolute', inset: 0, background: f.color, opacity: 0.45 * Math.max(0, 1 - f.t / (f.life ?? 0.5)), pointerEvents: 'none', zIndex: 12 }} />
         ))}
 
-        {/* Mahoraga: everything else goes grey, you can only watch */}
-        {s.mahoraga && (() => {
-          const m = s.mahoraga, w = (m.berserk ? 178 : 150) * k;
-          const tint = m.berserk ? 'grayscale(1) sepia(1) hue-rotate(-50deg) saturate(4) brightness(0.55)' : 'grayscale(1) brightness(0.7)';
-          return (
-            <>
-              <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', backdropFilter: tint, WebkitBackdropFilter: tint }} />
-              {m.berserk && (
-                <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, zIndex: 13, pointerEvents: 'none', overflow: 'visible' }}>
-                  {s.shots.filter(sh => sh.maho).map(sh => {
-                    const t = s.enemies.find(e => e.id === sh.target), a = t ? Math.atan2(t.y - sh.y, t.x - sh.x) : 0, L = 26 * k;
-                    return <line key={sh.id} x1={sh.x - Math.cos(a) * L} y1={sh.y - Math.sin(a) * L} x2={sh.x} y2={sh.y} stroke="#fef08a" strokeWidth={3.5 * k} strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 5px #ef4444)' }} />;
-                  })}
-                </svg>
-              )}
-              <div className={`suspended-text${m.berserk ? ' berserk' : ''}`}>{m.berserk ? 'MAHORAGA HAS ADAPTED' : 'COMMAND MAHORAGA'} · click an enemy · {Math.max(0, Math.ceil(m.timeout - m.t))}s</div>
-              <div style={{ position: 'absolute', left: m.x - w / 2, top: m.y - w * 0.3, width: w, zIndex: 13, pointerEvents: 'none' }}>
-                <div style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 4 * k, display: 'flex', alignItems: 'center', gap: 4 * k }}>
-                  <span className="maho-wheel" style={{ transform: `rotate(${m.wheel * 45}deg)`, fontSize: 20 * k, color: '#fde047', lineHeight: 0 }}><Icon name="wheel" /></span>
-                  <div style={{ width: w * 0.8, height: 7 * k, background: 'rgba(0,0,0,0.7)', borderRadius: 4, border: '1px solid #fde047' }}>
-                    <div style={{ width: `${Math.max(0, m.hp / m.maxHp) * 100}%`, height: '100%', background: '#fde047', borderRadius: 4 }} />
-                  </div>
-                </div>
-                <img src={m.berserk ? MAHORAGA_BERSERK_IMG : MAHORAGA_IMG} alt="Mahoraga" draggable={false} className={m.berserk ? 'maho-berserk' : undefined}
-                  style={{ width: '100%', display: 'block', filter: m.invuln > 0.15 ? 'brightness(1.8)' : m.berserk ? 'drop-shadow(0 0 16px #dc2626) drop-shadow(0 0 4px #3b82f6)' : 'drop-shadow(0 0 12px #fde047)' }} />
-                {m.berserk && m.flashT > 0 && (
-                  <svg viewBox="-20 -20 40 40" style={{ position: 'absolute', width: 54 * k, height: 54 * k, top: '48%', [m.flashSide > 0 ? 'right' : 'left']: '-22%', overflow: 'visible' }}>
-                    <polygon points="0,-18 5,-5 18,0 5,5 0,18 -5,5 -18,0 -5,-5" fill="#fef08a" style={{ filter: 'drop-shadow(0 0 8px #f97316) drop-shadow(0 0 3px #fff)' }} />
-                    <circle r="5" fill="#fff" />
-                  </svg>
-                )}
-              </div>
-            </>
-          );
-        })()}
+        {/* Mahoraga: everything else goes grey; you command it */}
+        <MahoragaLayer s={s} k={k} />
+        <WorldCuts effects={s.effects} k={k} />
+        {/* Bio: M2 held — the hand-sign wheel */}
+        <HandSignWheel s={s} sk={curSkill} W={s.W} H={s.H} mobile={mobile} />
 
-        {/* Mahoraga's summon / berserk cut-ins */}
+        {/* Mahoraga's summon / berserk, the garden: cut-ins */}
         {s.kit.cutin && <CutIn c={s.kit.cutin} />}
 
         <StageBarView {...stageBarProps(s, bossParts)} />
@@ -618,7 +572,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Status chips */}
         <div style={{ position: 'absolute', top: s.mahoraga ? 62 : 44, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, zIndex: 13, pointerEvents: 'none' }}>
-          <KitChip s={s} sk={s.stats.skill} cur={curSkill} />
+          <KitChip s={s} sk={s.stats.skill} cur={curSkill} mobile={mobile} />
           {s.stage.mod && <span title={s.stage.mod.desc}><Chip color={s.stage.mod.color}>◆ {s.stage.mod.name}</Chip></span>}
           {s.frenzy > 0 && <Chip color="#ff8c00">FRENZY {s.frenzy.toFixed(0)}s</Chip>}
           {pl.debuffs?.weak > 0 && <Chip color="#c084fc">WEAKENED −30% DMG {pl.debuffs.weak.toFixed(0)}s</Chip>}
@@ -644,7 +598,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
           hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd}
           onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null}
-          spKind={sp?.kind} spColor={sp?.color} onSpecial={onSpecial}
+          spKind={sp?.kind} spColor={sp?.color} spHint={sp?.hint} onSpecial={onSpecial} onSpecialMove={onSpecialMove}
           spFill={!sp ? 0 : sp.kind === 'cd' ? Math.round((1 - (sp.cdMax ? sp.cd / sp.cdMax : 0)) * 40) / 40 : Math.round((sp.fill ?? sp.n / sp.max) * 40) / 40}
           spText={!sp ? '' : sp.kind === 'cd' ? (sp.cd > 0 ? `${Math.ceil(sp.cd)}s` : '') : `${sp.n}`} />
 
@@ -672,85 +626,6 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
       <style>{ARENA_CSS}</style>
     </>
-  );
-}
-
-// Anime-style cut-in: the art slams in on a slanted panel with speed lines, holds, slides out
-function CutIn({ c }) {
-  const t = c.t, berserk = c.kind === 'berserk';
-  const inP = Math.min(1, t / 0.18), outP = Math.max(0, (t - (c.life - 0.3)) / 0.3);
-  const ease = 1 - (1 - inP) ** 3, slide = (berserk ? 1 : -1) * ((1 - ease) * 120 + outP * -130);
-  const shake = berserk && t < 0.5 ? Math.sin(t * 90) * 6 * (0.5 - t) : 0;
-  return (
-    <div className={`cutin ${c.kind}`} style={{ opacity: 1 - outP * 0.6 }}>
-      <div className="cutin-bg" style={{ opacity: Math.min(1, t / 0.08) * (1 - outP) }} />
-      <div className="cutin-lines" style={{ opacity: 1 - outP }} />
-      <div className="cutin-panel" style={{ transform: `translate(${slide}%, ${shake}px) skewX(-10deg)` }}>
-        <img src={berserk ? CUTIN_BERSERK : CUTIN_SUMMON} alt="" draggable={false} style={{ transform: `skewX(10deg) scale(${1.18 + 0.07 * t})` }} />
-      </div>
-      <div className="cutin-text" style={{ opacity: Math.min(1, Math.max(0, (t - 0.15) / 0.15)) * (1 - outP) }}>
-        <div className="small">{berserk ? 'THE WHEEL HAS TURNED' : 'EIGHT-HANDLED SWORD · DIVERGENT SILA · DIVINE GENERAL'}</div>
-        <div className="big">{berserk ? 'MAHORAGA HAS ADAPTED' : 'MAHORAGA'}</div>
-      </div>
-    </div>
-  );
-}
-
-// A shikigami: game-icons silhouette drawn in shadow ink with a rim of light
-function ShikiArt({ name, size, fill, rim, flip }) {
-  return (
-    <svg viewBox="0 0 512 512" width={size} height={size} style={{ display: 'block', overflow: 'visible', transform: flip ? 'scaleX(-1)' : undefined }}>
-      <path d={GAME_ICONS[name][2]} fill={fill} stroke={rim} strokeWidth={22} strokeLinejoin="round" paintOrder="stroke" />
-    </svg>
-  );
-}
-
-// The Great Serpent: rises out of a shadow pool next to its prey, lunges down on it, sinks back
-function Serpent({ sp, k }) {
-  const S = 250 * k, ease = q => 1 - (1 - q) ** 3;
-  const rise = ease(Math.min(1, sp.t / 0.35)), strike = Math.max(0, Math.min(1, (sp.t - 0.36) / 0.1)), sink = Math.max(0, Math.min(1, (sp.t - 0.8) / 0.6));
-  const gx = sp.x - S * 0.26, gy = sp.y + S * 0.28;   // the pool: its head ends up right over the target
-  const lunge = strike * (1 - sink) * S * 0.36, up = S * (0.8 * rise - sink * 0.9);
-  const id = `serp${sp.id}`;
-  return (
-    <g>
-      <defs><clipPath id={id}><rect x={gx - S} y={gy - S * 2} width={S * 2} height={S * 2} /></clipPath></defs>
-      <ellipse cx={gx} cy={gy} rx={S * 0.42 * Math.min(1, sp.t * 6) * (1 - sink * 0.6)} ry={S * 0.13 * Math.min(1, sp.t * 6) * (1 - sink * 0.6)} fill="#04030c" stroke="#4f46e5" strokeWidth={2.5 * k} opacity={0.95} />
-      <g clipPath={`url(#${id})`}>
-        <g transform={`translate(${gx - S * 0.5} ${gy - up + lunge})`} style={{ filter: 'drop-shadow(0 0 10px #4338ca)' }}>
-          <path d={GAME_ICONS.serpent[2]} transform={`scale(${S / 512})`} fill="#07061a" stroke="#a5b4fc" strokeWidth={14} strokeLinejoin="round" paintOrder="stroke" />
-        </g>
-      </g>
-      {strike > 0 && strike < 1 && <circle cx={sp.x} cy={sp.y} r={(30 + 50 * strike) * k} fill="none" stroke="#e0e7ff" strokeWidth={5 * k * (1 - strike)} />}
-    </g>
-  );
-}
-
-// Max Elephant: its shadow spreads on the ground, it drops out of the sky, the water bursts out
-function Elephant({ dp, k, H }) {
-  const p = Math.min(1, dp.t / dp.fall), after = Math.max(0, dp.t - dp.fall);
-  const S = Math.min(dp.r * 1.25, 290 * k), fade = Math.max(0, 1 - Math.max(0, after - 0.25) / 0.5);
-  const squash = after > 0 ? 1 - 0.18 * Math.sin(Math.min(1, after / 0.18) * Math.PI) : 1;
-  const y = dp.y - (1 - p * p) * (H * 0.9 + S) + S * 0.04 - S * 0.346 * squash, sink = after > 0.25 ? (after - 0.25) * S * 0.6 : 0;
-  const wave = Math.min(1, after / 0.45);
-  return (
-    <g>
-      {!dp.landed && (
-        <g>
-          <ellipse cx={dp.x} cy={dp.y} rx={dp.r * (0.25 + 0.75 * p)} ry={dp.r * 0.38 * (0.25 + 0.75 * p)} fill="rgba(4,3,12,0.5)" />
-          <circle cx={dp.x} cy={dp.y} r={dp.r} fill="none" stroke="#60a5fa" strokeWidth={2.5 * k} strokeDasharray={`${12 * k} ${8 * k}`} opacity={0.5 + 0.5 * p} />
-        </g>
-      )}
-      {after > 0 && (
-        <g opacity={1 - wave}>
-          <path d={GAME_ICONS.splash[2]} fill="#bfdbfe" stroke="#1d4ed8" strokeWidth={14} paintOrder="stroke"
-            transform={`translate(${dp.x} ${dp.y}) scale(${(S * (0.9 + 0.9 * wave)) / 512}) translate(-256 -440)`} style={{ filter: 'drop-shadow(0 0 10px #3b82f6)' }} />
-        </g>
-      )}
-      <g opacity={fade} transform={`translate(${dp.x} ${y + sink})`} style={{ filter: 'drop-shadow(0 0 14px #1d4ed8)' }}>
-        <path d={GAME_ICONS.elephant[2]} transform={`scale(${S / 512 * (2 - squash)} ${S / 512 * squash}) translate(-256 -256)`} fill="#060c1f" stroke="#93c5fd" strokeWidth={12} strokeLinejoin="round" paintOrder="stroke" />
-      </g>
-    </g>
   );
 }
 
@@ -971,6 +846,7 @@ function AttackShape({ a, k }) {
 }
 
 function EffectShape({ f, k }) {
+  if (TS_EFFECTS.has(f.kind)) return <TsEffect f={f} k={k} />;   // Bio's
   const p = Math.min(1, f.t / (f.life ?? 0.5));
   if (f.kind === 'beam') return (
     <g opacity={1 - p * p}>
@@ -1037,43 +913,6 @@ function EffectShape({ f, k }) {
       <circle cx={f.x} cy={f.y} r={(6 + 10 * p) * k} fill="#ede9fe" style={{ filter: 'drop-shadow(0 0 12px #8b5cf6)' }} />
     </g>
   );
-  // Ten Shadows: a pool of shadow (where shikigami come from and go back to)
-  if (f.kind === 'puddle') {
-    const grow = Math.min(1, p * 3), fade = p < 0.6 ? 1 : (1 - p) / 0.4;
-    return (
-      <g opacity={fade}>
-        <ellipse cx={f.x} cy={f.y} rx={f.r * grow} ry={f.r * 0.42 * grow} fill="#05030f" opacity={0.85} />
-        <ellipse cx={f.x} cy={f.y} rx={f.r * grow} ry={f.r * 0.42 * grow} fill="none" stroke="#6366f1" strokeWidth={2.5 * k} opacity={0.8} />
-      </g>
-    );
-  }
-  // Rabbit Escape: a burst of shadow rabbits scattering
-  if (f.kind === 'rabbits') return (
-    <g opacity={p < 0.7 ? 1 : (1 - p) / 0.3}>
-      <ellipse cx={f.x} cy={f.y + 8 * k} rx={34 * k * Math.min(1, p * 4)} ry={12 * k * Math.min(1, p * 4)} fill="#05030f" opacity={0.7 * (1 - p)} />
-      {Array.from({ length: 14 }, (_, i) => {
-        const a = i * 0.449 + f.id * 0.7, d = (10 + 120 * (1 - (1 - p) ** 2)) * k * (0.6 + (i % 4) * 0.15);
-        const hop = Math.abs(Math.sin(p * Math.PI * 3 + i)) * 14 * k, sz = (16 + (i % 3) * 5) * k;
-        const x = f.x + Math.cos(a) * d, y = f.y + Math.sin(a) * d * 0.6 - hop;
-        return <path key={i} d={GAME_ICONS.rabbit[2]} fill={i % 3 ? '#f8fafc' : '#0b0a1f'} stroke={i % 3 ? '#1e1b4b' : '#e2e8f0'} strokeWidth={36} paintOrder="stroke"
-          transform={`translate(${x - sz / 2} ${y - sz / 2}) scale(${sz / 512})${Math.cos(a) < 0 ? ` translate(512 0) scale(-1 1)` : ''}`} />;
-      })}
-    </g>
-  );
-  // Nue's lightning: a jagged bolt from the bird down to the target
-  if (f.kind === 'bolt') {
-    const pts = [0, 0.2, 0.4, 0.6, 0.8, 1].map((t, i) => {
-      const j = i === 0 || i === 5 ? 0 : (((f.id * 13 + i * 7) % 11) - 5) * 3.2 * k;
-      return `${f.x0 + (f.x - f.x0) * t + j},${f.y0 + (f.y - f.y0) * t}`;
-    }).join(' ');
-    return (
-      <g opacity={1 - p} style={{ filter: 'drop-shadow(0 0 8px #facc15)' }}>
-        <polyline points={pts} fill="none" stroke="#fde047" strokeWidth={6 * k} strokeLinejoin="bevel" />
-        <polyline points={pts} fill="none" stroke="#fffbeb" strokeWidth={2 * k} strokeLinejoin="bevel" />
-        <circle cx={f.x} cy={f.y} r={(14 + 18 * p) * k} fill="none" stroke="#fde047" strokeWidth={3 * k} />
-      </g>
-    );
-  }
   // Hox's ult feeding: jaws the width of the arena slam shut
   if (f.kind === 'bigjaws') {
     const close = Math.min(1, f.t / 0.22), fade = f.t < 0.5 ? 1 : Math.max(0, 1 - (f.t - 0.5) / 0.4);
@@ -1302,24 +1141,12 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
 }, (a, b) => a.n === b.n && Math.abs(a.left - b.left) < 0.04 && a.k === b.k);
 
 // What the main card's kit is doing right now (charges, Infinity, copied passive…)
-function KitChip({ s, sk, cur }) {
+function KitChip({ s, sk, cur, mobile }) {
   if (!sk) return null;
   const out = [];
   if (cur?.type === 'souls') out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to hurl' : ' · hold to charge'}</Chip>);
   else if (s.kit.souls > 0) out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}</Chip>);
-  if (cur?.type === 'tenshadows') {
-    const bars = Math.floor((s.kit.shadow ?? 0) / cur.barCost), max = Math.round(cur.maxBars);
-    const dogsOut = s.allies.some(a => a.kind === 'dog' && a.summoned);
-    const next = bars === 1 && dogsOut ? 'TOTALITY' : ['', 'DIVINE DOGS', 'NUE', 'GREAT SERPENT', 'MAX ELEPHANT'][Math.min(bars, max)];
-    const part = ((s.kit.shadow ?? 0) % cur.barCost) / cur.barCost;
-    out.push(
-      <div key="ts" className="ts-chip">
-        <span>SHADOWS</span>
-        {Array.from({ length: max }, (_, i) => <i key={i} className={i < bars ? 'on' : ''} style={i === bars ? { background: `linear-gradient(90deg, #6366f1 ${part * 100}%, transparent ${part * 100}%)` } : undefined} />)}
-        <b>{bars ? `M2 · ${next}` : 'hit to fill'}</b>
-      </div>
-    );
-  }
+  if (cur?.type === 'tenshadows') out.push(<TsChips key="ts" s={s} sk={cur} mobile={mobile} />);
   if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
@@ -1336,7 +1163,7 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{Children.map(children, c => withIcons(c))}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, onSpecial }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spHint, onSpecial, onSpecialMove }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -1345,9 +1172,9 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
           // PC: just a cooldown / counter (M2 and Q do the work). Phone: a button (tap / hold).
           // Its touches never move your aim.
           <div className={`sp-btn${spKind === 'cd' && spFill >= 1 ? ' ready' : ''}${mobile ? '' : ' display'}`}
-            {...(mobile ? holdButton(() => onSpecial(true), () => onSpecial(false)) : {})}
+            {...(mobile ? holdButton(() => onSpecial(true), () => onSpecial(false), onSpecialMove) : {})}
             onContextMenu={e => e.preventDefault()}
-            title={mobile ? undefined : spKind === 'cd' ? 'Special: right-click (M2) or Q' : 'Charge: tap M2 / Q to stock one; hold M2, Q or M1 for 1s to keep charging, let go to release'}
+            title={mobile ? undefined : spHint ?? (spKind === 'cd' ? 'Special: right-click (M2) or Q' : 'Charge: tap M2 / Q to stock one; hold M2, Q or M1 for 1s to keep charging, let go to release')}
             style={{ '--sp': spColor, width: mobile ? 52 : 46, height: mobile ? 52 : 46 }}>
             <span className="sp-fill" style={{ height: `${Math.min(1, spFill) * 100}%` }} />
             <span className="sp-txt">{spText || (mobile ? 'SPEC' : 'M2')}</span>
@@ -1414,46 +1241,25 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
 
 // Touch/mouse handlers for an on-screen button inside the arena: the press stays on the button
 // (captured) and none of its moves reach the arena, so it doesn't drag your aim onto the button.
-function holdButton(onDown, onUp) {
+// onMove (optional) gets how far the finger has slid since the press.
+function holdButton(onDown, onUp, onMove) {
   const stop = e => e.stopPropagation();
   return {
-    onPointerDown: e => { e.stopPropagation(); e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } onDown?.(); },
-    onPointerMove: stop,
-    onPointerUp: e => { e.stopPropagation(); onUp?.(); },
-    onPointerCancel: e => { e.stopPropagation(); onUp?.(); },
+    onPointerDown: e => { e.stopPropagation(); e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } e.currentTarget.dataset.px = e.clientX; e.currentTarget.dataset.py = e.clientY; onDown?.(); },
+    onPointerMove: e => {
+      e.stopPropagation();
+      const d = e.currentTarget.dataset;
+      if (onMove && d.px != null && d.px !== '') onMove(e.clientX - Number(d.px), e.clientY - Number(d.py));
+    },
+    onPointerUp: e => { e.stopPropagation(); e.currentTarget.dataset.px = ''; onUp?.(); },
+    onPointerCancel: e => { e.stopPropagation(); e.currentTarget.dataset.px = ''; onUp?.(); },
     onLostPointerCapture: stop,
     onMouseDown: stop,
   };
 }
 
 const ARENA_CSS = `
-  .ts-chip { display:flex; align-items:center; gap:4px; background:rgba(4,3,12,0.75); border:1px solid #6366f1; border-radius:12px; padding:2px 10px;
-    font-size:12px; font-weight:800; color:#c7d2fe; letter-spacing:1px; }
-  .ts-chip i { display:inline-block; width:14px; height:8px; border:1px solid #818cf8; border-radius:2px; transform:skewX(-15deg); }
-  .ts-chip i.on { background:#a5b4fc; box-shadow:0 0 6px #818cf8; }
-  .ts-chip b { margin-left:4px; color:#e0e7ff; }
-  .maho-berserk { animation: mahoRage 0.35s ease-in-out infinite alternate; border-radius: 50%; }
-  @keyframes mahoRage { from { transform: scale(0.97) rotate(-1.5deg); } to { transform: scale(1.04) rotate(1.5deg); } }
-  .suspended-text.berserk { color: #fecaca; text-shadow: 0 0 12px #dc2626; }
-  .cutin { position:absolute; inset:0; z-index:16; pointer-events:none; overflow:hidden; container-type:inline-size; }
-  .cutin-bg { position:absolute; inset:0; }
-  .cutin.summon .cutin-bg { background: radial-gradient(ellipse at 50% 45%, rgba(253,224,71,0.35), rgba(10,8,0,0.88) 70%); }
-  .cutin.berserk .cutin-bg { background: radial-gradient(ellipse at 50% 45%, rgba(220,38,38,0.55), rgba(10,0,0,0.92) 70%); }
-  .cutin-lines { position:absolute; inset:-20%; mix-blend-mode:screen; animation: cutinLines 0.25s linear infinite;
-    background: repeating-linear-gradient(100deg, transparent 0 22px, rgba(255,255,255,0.10) 23px 25px, transparent 26px 70px); }
-  .cutin.berserk .cutin-lines { background: repeating-linear-gradient(80deg, transparent 0 18px, rgba(255,80,80,0.22) 19px 22px, transparent 23px 60px); }
-  @keyframes cutinLines { from { transform: translateX(0); } to { transform: translateX(-70px); } }
-  .cutin-panel { position:absolute; left:6%; right:6%; top:10%; bottom:24%; overflow:hidden; border:4px solid #fde047;
-    box-shadow: 0 0 30px rgba(253,224,71,0.7), 0 0 0 3px #000; background:#000; }
-  .cutin.berserk .cutin-panel { border-color:#ef4444; box-shadow: 0 0 40px rgba(239,68,68,0.9), 0 0 0 3px #000; }
-  .cutin-panel img { width:100%; height:100%; object-fit:cover; object-position:50% 38%; display:block; }
-  .cutin-text { position:absolute; left:0; right:0; bottom:9%; text-align:center; font-family: var(--font-dramatic); }
-  .cutin-text .small { font-size: clamp(9px, 1.9cqw, 15px); letter-spacing: 3px; color:#fef9c3; text-shadow:0 0 8px #000, 0 0 2px #000; }
-  .cutin-text .big { font-size: clamp(24px, 11cqw, 76px); text-wrap: balance; padding: 0 4%; font-weight:900; letter-spacing:4px; color:#fde047; line-height:1.05;
-    text-shadow: 0 0 22px rgba(253,224,71,0.8), 3px 3px 0 #000, -2px -2px 0 #000; }
-  .cutin.berserk .cutin-text .small { color:#fecaca; }
-  .cutin.berserk .cutin-text .big { font-size: clamp(22px, 7.4cqw, 60px); letter-spacing: 0.04em; }
-  .cutin.berserk .cutin-text .big { color:#fff; text-shadow: 0 0 26px #ef4444, 0 0 8px #3b82f6, 3px 3px 0 #000, -2px -2px 0 #000; }
+${TS_CSS}
   .mad-aura { position:absolute; inset:-10%; border-radius:50%; pointer-events:none; z-index:-1;
     background: radial-gradient(circle, rgba(126,34,206,0.35), rgba(76,29,149,0.15) 55%, transparent 72%); box-shadow: 0 0 14px rgba(168,85,247,0.6); }
   .mad-aura.full { animation: madPulse 0.5s ease-in-out infinite alternate; box-shadow: 0 0 20px rgba(239,68,68,0.75); }
@@ -1518,19 +1324,9 @@ const ARENA_CSS = `
   @keyframes flickB { 0% { opacity:0 } 50% { opacity:1 } }
   .crawler { animation: crawl 0.35s ease-in-out infinite alternate; }
   @keyframes crawl { from { transform: skewX(-8deg) scaleY(0.92); } to { transform: skewX(8deg) scaleY(1.05); } }
-  .shiki { transform: translate(-50%, -50%); filter: drop-shadow(0 0 8px #6366f1) drop-shadow(0 2px 3px #000); line-height: 1; }
-  .shiki.dog { animation: shikiHop 0.3s ease-in-out infinite alternate; }
-  .shiki.summoned { animation: shikiIn 0.28s ease-out, shikiHop 0.3s ease-in-out 0.28s infinite alternate; }
-  .shiki.summoned.totality { animation: shikiIn 0.35s ease-out, shikiHop 0.22s ease-in-out 0.35s infinite alternate; }
-  .shiki.nue2 { filter: drop-shadow(0 0 10px #facc15) drop-shadow(0 0 2px #fff); animation: shikiIn 0.3s ease-out, nueFlap 0.18s ease-in-out 0.3s infinite alternate; }
-  @keyframes shikiIn { from { transform: translate(-50%, 0%) scale(0.4, 0.05); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
-  @keyframes nueFlap { from { transform: translate(-50%, -50%) scaleY(1); } to { transform: translate(-50%, -54%) scaleY(0.86); } }
-  .shiki.nue { animation: shikiHop 0.5s ease-in-out infinite alternate; }
-  @keyframes shikiHop { from { margin-top: 0; } to { margin-top: -5px; } }
   .suspended-text { position:absolute; top:34px; left:50%; transform:translateX(-50%); z-index:13; pointer-events:none; max-width:92%; width:max-content; text-align:center;
                     color:#fde047; font-weight:900; letter-spacing:2px; font-size:clamp(11px, 2.4vw, 14px); text-shadow:0 0 12px #000, 0 0 4px #000; animation: blinkSlow 1.4s ease-in-out infinite; }
   @keyframes blinkSlow { 50% { opacity: 0.45; } }
-  .maho-wheel { display:inline-block; color:#fde047; text-shadow:0 0 8px #000; transition: transform 0.35s cubic-bezier(.3,1.6,.5,1); line-height:1; }
   .ora-pick { position:absolute; inset:0; z-index:40; background:rgba(20,5,20,0.82); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:12px; }
   .ora-opt { width:min(420px, 92%); text-align:left; background:#2a0f2a; border:2px solid #ec4899; border-radius:8px; color:#fff; padding:10px 14px; font-size:15px; cursor:pointer; }
   .ora-opt:hover, .ora-opt:focus-visible { background:#4a1240; outline:none; }
