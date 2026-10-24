@@ -166,7 +166,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const OVER = new Set(['dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
+  const OVER = new Set(['bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -259,10 +259,18 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* ── Malevolent Shrine: the domain closes in from where you cast it ── */}
           {s.ult.active?.type === 'shrine' && <ShrineDomain dom={s.ult.active} W={s.W} H={s.H} k={k} time={s.time} />}
+          {s.ult.active?.type === 'devourer' && <DevourerSky dv={s.ult.active} W={s.W} H={s.H} k={k} time={s.time} />}
+          {/* Hox as your main: the arena edges breathe a faint eldritch dark */}
+          {s.stats.skill?.type === 'maw' && <div className="eldritch-vignette" />}
 
           {/* ── Attack areas ─────────────────────────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4, overflow: 'visible' }}>
             <defs>
+              <radialGradient id="voidGrad">
+                <stop offset="0%" stopColor="#05010a" stopOpacity="0.7" />
+                <stop offset="60%" stopColor="#2e1065" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#581c87" stopOpacity="0" />
+              </radialGradient>
               <radialGradient id="lavaGrad">
                 <stop offset="0%" stopColor="#fde68a" stopOpacity="0.85" />
                 <stop offset="45%" stopColor="#f97316" stopOpacity="0.6" />
@@ -273,6 +281,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               const fade = Math.min(1, z.t / 0.25, (z.life - z.t) / 0.6);
               return <circle key={z.id} cx={z.x} cy={z.y} r={z.r} fill="url(#lavaGrad)" opacity={Math.max(0, fade)} stroke="#fb923c" strokeWidth={2} strokeOpacity={0.6 * fade} />;
             })}
+            {/* Hox: Eldritch Presence — a void around your cursor, eyes on its rim watching the nearest enemy */}
+            {curPassive?.type === 'presence' && P && !s.mahoraga && (
+              <EldritchAura P={P} R={curPassive.radius * k} k={k} time={s.time} look={s.enemies.length ? s.enemies.reduce((b, e) => (!b || Math.hypot(e.x - P.x, e.y - P.y) < Math.hypot(b.x - P.x, b.y - P.y) ? e : b), null) : null} />
+            )}
             {s.fire.length > 0 && (
               <g>
                 {s.fire.map(f => {
@@ -358,7 +370,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 affix={e.affix} pose={poseOf(e)} poses={e.type.poses} drawScale={e.drawScale} turns={e.facing != null}
                 sway={e.role === 'hydra' ? e.segIndex : null}
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
-                mirror={e.refl && e.refl.state !== 'idle' ? e.refl.state : null} fort={e.fortT > 0} badge={e.type.badge}
+                mirror={e.refl && e.refl.state !== 'idle' ? e.refl.state : null} fort={e.fortT > 0} badge={e.type.badge} mad={e.mad ?? 0}
                 weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
             );
           })}
@@ -427,6 +439,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 </g>
               );
             })()}
+            {/* Hox: the Abyssal Maw opening under the cursor, jaws closing */}
+            {(s.kit.maws ?? []).map(m => <Maw key={m.id} m={m} k={k} />)}
+            {/* Hox's ult: tentacles bursting from the sides */}
+            {(s.kit.tentacles ?? []).map(tn => <Tentacle key={tn.id} tn={tn} k={k} time={s.time} />)}
             {/* Malevolent Shrine aura around your cursor */}
             {s.ult.active?.type === 'shrine' && P && (
               <g style={{ filter: 'drop-shadow(0 0 10px #dc2626)' }}>
@@ -463,6 +479,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                   <line x1={pu.x - cx * L} y1={pu.y - sy * L} x2={pu.x + cx * L} y2={pu.y + sy * L} stroke="#a855f7" strokeWidth={pu.width * (0.3 + 0.7 * p)} opacity={0.22 + 0.25 * p} />
                   <line x1={pu.x - cx * L} y1={pu.y - sy * L} x2={pu.x + cx * L} y2={pu.y + sy * L} stroke="#f5f3ff" strokeWidth={3} strokeDasharray={`${10 * k} ${8 * k}`} opacity={0.9} />
                   <circle cx={pu.x} cy={pu.y} r={7 * k} fill="#f5f3ff" />
+                  <HitMarks enemies={s.enemies} x={pu.x} y={pu.y} a={pu.a} w={pu.width} k={k} color="#e9d5ff" />
                   <circle cx={pu.x - sy * d} cy={pu.y + cx * d} r={16 * k} fill="#3b82f6" style={{ filter: 'drop-shadow(0 0 10px #3b82f6)' }} />
                   <circle cx={pu.x + sy * d} cy={pu.y - cx * d} r={16 * k} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
                 </g>
@@ -476,6 +493,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 <g>
                   <line x1={ax - cx * L} y1={ay - sy * L} x2={ax + cx * L} y2={ay + sy * L} stroke="#67e8f9" strokeWidth={2.5} strokeDasharray={`${12 * k} ${8 * k}`} opacity={0.75} />
                   <circle cx={ax} cy={ay} r={6 * k} fill="#67e8f9" />
+                  <HitMarks enemies={s.enemies} x={ax} y={ay} a={s.kit.aimA} w={(curSkill.width ?? 50) * k} k={k} color="#a5f3fc" />
                 </g>
               );
             })()}
@@ -608,6 +626,147 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
       <style>{ARENA_CSS}</style>
     </>
+  );
+}
+
+// Rings on every enemy an aimed beam is about to hit (so you can see what you'll catch)
+function HitMarks({ enemies, x, y, a, w, k, color }) {
+  const L = 4000, x1 = x - Math.cos(a) * L, y1 = y - Math.sin(a) * L, x2 = x + Math.cos(a) * L, y2 = y + Math.sin(a) * L;
+  const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
+  return enemies.filter(e => {
+    if (e.down > 0 || e.tier === 'treasure') return false;
+    const t = Math.max(0, Math.min(1, ((e.x - x1) * dx + (e.y - y1) * dy) / len2));
+    return Math.hypot(e.x - (x1 + t * dx), e.y - (y1 + t * dy)) <= w / 2 + e.size * k * 0.35;
+  }).map(e => <circle key={e.id} cx={e.x} cy={e.y} r={e.size * k * 0.62} fill="none" stroke={color} strokeWidth={2.5 * k} strokeDasharray={`${7 * k} ${5 * k}`} />);
+}
+
+// Hox's Eldritch Presence: a void with turning rings, waving tendrils and eyes that blink and look
+// at the nearest enemy
+function EldritchAura({ P, R, k, time, look }) {
+  const eyes = 6, tend = 8;
+  return (
+    <g>
+      <circle cx={P.x} cy={P.y} r={R} fill="url(#voidGrad)" />
+      <circle cx={P.x} cy={P.y} r={R} fill="none" stroke="#7e22ce" strokeWidth={3 * k} strokeDasharray={`${16 * k} ${9 * k}`} opacity={0.75}
+        transform={`rotate(${time * 40} ${P.x} ${P.y})`} />
+      <circle cx={P.x} cy={P.y} r={R * 0.78} fill="none" stroke="#c026d3" strokeWidth={1.5 * k} strokeDasharray={`${4 * k} ${11 * k}`} opacity={0.55}
+        transform={`rotate(${-time * 70} ${P.x} ${P.y})`} />
+      {Array.from({ length: tend }, (_, i) => {
+        const a = i * (Math.PI * 2 / tend) + time * 0.4, w = Math.sin(time * 3 + i * 1.3);
+        const x0 = P.x + Math.cos(a) * R * 0.95, y0 = P.y + Math.sin(a) * R * 0.95;
+        const x1 = P.x + Math.cos(a + 0.25 * w) * R * 1.25, y1 = P.y + Math.sin(a + 0.25 * w) * R * 1.25;
+        const x2 = P.x + Math.cos(a - 0.15 * w) * R * (1.4 + 0.1 * w), y2 = P.y + Math.sin(a - 0.15 * w) * R * (1.4 + 0.1 * w);
+        return <path key={i} d={`M${x0},${y0} Q${x1},${y1} ${x2},${y2}`} fill="none" stroke="#3b0764" strokeWidth={4 * k} strokeLinecap="round" opacity={0.7} />;
+      })}
+      {Array.from({ length: eyes }, (_, i) => {
+        const a = i * (Math.PI * 2 / eyes) - time * 0.25, ex = P.x + Math.cos(a) * R, ey = P.y + Math.sin(a) * R;
+        const ph = (time * 0.7 + i * 0.37) % 3, open = ph < 0.15 ? Math.abs(ph - 0.075) / 0.075 : 1;   // a blink now and then
+        let lx = 0, ly = 0;
+        if (look) { const dx = look.x - ex, dy = look.y - ey, d = Math.hypot(dx, dy) || 1; lx = dx / d * 2.4 * k; ly = dy / d * 1.4 * k; }
+        return (
+          <g key={`e${i}`}>
+            <ellipse cx={ex} cy={ey} rx={8 * k} ry={5 * k * open} fill="#fdf2f8" stroke="#1e0b2e" strokeWidth={1.5 * k} />
+            {open > 0.3 && <><circle cx={ex + lx} cy={ey + ly} r={3.4 * k} fill="#dc2626" /><ellipse cx={ex + lx} cy={ey + ly} rx={1 * k} ry={2.8 * k * open} fill="#05010a" /></>}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// Hox's Abyssal Maw: a hole in the world opens under the cursor, two rows of teeth slam shut
+function Maw({ m, k }) {
+  const p = Math.min(1, m.t / m.dur), ease = 1 - (1 - p) ** 3, after = Math.max(0, m.t - m.dur), fade = Math.max(0, 1 - after / 0.45);
+  const r = m.r, gap = r * 0.55 * (1 - ease), n = 7, tw = (r * 1.5) / n, th = r * 0.3;
+  return (
+    <g opacity={fade} style={{ filter: 'drop-shadow(0 0 12px #7e22ce)' }}>
+      <ellipse cx={m.x} cy={m.y} rx={r * (0.4 + 0.6 * ease)} ry={r * 0.6 * (0.4 + 0.6 * ease)} fill="#05010a" stroke="#a21caf" strokeWidth={3 * k} />
+      <ellipse cx={m.x} cy={m.y} rx={r * 0.55 * ease} ry={r * 0.3 * ease} fill="#450a0a" opacity={0.8} />
+      {Array.from({ length: n }, (_, i) => {
+        const x = m.x - r * 0.75 + i * tw;
+        return (
+          <g key={i}>
+            <polygon points={`${x},${m.y - gap - th * 0.4} ${x + tw},${m.y - gap - th * 0.4} ${x + tw / 2},${m.y - gap + th * 0.6}`} fill="#f5f0e6" stroke="#1e0b2e" strokeWidth={1.5} />
+            <polygon points={`${x},${m.y + gap + th * 0.4} ${x + tw},${m.y + gap + th * 0.4} ${x + tw / 2},${m.y + gap - th * 0.6}`} fill="#f5f0e6" stroke="#1e0b2e" strokeWidth={1.5} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// A tentacle lashing in from the edge of the screen: shoots out, smashes, pulls back
+function Tentacle({ tn, k, time }) {
+  const ext = tn.t < 0.24 ? 1 - (1 - tn.t / 0.24) ** 2 : tn.t < 0.45 ? 1 : Math.max(0, 1 - (tn.t - 0.45) / 0.35);
+  const ex = tn.fx + (tn.tx - tn.fx) * ext, ey = tn.fy + (tn.ty - tn.fy) * ext;
+  const dx = ex - tn.fx, dy = ey - tn.fy, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+  const amp = Math.min(70 * k, L * 0.25), w1 = Math.sin(time * 7 + tn.wob), w2 = Math.sin(time * 7 + tn.wob + 1.6);
+  const c1x = tn.fx + dx * 0.33 + nx * amp * w1, c1y = tn.fy + dy * 0.33 + ny * amp * w1;
+  const c2x = tn.fx + dx * 0.66 - nx * amp * w2, c2y = tn.fy + dy * 0.66 - ny * amp * w2;
+  const d = `M${tn.fx},${tn.fy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`;
+  const bez = t => { const u = 1 - t; return [u * u * u * tn.fx + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * ex, u * u * u * tn.fy + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * ey]; };
+  return (
+    <g style={{ filter: 'drop-shadow(0 0 10px #581c87)' }}>
+      <path d={d} fill="none" stroke="#12061c" strokeWidth={30 * k} strokeLinecap="round" />
+      <path d={d} fill="none" stroke="#4c1d95" strokeWidth={20 * k} strokeLinecap="round" />
+      <path d={d} fill="none" stroke="#a21caf" strokeWidth={6 * k} strokeLinecap="round" opacity={0.7} />
+      {[0.3, 0.45, 0.6, 0.75, 0.88].map(t => { const [x, y] = bez(t); return <circle key={t} cx={x} cy={y} r={4 * k} fill="#f0abfc" opacity={0.75} />; })}
+      <circle cx={ex} cy={ey} r={9 * k} fill="#1e0b2e" stroke="#ef4444" strokeWidth={2 * k} />
+    </g>
+  );
+}
+
+// THE DEVOURER WAKES: the sky goes black and red, a colossal eye opens at the top of the arena,
+// its slit pupil tracks your cursor and its gaze (a crimson cone) burns where you point
+function DevourerSky({ dv, W, H, k, time }) {
+  const opening = Math.min(1, 1 - Math.max(0, dv.intro) / 1.2);
+  const closing = dv.fed ? Math.max(0, Math.min(1, dv.t / 0.9)) : 1;   // it shuts as it feeds
+  const fade = Math.min(1, dv.t / 0.4);
+  const open = (1 - (1 - opening) ** 3) * closing;
+  const cx = W / 2, cy = H * 0.19, ew = Math.min(W * 0.46, 420 * k), eh = ew * 0.42;
+  const gx = dv.gx ?? cx, gy = dv.gy ?? H / 2;
+  const dx = gx - cx, dy = gy - cy, dl = Math.hypot(dx, dy) || 1;
+  const ir = eh * 0.42, px = cx + dx / dl * Math.min(ew * 0.16, dl * 0.2), py = cy + dy / dl * Math.min(eh * 0.12, dl * 0.2);
+  const pulse = 0.5 + 0.5 * Math.sin(time * 4);
+  const nx = -dy / dl, ny = dx / dl, gr = dv.gazeR ?? 150 * k;
+  const gazeOn = !dv.fed && dv.intro <= 0;
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none', opacity: fade }}>
+      <div style={{ position: 'absolute', inset: 0, opacity: opening, background: `radial-gradient(ellipse at 50% 20%, rgba(60,0,10,${0.55 + 0.1 * pulse}) 0%, rgba(12,2,14,0.86) 50%, rgba(0,0,0,0.94) 100%)` }} />
+      <svg width={W} height={H} style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
+        <defs>
+          <radialGradient id="dvIris"><stop offset="0%" stopColor="#fde047" /><stop offset="35%" stopColor="#f97316" /><stop offset="75%" stopColor="#b91c1c" /><stop offset="100%" stopColor="#450a0a" /></radialGradient>
+          <radialGradient id="dvWhite"><stop offset="0%" stopColor="#fff7ed" /><stop offset="70%" stopColor="#fecaca" /><stop offset="100%" stopColor="#7f1d1d" /></radialGradient>
+          <linearGradient id="dvGaze" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef4444" stopOpacity="0.45" /><stop offset="100%" stopColor="#ef4444" stopOpacity="0.08" /></linearGradient>
+          <clipPath id="dvLid"><ellipse cx={cx} cy={cy} rx={ew / 2} ry={(eh / 2) * Math.max(0.02, open)} /></clipPath>
+        </defs>
+        {/* cracks in the dark */}
+        {[[0.02, 0.6, 0.18, 0.5], [0.98, 0.45, 0.82, 0.55], [0.1, 1, 0.22, 0.82], [0.9, 1, 0.76, 0.84]].map(([a, b, c, d], i) => (
+          <polyline key={i} points={`${a * W},${b * H} ${(a + c) / 2 * W + 12 * k},${(b + d) / 2 * H} ${c * W},${d * H}`} fill="none" stroke="#dc2626" strokeWidth={2 * k} opacity={0.45 * opening} style={{ filter: 'drop-shadow(0 0 6px #ef4444)' }} />
+        ))}
+        {/* the gaze: a crimson cone from the pupil to your cursor */}
+        {gazeOn && (
+          <>
+            <polygon points={`${px},${py} ${gx + nx * gr},${gy + ny * gr} ${gx - nx * gr},${gy - ny * gr}`} fill="url(#dvGaze)" />
+            <circle cx={gx} cy={gy} r={gr} fill="rgba(239,68,68,0.12)" stroke="#ef4444" strokeWidth={2.5 * k} strokeDasharray={`${12 * k} ${8 * k}`} transform={`rotate(${time * 50} ${gx} ${gy})`} />
+          </>
+        )}
+        {/* the eye */}
+        <ellipse cx={cx} cy={cy} rx={ew / 2 + 14 * k} ry={(eh / 2) * Math.max(0.05, open) + 10 * k} fill="#0a0208" opacity={opening} style={{ filter: `drop-shadow(0 0 ${20 + 14 * pulse}px #dc2626)` }} />
+        <g clipPath="url(#dvLid)">
+          <ellipse cx={cx} cy={cy} rx={ew / 2} ry={eh / 2} fill="url(#dvWhite)" />
+          {Array.from({ length: 10 }, (_, i) => {
+            const a = i * 0.628, x0 = cx + Math.cos(a) * ew * 0.5, y0 = cy + Math.sin(a) * eh * 0.5;
+            return <path key={i} d={`M${x0},${y0} Q${cx + Math.cos(a + 0.3) * ew * 0.36},${cy + Math.sin(a + 0.3) * eh * 0.36} ${cx + Math.cos(a) * ew * 0.25},${cy + Math.sin(a) * eh * 0.28}`} fill="none" stroke="#b91c1c" strokeWidth={1.6 * k} opacity={0.7} />;
+          })}
+          <circle cx={px} cy={py} r={ir} fill="url(#dvIris)" />
+          <circle cx={px} cy={py} r={ir} fill="none" stroke="#450a0a" strokeWidth={3 * k} />
+          <ellipse cx={px} cy={py} rx={ir * (0.16 + 0.05 * pulse)} ry={ir * 0.82} fill="#05010a" />
+          <circle cx={px - ir * 0.35} cy={py - ir * 0.35} r={ir * 0.14} fill="#fff" opacity={0.85} />
+        </g>
+        <ellipse cx={cx} cy={cy} rx={ew / 2} ry={(eh / 2) * Math.max(0.02, open)} fill="none" stroke="#1e0b2e" strokeWidth={7 * k} />
+      </svg>
+    </div>
   );
 }
 
@@ -753,6 +912,21 @@ function EffectShape({ f, k }) {
       <circle cx={f.x} cy={f.y} r={(6 + 10 * p) * k} fill="#ede9fe" style={{ filter: 'drop-shadow(0 0 12px #8b5cf6)' }} />
     </g>
   );
+  // Hox's ult feeding: jaws the width of the arena slam shut
+  if (f.kind === 'bigjaws') {
+    const close = Math.min(1, f.t / 0.22), fade = f.t < 0.5 ? 1 : Math.max(0, 1 - (f.t - 0.5) / 0.4);
+    const W = f.W, H = f.H, n = 11, tw = W / n, th = H * 0.2, top = -th + (H * 0.5) * close, bot = H + th - (H * 0.5) * close;
+    return (
+      <g opacity={fade}>
+        <rect x={0} y={-H} width={W} height={top + H} fill="#0a0208" />
+        <rect x={0} y={bot} width={W} height={H} fill="#0a0208" />
+        {Array.from({ length: n }, (_, i) => <polygon key={`u${i}`} points={`${i * tw},${top} ${(i + 1) * tw},${top} ${(i + 0.5) * tw},${top + th}`} fill="#f5f0e6" stroke="#450a0a" strokeWidth={2} />)}
+        {Array.from({ length: n }, (_, i) => <polygon key={`d${i}`} points={`${(i + 0.5) * tw - tw / 2},${bot} ${(i + 0.5) * tw + tw / 2},${bot} ${(i + 0.5) * tw},${bot - th}`} fill="#f5f0e6" stroke="#450a0a" strokeWidth={2} transform={`translate(${tw / 2} 0)`} />)}
+        <rect x={0} y={top - 6} width={W} height={6} fill="#7f1d1d" />
+        <rect x={0} y={bot} width={W} height={6} fill="#7f1d1d" />
+      </g>
+    );
+  }
   // Malevolent Shrine's Dismantle / Cleave: red slashes with a white edge
   if (f.kind === 'dslash') return (
     <g opacity={1 - p}>
@@ -851,7 +1025,7 @@ function HydraNecks({ heads, k, time }) {
 }
 
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0 }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
@@ -881,6 +1055,15 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       {mirror && <div className={`mirror-aura ${mirror}`} />}
       {mirror === 'on' && <div className="mirror-tag" style={{ fontSize: 11 * Math.max(0.85, k) }}>MIRROR · don't hit</div>}
       {fort && <div className="fort-aura" />}
+      {/* Hox's MADNESS: a violet haze that thickens with stacks; an eye opens at 5+ */}
+      {mad > 0 && <div className={`mad-aura${mad >= 10 ? ' full' : ''}`} style={{ opacity: 0.2 + mad * 0.07 }} />}
+      {mad >= 5 && (
+        <svg className="mad-eye" viewBox="0 0 24 14" style={{ width: 22 * Math.max(0.85, k), height: 13 * Math.max(0.85, k) }}>
+          <ellipse cx="12" cy="7" rx="11" ry="6" fill="#fdf2f8" stroke="#1e0b2e" strokeWidth="1.5" />
+          <circle cx="12" cy="7" r="4.2" fill="#dc2626" /><ellipse cx="12" cy="7" rx="1.2" ry="3.6" fill="#05010a" />
+          {mad >= 10 && <ellipse cx="12" cy="7" rx="11" ry="6" fill="none" stroke="#ef4444" strokeWidth="1.2" />}
+        </svg>
+      )}
       {badge && <div className="enemy-badge" style={{ color: badge.color, borderColor: badge.color, fontSize: 12 * Math.max(0.85, k) }}>{badge.icon}</div>}
       {ax && <div className="affix-tag" style={{ color: ax.color, fontSize: 10 * Math.max(0.85, k) }}>{ax.name}</div>}
       <div className={`squash${hurt ? ' hit' : ''}${mirror === 'on' ? ' mirrored' : ''}`}>
@@ -1069,6 +1252,14 @@ function holdButton(onDown, onUp) {
 }
 
 const ARENA_CSS = `
+  .mad-aura { position:absolute; inset:-10%; border-radius:50%; pointer-events:none; z-index:-1;
+    background: radial-gradient(circle, rgba(126,34,206,0.35), rgba(76,29,149,0.15) 55%, transparent 72%); box-shadow: 0 0 14px rgba(168,85,247,0.6); }
+  .mad-aura.full { animation: madPulse 0.5s ease-in-out infinite alternate; box-shadow: 0 0 20px rgba(239,68,68,0.75); }
+  @keyframes madPulse { from { transform: scale(0.95); } to { transform: scale(1.08); } }
+  .mad-eye { position:absolute; left:50%; top:-4px; transform:translate(-50%,-100%); pointer-events:none; filter: drop-shadow(0 0 4px #7e22ce); }
+  .eldritch-vignette { position:absolute; inset:0; pointer-events:none; z-index:2; box-shadow: inset 0 0 90px rgba(46,16,101,0.55), inset 0 0 26px rgba(10,2,20,0.6);
+    animation: eldritchBreath 4.5s ease-in-out infinite; }
+  @keyframes eldritchBreath { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
   .shrine-sky { position:absolute; inset:0; opacity:0.35; mix-blend-mode:screen;
     background: repeating-linear-gradient(115deg, transparent 0 46px, rgba(239,68,68,0.18) 47px 49px, transparent 50px 120px);
     animation: shrineSky 2.4s linear infinite; }

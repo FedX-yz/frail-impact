@@ -10,6 +10,9 @@
 //   s.mahoraga – Bio's ult: enemies attack it instead of you
 // ─────────────────────────────────────────────────────────────────────────────
 import { BAL } from './balance';
+import { playSFX } from '../utils/sfx';
+
+const BASE = import.meta.env.BASE_URL;
 import { SKILLS, scaleKit } from './kits';
 import { CHARACTERS } from '../data/characters';
 
@@ -95,24 +98,52 @@ export function createKitRuntime(api) {
     const L = Math.hypot(s.W, s.H) * 1.2;
     return { x1: x - Math.cos(a) * L, y1: y - Math.sin(a) * L, x2: x + Math.cos(a) * L, y2: y + Math.sin(a) * L };
   }
+  // How good a line is: the enemies on it (bosses 3, big ones 2, the rest 1)
+  function lineScore(x, y, a, w, list = foes()) {
+    const L = lineThrough(x, y, a);
+    let sc = 0;
+    for (const e of list) if (distToSegment(e.x, e.y, L.x1, L.y1, L.x2, L.y2) <= w / 2 + radius(e) * 0.7) sc += e.tier === 'boss' ? 3 : e.tier === 'elite' ? 2 : 1;
+    return sc;
+  }
   function bestAngle(x, y, w, prev = null) {
     const list = foes();
     let best = prev ?? 0, bestScore = -1;
     for (let i = 0; i < 36; i++) {
-      const a = (i * Math.PI) / 36, L = lineThrough(x, y, a);
-      let sc = 0;
-      for (const e of list) if (distToSegment(e.x, e.y, L.x1, L.y1, L.x2, L.y2) <= w / 2 + radius(e) * 0.7) sc += e.tier === 'boss' ? 3 : e.tier === 'elite' ? 2 : 1;
+      const a = (i * Math.PI) / 36;
+      let sc = lineScore(x, y, a, w, list);
       if (prev != null) { const d = Math.abs(((a - prev) % Math.PI + Math.PI * 1.5) % Math.PI - Math.PI / 2); if (d < 0.1) sc += 0.5; }
       if (sc > bestScore) { bestScore = sc; best = a; }
     }
     return best;
   }
-  // Where a beam points: from the spot you pressed (anchor) toward your cursor once you've moved
-  // it a little — so you aim by pressing and pulling. Not moved yet: the best line through the anchor.
+  // Aim assist: a hand-aimed line snaps a little (up to ~13°) onto enemies it would just miss
+  function assistAngle(x, y, w, a0) {
+    const list = foes();
+    let best = a0, bs = lineScore(x, y, a0, w, list);
+    for (let d = -0.22; d <= 0.2201; d += 0.044) {
+      const sc = lineScore(x, y, a0 + d, w, list) - Math.abs(d) * 0.5;
+      if (sc > bs + 0.001) { bs = sc; best = a0 + d; }
+    }
+    return best;
+  }
+  // Where a beam points: from the spot you pressed (anchor) toward your cursor once you've pulled
+  // it away a bit — press and pull. Not pulled: the best line through the anchor by itself.
   function aimAngle(ax, ay, w, prev = null) {
     const P = s.player.pos;
-    if (P && dist(P.x, P.y, ax, ay) > K(28)) return Math.atan2(P.y - ay, P.x - ax);
+    if (P && dist(P.x, P.y, ax, ay) > K(45)) return assistAngle(ax, ay, w, Math.atan2(P.y - ay, P.x - ax));
     return bestAngle(ax, ay, w, prev);
+  }
+  // A quick swipe of the cursor (for moves that happen on a click): its direction, or null when still
+  function swipeAngle() {
+    const v = s.kit.vel;
+    return v && Math.hypot(v.x, v.y) > K(380) ? Math.atan2(v.y, v.x) : null;
+  }
+  // The enemy you're pointing at: nearest your cursor within `range` (design px), or null
+  function focus(range = 260, list = foes()) {
+    const P = s.player.pos;
+    if (!P) return null;
+    const e = nearest(P.x, P.y, list);
+    return e && dist(P.x, P.y, e.x, e.y) <= K(range) + radius(e) ? e : null;
   }
   const nearest = (x, y, list = foes()) => list.reduce((b, e) => (!b || dist(x, y, e.x, e.y) < dist(x, y, b.x, b.y) ? e : b), null);
 
@@ -297,7 +328,9 @@ export function createKitRuntime(api) {
   function onCritClick(e) {
     const sk = skill();
     if (sk?.type !== 'crit' || !sk.cut) return;
-    const a = rand(0, Math.PI), L = Math.hypot(s.W, s.H);
+    // the way you swiped (snapped onto enemies), or by itself along the line that cuts the most
+    const sw = swipeAngle(), others = foes().filter(o => o !== e);
+    const a = sw != null ? assistAngle(e.x, e.y, K(44), sw) : (others.length ? bestAngle(e.x, e.y, K(44)) : rand(0, Math.PI)), L = Math.hypot(s.W, s.H);
     const x1 = e.x - Math.cos(a) * L, y1 = e.y - Math.sin(a) * L, x2 = e.x + Math.cos(a) * L, y2 = e.y + Math.sin(a) * L;
     effect({ kind: 'slash', x1, y1, x2, y2, life: 0.25 });
     let n = 0;
@@ -312,8 +345,10 @@ export function createKitRuntime(api) {
     if (act?.type === 'distortion') {
       const L = Math.hypot(s.W, s.H);
       let any = false;
+      // a fan through the cursor: centred on your swipe, or on the line that cuts the most
+      const sw = swipeAngle(), c = sw != null ? assistAngle(x, y, K(60), sw) : bestAngle(x, y, K(60));
       for (let i = 0; i < act.slashes; i++) {
-        const a = rand(0, Math.PI);
+        const a = c + (i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.42);
         const x1 = x - Math.cos(a) * L, y1 = y - Math.sin(a) * L, x2 = x + Math.cos(a) * L, y2 = y + Math.sin(a) * L;
         effect({ kind: 'slash', x1, y1, x2, y2, life: 0.3 });
         foes().forEach(e => {
@@ -343,7 +378,7 @@ export function createKitRuntime(api) {
     s.ult.active = null; s.ult.charge = 0; s.ult.cd = 0; s.timeStop = 0;
     s.special.cd = 0; s.special.cdMax = 0;
     s.player.m2 = null; s.player.held = null;
-    s.enemies.forEach(e => { e.burn = null; });
+    s.enemies.forEach(e => { e.burn = null; e.mad = 0; });
   }
 
   // ── M2 (special), charge and hold moves ──────────────────────────────────
@@ -425,6 +460,13 @@ export function createKitRuntime(api) {
         for (let i = 0; i < 2; i++) s.allies.push({ id: nextId(), kind: 'dog', summoned: true, x: x + (i ? K(30) : -K(30)), y, pct: sk.pct, life: sk.dur, biteT: i * 0.2, target: null });
         effect({ kind: 'burst', x, y, r: K(70), color: '#6366f1' });
         floater('🐺🐺 DIVINE DOGS', x, y - K(50), '#a5b4fc', true);
+        sfx('shield');
+        return true;
+      }
+      case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
+        if (!startCooldown(sk, x, y)) return false;
+        s.kit.maws = s.kit.maws ?? [];
+        s.kit.maws.push({ id: nextId(), x, y, t: 0, dur: 0.38, r: K(sk.radius), sk });
         sfx('shield');
         return true;
       }
@@ -653,6 +695,14 @@ export function createKitRuntime(api) {
         shake(0.5);
         return true;
       }
+      case 'devourer':   // Hox: THE DEVOURER WAKES
+        s.ult.active = { type: 'devourer', t: u.dur + 2, dur: u.dur + 2, intro: 1.2, gaze: u.gaze, gazeR: K(u.gazeR), slam: u.slam, crunch: u.crunch,
+          devour: u.devour, bossPct: u.bossPct, tick: 0, madT: 0, slamT: 0.4, fed: false, gx: P.x, gy: P.y };
+        s.banner = { text: 'THE DEVOURER WAKES', sub: 'kneel.', t: 2, bad: true };
+        effect({ kind: 'flash', color: '#000000', life: 1 });
+        shake(0.8); sfx('boom');
+        playSFX(`${BASE}sounds/hoxjumpscare.mp3`, 0.9);
+        return true;
       case 'shrine':   // Doro: Domain Expansion — Malevolent Shrine
         s.ult.active = { type: 'shrine', t: u.dur + 1, dur: u.dur + 1, pct: u.pct, cleave: u.cleave, tick: 0, cleaveT: 0.6, intro: 1, x: P.x, y: P.y };
         s.banner = { text: 'DOMAIN EXPANSION', sub: 'MALEVOLENT SHRINE · 伏魔御廚子', t: 1.8, bad: true };
@@ -711,6 +761,12 @@ export function createKitRuntime(api) {
   // ── Every frame ──────────────────────────────────────────────────────────
   function update(dt) {
     const sk = skill(), P = s.player.pos, kit = s.kit;
+    // how fast the cursor is moving (for swipes)
+    if (P && dt > 0) {
+      const lp = kit.lastP ?? P, vx = (P.x - lp.x) / dt, vy = (P.y - lp.y) / dt, v = kit.vel ?? { x: 0, y: 0 };
+      kit.vel = { x: v.x * 0.6 + vx * 0.4, y: v.y * 0.6 + vy * 0.4 };
+      kit.lastP = { x: P.x, y: P.y };
+    }
     const live = fighting();
 
     // Room 16: copy another agent's passive, and switch every so often
@@ -767,6 +823,118 @@ export function createKitRuntime(api) {
       }
     } else if (sk?.type === 'firetrail') kit.trailPt = null;
 
+    // Hox: the aura drives everything inside MAD; madness fades a while after leaving it
+    const pres = pv?.type === 'presence' ? pv : null;
+    const devo = s.ult.active?.type === 'devourer' ? s.ult.active : null;
+    if (pres && live) {
+      const R0 = K(pres.radius);
+      for (const e of foes()) {
+        const inside = P && dist(e.x, e.y, P.x, P.y) <= R0 + radius(e) * 0.5;
+        if (inside) {
+          e.madOut = 0;
+          e.madAcc = (e.madAcc ?? 0) + dt * pres.perSec;
+          while (e.madAcc >= 1) { e.madAcc -= 1; e.mad = Math.min(pres.maxMad, (e.mad ?? 0) + 1); }
+        } else if (e.mad > 0 && !devo) {
+          e.madOut = (e.madOut ?? 0) + dt;
+          if (e.madOut > 2.5) { e.madOut -= 1.2; e.mad--; }
+        }
+      }
+    }
+
+    // Hox: the Abyssal Maw snaps shut — eats the madness, devours the weak
+    if (kit.maws?.length) {
+      for (const m of kit.maws) {
+        m.t += dt;
+        if (m.t < m.dur || m.snapped) continue;
+        m.snapped = true;
+        const sk2 = m.sk;
+        let n = 0, devoured = 0;
+        api.asYou(() => foes().filter(e => dist(e.x, e.y, m.x, m.y) <= m.r + radius(e) * 0.5).forEach(e => {
+          const stacks = e.mad ?? 0;
+          kitHit(e, sk2.pct + sk2.perStack * stacks, { color: '#e879f9', label: stacks ? `👁${stacks} ` : '', quiet: n++ >= 4 });
+          e.mad = 0;
+          if (e.hp > 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group && e.hp / e.maxHp <= sk2.devour) {
+            floater('DEVOURED', e.x, e.y - K(36), '#ef4444', true);
+            api.killEnemy(e);
+            devoured++;
+          }
+        }));
+        if (devoured) api.heal(sk2.heal * devoured * s.player.maxHp);
+        effect({ kind: 'shards', x: m.x, y: m.y, r: m.r, color: '#7e22ce', n: 16 });
+        effect({ kind: 'ring', x: m.x, y: m.y, r: m.r * 1.1, color: '#dc2626', life: 0.4 });
+        if (devoured) effect({ kind: 'flash', color: '#450a0a', life: 0.25 });
+        shake(devoured ? 0.4 : 0.25); sfx(devoured ? 'bigKill' : 'crit');
+      }
+      kit.maws = kit.maws.filter(m => m.t < m.dur + 0.5);
+    }
+
+    // Hox's ult: the eye's gaze burns where you point, tentacles hunt the far ones, then it feeds
+    if (devo && live) {
+      if (devo.intro > 0) devo.intro -= dt;
+      else if (!devo.fed) {
+        const G = P ?? center();
+        devo.gx += (G.x - devo.gx) * Math.min(1, dt * 10); devo.gy += (G.y - devo.gy) * Math.min(1, dt * 10);
+        devo.tick -= dt;
+        if (devo.tick <= 0) {
+          devo.tick = 0.25;
+          devo.n = (devo.n ?? 0) + 1;
+          foes().filter(e => dist(e.x, e.y, devo.gx, devo.gy) <= devo.gazeR + radius(e) * 0.5).forEach((e, i) => {
+            api.damageEnemy(e, s.stats.clickDmg * devo.gaze * 0.25, { color: '#f87171', label: '👁', charge: 0, quiet: i >= 2 || devo.n % 2 === 0 });
+            e.mad = Math.min(10, (e.mad ?? 0) + 1);
+          });
+        }
+        devo.madT -= dt;
+        if (devo.madT <= 0) { devo.madT = 0.5; foes().forEach(e => { e.mad = Math.min(10, (e.mad ?? 0) + 1); }); }
+        devo.slamT -= dt;
+        if (devo.slamT <= 0) {
+          devo.slamT = 0.6;
+          // the one farthest from your cursor (the gaze already has the near ones)
+          const far = foes().reduce((b, e) => (!b || dist(e.x, e.y, devo.gx, devo.gy) > dist(b.x, b.y, devo.gx, devo.gy) ? e : b), null);
+          if (far) {
+            const left = far.x < s.W / 2;
+            kit.tentacles = kit.tentacles ?? [];
+            kit.tentacles.push({ id: nextId(), fx: left ? -K(40) : s.W + K(40), fy: clamp(far.y + rand(-K(140), K(140)), s.H * 0.15, s.H * 1.05),
+              tx: far.x, ty: far.y, target: far.id, t: 0, life: 0.8, hit: false, wob: rand(0, 6) });
+          }
+        }
+        if (devo.t <= 0.9) {   // it feeds
+          devo.fed = true;
+          effect({ kind: 'bigjaws', life: 0.9, W: s.W, H: s.H });
+          effect({ kind: 'flash', color: '#7f1d1d', life: 0.6 });
+          [...foes()].forEach((e, i) => {
+            const stacks = e.mad ?? 0;
+            e.mad = 0;
+            if (e.tier !== 'boss' && !e.group && e.hp / e.maxHp <= devo.devour) {
+              floater('DEVOURED', e.x, e.y - K(36), '#ef4444', true);
+              api.killEnemy(e);
+              return;
+            }
+            api.damageEnemy(e, s.stats.clickDmg * (devo.crunch + stacks), { color: '#ef4444', label: 'DEVOUR ', crit: true, charge: 0, quiet: i >= 4 });
+            if ((e.tier === 'boss' || e.group) && s.enemies.includes(e)) api.damageEnemy(e, e.maxHp * devo.bossPct, { color: '#ff0000', label: '👁', crit: true, charge: 0 });
+          });
+          api.heal(s.player.maxHp);
+          shake(0.9); sfx('boom'); sfx('bigKill');
+        }
+      }
+    }
+    if (kit.tentacles?.length) {
+      for (const tn of kit.tentacles) {
+        tn.t += dt;
+        const e = s.enemies.find(x => x.id === tn.target);
+        if (e && tn.t < 0.24) { tn.tx = e.x; tn.ty = e.y; }
+        if (!tn.hit && tn.t >= 0.24) {
+          tn.hit = true;
+          if (e && !(e.down > 0)) {
+            api.damageEnemy(e, s.stats.clickDmg * (devo?.slam ?? 3), { color: '#a855f7', label: '🦑', charge: 0 });
+            e.mad = Math.min(10, (e.mad ?? 0) + 3);
+          }
+          effect({ kind: 'shards', x: tn.tx, y: tn.ty, r: K(60), color: '#581c87', n: 10 });
+          shake(0.18); sfx('hit');
+        }
+      }
+      kit.tentacles = kit.tentacles.filter(tn => tn.t < tn.life);
+    }
+
     // Doro's fire arrows land
     if (kit.arrows?.length) {
       for (const ar of kit.arrows) {
@@ -808,7 +976,7 @@ export function createKitRuntime(api) {
         dom.cleaveT -= dt;
         if (dom.cleaveT <= 0) {
           dom.cleaveT = 1;
-          const t = strongest();
+          const t = focus(260) ?? strongest();   // Cleave goes where you point (else the toughest)
           if (t) {
             api.damageEnemy(t, s.stats.clickDmg * dom.cleave, { color: '#ef4444', label: 'CLEAVE ', charge: 0, crit: true });
             effect({ kind: 'dslash', x1: t.x - t.size * s.k, y1: t.y - t.size * s.k * 0.4, x2: t.x + t.size * s.k, y2: t.y + t.size * s.k * 0.4, life: 0.4, big: true });
@@ -929,7 +1097,7 @@ export function createKitRuntime(api) {
         act.acc -= 1;
         const list = foes();
         if (!list.length) break;
-        const e = pick(list);
+        const f = focus(300, list), e = f && Math.random() < 0.75 ? f : pick(list);   // mostly what you point at
         kitHit(e, act.pct, { color: '#f9a8d4', label: 'ORA ', quiet: Math.random() < 0.6 });
         effect({ kind: 'fist', x: e.x + rand(-K(20), K(20)), y: e.y + rand(-K(20), K(20)), life: 0.25 });
       }
@@ -939,6 +1107,8 @@ export function createKitRuntime(api) {
     if (kit.meteor) {
       const m = kit.meteor;
       m.t += dt;
+      // you can steer it while it falls; it locks on 0.35s before impact
+      if (P && m.t < m.tele - 0.35) { const f = Math.min(1, dt * 6); m.x += (P.x - m.x) * f; m.y += (P.y - m.y) * f; }
       if (m.t >= m.tele) {
         foes().filter(e => dist(e.x, e.y, m.x, m.y) <= m.r + radius(e) * 0.6).forEach(e => ultHit(e, m.mult, '#f97316', '☄'));
         addLava(m.x, m.y, m.r, 6, 0.5, true);
@@ -991,7 +1161,10 @@ export function createKitRuntime(api) {
           sfx('kill'); if (a.big) shake(0.2);
         }
       } else if (a.kind === 'dog') {
+        // they hunt whatever you point at (the enemy nearest your cursor), otherwise the closest one
+        a.lookT = (a.lookT ?? 0) - dt;
         let t = s.enemies.find(e => e.id === a.target);
+        if (a.lookT <= 0) { a.lookT = 0.4; const f = focus(320); if (f) { t = f; a.target = f.id; } }
         if (!t || t.tier === 'treasure' || t.down > 0) { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
         if (t) {
           const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
@@ -1056,6 +1229,9 @@ export function createKitRuntime(api) {
     m.turnT -= dt;
     if (m.turnT <= 0) { m.turnT = 6; m.turns++; m.wheel++; floater('☸', m.x, m.y - K(70), '#fde047', true); }
     let t = list.find(e => e.id === m.target);
+    // point at an enemy (cursor near it) and Mahoraga goes for it
+    m.lookT = (m.lookT ?? 0) - dt;
+    if (m.lookT <= 0) { m.lookT = 0.5; const f = focus(200, list); if (f) { t = f; m.target = f.id; } }
     if (!t) {
       // bosses first once they're out, otherwise whatever's closest
       const bosses = list.filter(e => e.tier === 'boss');
@@ -1109,7 +1285,7 @@ export function createKitRuntime(api) {
   // Stage cleared / lost / (re)loaded: wipe what's on the field
   function reset(why) {
     s.allies = []; s.zones = []; s.fire = [];
-    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = [];
+    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = []; s.kit.maws = []; s.kit.tentacles = [];
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
     s.kit.barrage = null; s.kit.emberPt = null; s.kit.entangle = null;
@@ -1117,7 +1293,7 @@ export function createKitRuntime(api) {
   }
 
   return {
-    skill, passive, onDamage, switchCard, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
+    skill, passive, onDamage, switchCard, focus, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
     clickMods, afterClick, onCritClick, onMiss, onPointerDown, onKill, onCombo,
     ultBlocked, activateUlt, endUlt, choose, hitMahoraga,
     update, reset, origin, slide,

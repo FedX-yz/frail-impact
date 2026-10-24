@@ -36,13 +36,14 @@ export const SKILLS = {
                    passive: { type: 'critCharge', bonus: 0.5,
                               lv1: { bonus: 0.25 }, si: { bonus: 0.1 },
                               desc: 'Crits charge your ult {bonus} faster.' } },
-  devour:        { type: 'devour',    style: 'click', pct: 0.04, maxBite: 0.8, healPctHp: 0.003,
-                   lv1: { pct: 0.02, maxBite: 0.5, healPctHp: 0.0015 },
-                   si: { pct: 0.01, maxBite: 0.1, healPctHp: 0.001 },
-                   desc: "Clicks also bite off {pct} of the target's current HP (at most {maxBite} click DMG) and heal you for {healPctHp} max HP.",
-                   passive: { type: 'killHeal', heal: 0.01,
-                              lv1: { heal: 0.005 }, si: { heal: 0.002 },
-                              desc: 'Kills heal you {heal} max HP.' } },
+  // ── HOX (6★): an eldritch god. Aura passive that drives enemies MAD, M2 maw that eats the madness.
+  abyssal_maw:   { type: 'maw',       style: 'special', cooldown: 6, radius: 125, pct: 4, perStack: 0.5, devour: 0.15, heal: 0.015,
+                   lv1: { cooldown: 8, radius: 105, pct: 2, perStack: 0.25, devour: 0.08, heal: 0.008 },
+                   si: { cooldown: -0.4, radius: 8, pct: 0.7, perStack: 0.08, devour: 0.015, heal: 0.002 },
+                   desc: 'M2: the Abyssal Maw tears open under your cursor and snaps shut: {pct} click DMG to everything inside ({radius} range), plus {perStack} for every Madness stack it eats. Anything left under {devour} HP is DEVOURED whole (not bosses), healing you {heal} max HP each. {cooldown}s cooldown.',
+                   passive: { type: 'presence', radius: 115, perSec: 2.5, per: 0.02, maxMad: 10,
+                              lv1: { radius: 90, per: 0.015 }, si: { radius: 6, per: 0.003 },
+                              desc: 'Eldritch Presence: a void aura with watching eyes follows your cursor. Enemies inside go MAD ({perSec} stacks a second, up to {maxMad}); every stack makes them take {per} more damage from you, and at 5+ they stagger and slow down.' } },
   ratio:         { type: 'ratio',     style: 'click', period: 1.0, window: 0.12, bonus: 1.5, critRateMod: -0.10,
                    lv1: { window: 0.09, bonus: 0.8 },
                    si: { window: 0.01, bonus: 0.25 },
@@ -175,9 +176,9 @@ export const ULTS = {
   reality_break:  { type: 'execute',   dur: 3, mult: 60, threshold: 0.2, charge: 1,
                     si: { mult: 8, threshold: 0.04 },
                     desc: 'Stops time for {dur}s, hits the strongest enemy for {mult} click DMG and executes non-bosses under {threshold} HP.' },
-  hox:            { type: 'hox',       bossPct: 0.2, charge: 1.6,
-                    si: { bossPct: 0.04 },
-                    desc: "Eats every non-boss enemy, bites {bossPct} of the boss's max HP and fully heals you." },
+  devourer_wakes: { type: 'devourer', dur: 8, gaze: 4, gazeR: 150, slam: 4, crunch: 14, devour: 0.35, bossPct: 0.1, charge: 1.4,
+                    si: { dur: 0.5, gaze: 0.5, crunch: 2, bossPct: 0.015 },
+                    desc: 'THE DEVOURER WAKES. A colossal eye opens over the arena for {dur}s. Its gaze follows your cursor and burns everything near it ({gaze} click DMG per second), tentacles burst from the dark to smash the enemies far from you ({slam} click DMG), and everything goes MAD. Then it feeds: every enemy is bitten for {crunch} click DMG plus 1 per Madness stack, anything under {devour} HP is devoured (bosses lose {bossPct} of their max HP instead), and you are fully healed.' },
 
   // ── Anemic Kaisen ──────────────────────────────────────────────────────
   overtime:        { type: 'overtime',   dur: 8, mult: 1, collapse: 12, charge: 1,
@@ -213,14 +214,14 @@ export const ULTS = {
 export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
-const PCT_KEYS = new Set(['share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
+const PCT_KEYS = new Set(['per', 'devour', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+const MULT_KEYS = new Set(['perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'every' || key === 'cap') return String(Math.round(v));
+  if (key === 'every' || key === 'cap' || key === 'maxMad') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
 }
@@ -272,7 +273,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

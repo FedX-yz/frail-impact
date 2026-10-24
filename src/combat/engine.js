@@ -356,7 +356,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       e.target = randomPoint({ x: e.x, y: e.y }, K(220));
     }
     if (!e.target) return;
-    const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1) * (e.tier === 'treasure' ? 1 : M('enemySpeed'));
+    const spd = K(40 + e.speed * 170) * (e.move === 'hop' ? 2.2 : 1) * (e.tier === 'treasure' ? 1 : M('enemySpeed')) * (e.mad >= 5 ? 0.65 : 1);   // MAD: staggering
     const dx = e.target.x - e.x, dy = e.target.y - e.y, d = Math.hypot(dx, dy) || 1;
     const step = Math.min(d, spd * dt);
     e.x += dx / d * step; e.y += dy / d * step;
@@ -607,6 +607,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     e.lastHit = s.time;
     const pv = rt.passive();
     if (e.frozen > 0 && pv?.type === 'frost') dmg *= 1 + pv.bonus;
+    // Hox: MAD enemies take more damage (each stack +2%, more with superimposition)
+    if (e.mad > 0 && (pv?.type === 'presence' || s.ult.active?.type === 'devourer')) dmg *= 1 + e.mad * (pv?.type === 'presence' ? pv.per : 0.02);
     if (crit && pv?.type === 'critCharge') charge *= 1 + pv.bonus;   // Stephen: crits charge the ult faster
     if (e.tier === 'boss') dmg *= s.stats.bossDmgMult;
     dmg = Math.max(1, Math.round(dmg));
@@ -769,7 +771,6 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function clickEnemy(e, mult = 1, auto = false) {
-    const sk = rt.skill();
     const mods = auto ? undefined : rt.clickMods(e);   // e.g. Nanami's ratio hit
     const { dmg, crit } = rollClick(mult, mods);
     const dealt = damageEnemy(e, dmg, { crit, label: mods?.label ?? '' });
@@ -780,11 +781,6 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
     rt.afterClick(e, dmg, auto, mods);
     if (crit && !auto) rt.onCritClick(e);
-    // main move (click style)
-    if (sk?.type === 'devour' && e.hp > 0) {
-      damageEnemy(e, Math.min(e.hp * sk.pct, s.stats.clickDmg * (sk.maxBite ?? Infinity)), { color: '#ff3355', label: '👁' });   // (capped: bosses have a lot of HP)
-      if (!auto) heal(sk.healPctHp * s.player.maxHp);
-    }
     // passives that ride on clicks (small chances)
     const pv = rt.passive();
     if (auto) return;
@@ -916,7 +912,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     switch (u.type) {
       case 'nuke':      hitAll(u.mult, '#F59E0B', '🗿'); break;
       case 'blackhole': {
-        const c = { x: s.W * 0.6, y: s.H * 0.48 };
+        // the black hole opens where you point
+        const P0 = s.player.pos ?? { x: s.W * 0.6, y: s.H * 0.48 };
+        const c = { x: clamp(P0.x, s.W * 0.15, s.W * 0.85), y: clamp(P0.y, s.H * 0.2, s.H * 0.8) };
         all.forEach(e => { if (e.tier !== 'boss') { e.x = c.x + rand(-40, 40) * s.k; e.y = c.y + rand(-40, 40) * s.k; e.target = null; e.kb = null; } e.frozen = Math.max(e.frozen, u.stun); });
         effect({ kind: 'burst', x: c.x, y: c.y, r: K(200), color: '#8B5CF6' });
         hitAll(u.mult, '#8B5CF6', '🌌');
@@ -937,16 +935,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       }
       case 'execute': {
         s.timeStop = u.dur; s.attacks.forEach(a => { if (a.phase === 'wait' || a.phase === 'tele') finishAttack(a); });
-        const strongest = all.reduce((a, b) => (a && a.hp > b.hp ? a : b), null);
+        // the enemy you point at (else the toughest one)
+        const strongest = rt.focus(240, all.filter(e => !(e.down > 0))) ?? all.reduce((a, b) => (a && a.hp > b.hp ? a : b), null);
         if (strongest) damageEnemy(strongest, base * u.mult, { color: '#EAB308', label: '✨', crit: true, charge: 0 });
         s.enemies.filter(e => e.tier !== 'boss' && e.hp / e.maxHp < u.threshold)
           .forEach(e => { floater('EXECUTE', e.x, e.y - K(30), '#EAB308', true); killEnemy(e); });
-        break;
-      }
-      case 'hox': {
-        all.filter(e => e.tier !== 'boss').forEach(e => { if (e.hp > 0) { floater('EATEN', e.x, e.y - K(30), '#ff0000', true); killEnemy(e); } });
-        all.filter(e => e.tier === 'boss' && e.hp > 0).forEach(b => damageEnemy(b, b.maxHp * u.bossPct, { color: '#ff0000', label: '👁', crit: true, charge: 0 }));
-        heal(s.player.maxHp);
         break;
       }
       default: hitAll(5, '#cc44ff', '✦');
@@ -1066,7 +1059,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         while (act.acc >= 1) {
           act.acc -= 1;
           const targets = s.enemies.filter(e => e.tier !== 'treasure' && !(e.down > 0));
-          if (targets.length) clickEnemy(pick(targets), 1, true);
+          // mostly whatever you're pointing at
+          const f = rt.focus(280, targets);
+          if (targets.length) clickEnemy(f && Math.random() < 0.7 ? f : pick(targets), 1, true);
         }
       }
       if (act.t <= 0) { rt.endUlt(act); s.ult.active = null; }

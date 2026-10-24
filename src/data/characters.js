@@ -515,24 +515,25 @@ export const CHARACTERS = [
     voiceLine:       `${BASE}audio/hox-voice.mp3`,
     animationVideo:  `${BASE}animations/6star.mp4`,
     resultVideo:     null,
-    stats: { hp: 9999, atk: 999, def: 999 },
+    // the strongest card in the game, but inside the same world as everyone else
+    // (was 9999 / 999 / 999 and +100% damage: about 12× any other card)
+    stats: { hp: 2100, atk: 235, def: 120 },
     skill: {
-      name: 'Devour',
-      description: "Clicks also bite off 4% of the target's current HP and heal you for 2 HP.",
-      effect: 'devour',
-      cooldown: 3,
+      name: 'Abyssal Maw',
+      description: 'M2: a maw tears open under your cursor, eats the madness of everything inside and devours the weak. Passive: an eldritch aura drives enemies MAD.',
+      effect: 'abyssal_maw',
     },
     ult: {
-      name: 'HOX',
-      description: "Eats every non-boss enemy, bites 25% of the boss's max HP and fully heals you.",
-      effect: 'hox',
+      name: 'The Devourer Wakes',
+      description: 'A colossal eye opens over the arena, its gaze follows your cursor, tentacles rise from the dark, and then it feeds.',
+      effect: 'devourer_wakes',
       cooldown: 60,
     },
     passive: {
       name: 'Gratitude',
-      description: '+100% to all damage multipliers.',
+      description: '+20% to all damage.',
       effect: 'global_dmg_boost',
-      value: 1.0,
+      value: 0.2,
     },
   },
 
