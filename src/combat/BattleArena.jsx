@@ -107,9 +107,13 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       if (e.repeat) return;   // holding E doesn't spam it
       if (engine.state.choosing && /^[1-3]$/.test(e.key)) { engine.choose(Number(e.key) - 1); return; }
       if (e.key === 'e' || e.key === 'E') engine.activateUlt();
+      if (e.key === 'q' || e.key === 'Q') engine.special();   // M2 for trackpads
     };
+    // let go of the mouse outside the window / switch apps: the hold ends
+    const release = () => engine.pointerHold(false);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('blur', release);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('blur', release); };
   }, [engine]);
 
   const toLocal = (e) => {
@@ -119,9 +123,15 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const onPointerDown = (e) => {
     if (e.pointerType === 'touch' !== touchMode) setTouchMode(e.pointerType === 'touch');
     const [x, y] = toLocal(e);
+    if (e.button === 2) { engine.special(x, y); return; }   // M2: the card's special move
+    if (e.button !== 0) return;
+    // keep getting moves / the release even if the cursor leaves the arena while held
+    try { ref.current.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
     engine.pointerDown(x, y);
   };
   const onPointerMove = (e) => { const [x, y] = toLocal(e); engine.pointerMove(x, y); };
+  const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
+  const onSpecial = useCallback(() => engine.special(), [engine]);
 
   const s = engine.state;
   const k = s.k;
@@ -144,10 +154,11 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const ultCd = s.ult.cd > 0 ? Math.ceil(s.ult.cd) : 0;
   const ultReady = ult && charge >= 1 && !ultCd && !s.ult.active && !s.ult.blocked;
   const curSkill = engine.curSkill?.();
+  const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
   const origin = s.reserved ? { x: (s.reserved.x0 + s.reserved.x1) / 2, y: (s.reserved.y0 + s.reserved.y1) / 2 } : { x: s.W * 0.12, y: s.H * 0.85 };
-  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack']);   // effects drawn above enemies
+  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -216,6 +227,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         className="battle-arena"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
         onContextMenu={e => e.preventDefault()}
         style={{
           flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden',
@@ -464,7 +478,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
           hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd}
-          onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null} />
+          onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null}
+          spKind={sp?.kind} spColor={sp?.color} onSpecial={onSpecial}
+          spFill={!sp ? 0 : sp.kind === 'cd' ? Math.round((1 - (sp.cdMax ? sp.cd / sp.cdMax : 0)) * 40) / 40 : sp.n / sp.max}
+          spText={!sp ? '' : sp.kind === 'cd' ? (sp.cd > 0 ? `${Math.ceil(sp.cd)}s` : '') : `${sp.n}`} />
 
         {/* Room 16's ult: pick a skill (the fight waits) */}
         {s.choosing && (
@@ -587,6 +604,16 @@ function EffectShape({ f, k }) {
     });
     return <g opacity={p < 0.6 ? 1 : (1 - p) / 0.4}>{lines}</g>;
   }
+  // Bio's implosion: rings collapsing onto the point
+  if (f.kind === 'implode') return (
+    <g opacity={0.35 + 0.65 * p}>
+      <circle cx={f.x} cy={f.y} r={f.r * (1 - p)} fill="none" stroke="#c4b5fd" strokeWidth={3 * k} strokeDasharray={`${10 * k} ${7 * k}`} />
+      <circle cx={f.x} cy={f.y} r={f.r * 0.6 * (1 - p)} fill="rgba(139,92,246,0.12)" stroke="#8b5cf6" strokeWidth={2 * k} />
+      <circle cx={f.x} cy={f.y} r={(6 + 10 * p) * k} fill="#ede9fe" style={{ filter: 'drop-shadow(0 0 12px #8b5cf6)' }} />
+    </g>
+  );
+  // Doro's drag: a bright cut along the path
+  if (f.kind === 'cut') return <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#fff7ed" strokeWidth={5 * k * (1 - p)} strokeLinecap="round" opacity={1 - p} style={{ filter: 'drop-shadow(0 0 5px #f97316)' }} />;
   if (f.kind === 'poof') return <circle cx={f.x} cy={f.y} r={f.r * (0.6 + p)} fill="none" stroke="#fff" strokeWidth={3 * k} opacity={1 - p} />;
   if (f.kind === 'burst') return <circle cx={f.x} cy={f.y} r={f.r * (0.4 + 0.6 * p)} fill={f.color} fillOpacity={0.15 * (1 - p)} stroke={f.color} strokeWidth={4 * k} opacity={1 - p} />;
   return null;
@@ -764,7 +791,8 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
 // What the main card's kit is doing right now (spirits, Infinity, copied skill…)
 function KitChip({ s, sk, cur }) {
   if (!sk) return null;
-  if (sk.type === 'souls') return <Chip color="#e879f9">👻 {s.kit.souls}/{Math.round(sk.cap)}</Chip>;
+  if (sk.type === 'souls') return <Chip color="#e879f9">👻 {s.kit.souls}/{Math.round(sk.cap)}{s.kit.souls > 0 ? ' · click to hurl' : ' · M2 to summon'}</Chip>;
+  if (sk.type === 'firetrail') return <Chip color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>;
   if (sk.type === 'infinity') {
     const left = Math.max(2, Math.round(sk.every ?? 4)) - s.kit.repelN;
     return <Chip color="#93c5fd">∞ {Math.round(s.kit.inf)}% · {left > 1 ? `repel in ${left}` : 'next hit REPELS'}</Chip>;
@@ -778,10 +806,20 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{Children.map(children, c => withIcons(c))}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, onSpecial }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        {/* SPECIAL (M2) button, next to the ult orb: fills up as the cooldown runs out / as you charge */}
+        {spKind && (
+          <div className={`sp-btn${spKind === 'cd' && spFill >= 1 ? ' ready' : ''}`} onPointerDown={e => { e.stopPropagation(); e.preventDefault(); onSpecial(); }}
+            onContextMenu={e => e.preventDefault()}
+            title={spKind === 'cd' ? 'Special: right-click (M2), Q, or tap here' : 'Charge: right-click (M2), Q or tap here; then click to fire'}
+            style={{ '--sp': spColor, width: mobile ? 52 : 46, height: mobile ? 52 : 46 }}>
+            <span className="sp-fill" style={{ height: `${Math.min(1, spFill) * 100}%` }} />
+            <span className="sp-txt">{spText || (mobile ? 'SPEC' : 'M2')}</span>
+          </div>
+        )}
         {/* Portrait first, so the frame's ring and bar sit on top of it */}
         {mainCard && STATUS_PORTRAITS[mainCard.id] && (
           <div style={{ position: 'absolute', right: '0.5%', bottom: '0.5%', width: '95%', height: '100%', overflow: 'hidden', pointerEvents: 'none' }}>
@@ -842,6 +880,12 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
 });
 
 const ARENA_CSS = `
+  .sp-btn { position:absolute; left:100%; bottom:14%; margin-left:8px; border-radius:50%; overflow:hidden; cursor:pointer; touch-action:none;
+    background:rgba(10,10,20,0.75); border:2px solid var(--sp); box-shadow:0 0 8px rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; }
+  .sp-btn .sp-fill { position:absolute; left:0; right:0; bottom:0; background:var(--sp); opacity:0.35; transition:height .1s linear; }
+  .sp-btn .sp-txt { position:relative; color:#fff; font-weight:900; font-size:13px; text-shadow:0 0 4px #000; letter-spacing:0.5px; }
+  .sp-btn.ready { box-shadow:0 0 14px var(--sp); animation: orbReady 0.9s ease-in-out infinite; }
+  .sp-btn.ready .sp-fill { opacity:0.55; }
   .battle-arena img { -webkit-user-drag: none; user-select: none; }
   .enemy-img { display:block; image-rendering:pixelated; animation: enemyBob 2.4s ease-in-out infinite; }
   .enemy-img.boss { animation: enemyBob 1.8s ease-in-out infinite, bossPulse 1.2s ease-in-out infinite; }

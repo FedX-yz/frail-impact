@@ -40,6 +40,8 @@ export function createKitRuntime(api) {
       posHist: [],                    // Astrec: where your cursor was
       phantomT: 0,
       purple: null, meteor: null,     // ults that take a moment to land
+      implode: null,                  // Bio's quantum implosion (M2), mid-pull
+      soulPressT: -9,                 // Ivy: when M2 last summoned a spirit
       tickT: ZONE_TICK,
       ratioU: 0, ratioWin: 0,
     };
@@ -279,6 +281,58 @@ export function createKitRuntime(api) {
     return false;
   }
 
+  // ── M2 (special) and charge skills ───────────────────────────────────────
+  // M2 / Q / SPECIAL button. true = something happened
+  function special(x, y) {
+    const sk = skill();
+    if (!sk || !fighting()) return false;
+    if (sk.type === 'pulse') {
+      if (s.special.cd > 0) { floater(`${Math.ceil(s.special.cd)}s`, x, y - K(30), '#a78bfa'); return false; }
+      s.special.cd = s.special.cdMax = sk.cooldown;
+      s.kit.implode = { x, y, t: 0, dur: 0.4, r: K(sk.radius), pct: sk.pct };
+      effect({ kind: 'implode', x, y, r: K(sk.radius) * 1.8, life: 0.4 });
+      sfx('shield');
+      return true;
+    }
+    if (sk.type === 'souls') {
+      // spam it: one spirit per press, at most ~9 a second
+      if (s.time - s.kit.soulPressT < 0.11) return false;
+      const cap = Math.round(sk.cap);
+      if (s.kit.souls >= cap) { floater('FULL', x, y - K(34), '#e879f9'); return false; }
+      s.kit.soulPressT = s.time;
+      s.kit.souls++;
+      effect({ kind: 'burst', x, y, r: K(28), color: '#e879f9' });
+      sfx('hit');
+      return true;
+    }
+    return false;
+  }
+  // M1 with something charged: Ivy hurls every spirit where you clicked
+  function fire(x, y, under) {
+    const sk = skill();
+    if (sk?.type !== 'souls' || s.kit.souls <= 0 || !fighting()) return;
+    const list = foes();
+    // aim: what you clicked, or the nearest enemy to the click (within reach)
+    const t = under && list.includes(under) ? under : nearest(x, y, list);
+    if (!t || (!under && dist(x, y, t.x, t.y) > K(160))) return;
+    const n = s.kit.souls, R = K(125);
+    s.kit.souls = 0;
+    kitHit(t, sk.throwPct * n * 1.5, { color: '#f0abfc', label: `👻×${n} ` });
+    list.filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6)
+      .forEach((e, i) => kitHit(e, sk.throwPct * n, { color: '#e879f9', label: '👻', quiet: i >= 3 }));
+    effect({ kind: 'spiral', x: t.x, y: t.y, r: R * 1.3, life: 0.5 });
+    effect({ kind: 'burst', x: t.x, y: t.y, r: R, color: '#d946ef' });
+    shake(Math.min(0.4, 0.06 + n * 0.015)); sfx(n >= 8 ? 'boom' : 'crit');
+  }
+  // For the UI: what M2 does right now
+  function specialInfo() {
+    const sk = skill();
+    if (!sk) return null;
+    if (sk.type === 'pulse') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
+    if (sk.type === 'souls') return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
+    return null;
+  }
+
   // ── Kills & combo ────────────────────────────────────────────────────────
   function onKill(e) {
     if (e.tier === 'treasure') return;
@@ -450,18 +504,47 @@ export function createKitRuntime(api) {
     // Infinity refills when it hasn't blocked anything for a second
     if (sk?.type === 'infinity' && s.time - kit.infUsed > 1) kit.inf = Math.min(100, kit.inf + 30 * dt);
 
-    // Doro: moving fast leaves fire behind the cursor
-    if (sk?.type === 'firetrail' && P && live) {
-      if (!kit.trailPt) { kit.trailPt = { x: P.x, y: P.y }; kit.trailT = s.time; }
+    // Doro: hold M1 and drag → cut everything the cursor passes through, leave fire behind
+    if (sk?.type === 'firetrail' && P && live && s.player.held && !s.mahoraga) {
+      if (!kit.trailPt) kit.trailPt = { x: P.x, y: P.y };
       const d = dist(kit.trailPt.x, kit.trailPt.y, P.x, P.y);
-      if (d > K(140)) { kit.trailPt = { x: P.x, y: P.y }; kit.trailT = s.time; }   // a jump (tap somewhere else): no wall
-      else if (d >= K(22)) {
-        const speed = d / Math.max(0.001, s.time - kit.trailT);
-        if (speed >= K(300)) {
-          s.fire.push({ id: nextId(), x1: kit.trailPt.x, y1: kit.trailPt.y, x2: P.x, y2: P.y, t: 0, life: sk.dur, dps: sk.pct });
-          if (s.fire.length > MAX_FIRE) s.fire.shift();
+      if (d > K(260)) kit.trailPt = { x: P.x, y: P.y };   // a jump (lost the pointer): no cut
+      else if (d >= K(16)) {
+        const a = kit.trailPt;
+        s.fire.push({ id: nextId(), x1: a.x, y1: a.y, x2: P.x, y2: P.y, t: 0, life: sk.dur, dps: sk.pct });
+        if (s.fire.length > MAX_FIRE) s.fire.shift();
+        effect({ kind: 'cut', x1: a.x, y1: a.y, x2: P.x, y2: P.y, life: 0.22 });
+        let cut = 0;
+        for (const e of foes()) {
+          if ((e.cutT ?? -9) > s.time - 0.3) continue;   // each enemy at most ~3 cuts a second
+          if (distToSegment(e.x, e.y, a.x, a.y, P.x, P.y) > K(12) + radius(e) * 0.75) continue;
+          e.cutT = s.time;
+          if (kitHit(e, sk.slash, { color: '#fdba74', label: '✂', quiet: cut >= 3 }) > 0) cut++;
         }
-        kit.trailPt = { x: P.x, y: P.y }; kit.trailT = s.time;
+        if (cut) { sfx(cut >= 3 ? 'crit' : 'hit'); api.comboHit?.(); }
+        kit.trailPt = { x: P.x, y: P.y };
+      }
+    } else if (sk?.type === 'firetrail') kit.trailPt = null;
+
+    // Bio: the implosion pulls enemies in, then bursts
+    if (kit.implode) {
+      const m = kit.implode;
+      m.t += dt;
+      for (const e of foes()) {
+        if (heavy(e) || e.kb) continue;
+        const dx = m.x - e.x, dy = m.y - e.y, d = Math.hypot(dx, dy);
+        if (d > m.r * 1.8 || d < K(8)) continue;
+        const step = Math.min(d - K(6), K(900) * dt);
+        e.x += dx / d * step; e.y += dy / d * step; e.target = null;
+      }
+      if (m.t >= m.dur) {
+        let n = 0;
+        foes().filter(e => dist(e.x, e.y, m.x, m.y) <= m.r + radius(e) * 0.5)
+          .forEach(e => kitHit(e, m.pct, { color: '#a78bfa', label: '⚛', quiet: n++ >= 4 }));
+        effect({ kind: 'burst', x: m.x, y: m.y, r: m.r, color: '#8B5CF6' });
+        effect({ kind: 'shards', x: m.x, y: m.y, r: m.r, color: '#c4b5fd', n: 14 });
+        shake(0.3); sfx('boom');
+        kit.implode = null;
       }
     }
     s.fire.forEach(f => { f.t += dt; });
@@ -702,14 +785,14 @@ export function createKitRuntime(api) {
   // Stage cleared / lost / (re)loaded: wipe what's on the field
   function reset(why) {
     s.allies = []; s.zones = []; s.fire = [];
-    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = [];
+    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.implode = null;
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
     if (why === 'defeat') s.kit.souls = 0;
   }
 
   return {
-    skill, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked,
+    skill, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, fire, specialInfo,
     clickMods, afterClick, onPointerDown, onKill, onCombo,
     ultBlocked, activateUlt, endUlt, choose, hitMahoraga,
     update, reset, origin, slide,

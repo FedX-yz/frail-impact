@@ -11,7 +11,7 @@ import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
 import { setOfCard, formatSub, CARD_SETS } from '../combat/sets';
-import { SKILLS, ULTS, describeKit, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK, abilityText } from '../combat/kits';
+import { SKILLS, ULTS, STYLES, describeKit, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK, abilityText } from '../combat/kits';
 import { cardBattleStats, siMult } from '../combat/stats';
 import useIsMobile from '../hooks/useIsMobile';
 import TermTitle from '../components/TermTitle';
@@ -182,7 +182,7 @@ function CardFile({ card, entry, count, active, counts, onArt, onOpen }) {
         <div className="rc-hd"><span>{agent ? 'FIELD NOTES' : 'CASE NOTES'}</span><span>PAGE 2</span></div>
         {kits.map(([tag, a, kit]) => (
           <div key={tag}>
-            <div className="rc-sect">{tag} · {a.name.toUpperCase()}</div>
+            <div className="rc-sect">{tag} · {a.name.toUpperCase()}{tag === 'SKILL' && STYLES[kit?.style] && <span style={{ marginLeft: 8, color: STYLES[kit.style].color }}>[{STYLES[kit.style].name} · {STYLES[kit.style].how}]</span>}</div>
             <div className="rc-kit">{kit ? describeKit(kit, si) : abilityText(a, si)}</div>
             {tag === 'SKILL' && kit?.lv1 && <div className="rc-small">Before LV{SKILL_UNLOCK} (weaker): {describeKit(weakKit(kit), si)}</div>}
             {tag !== 'SKILL' && <div className="rc-small">Cooldown {Math.round((a.cooldown ?? 30) * (1 - ULT_CD_PER_SI * si))}s · fills from damage you deal · press E</div>}

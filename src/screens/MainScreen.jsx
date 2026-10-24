@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { playSFX, playPress } from '../utils/sfx';
 import { fmt } from '../combat/engine';
 import { cardBattleStats } from '../combat/stats';
-import { SKILL_UNLOCK, ULT_UNLOCK, abilityText } from '../combat/kits';
+import { SKILL_UNLOCK, ULT_UNLOCK, abilityText, SKILLS, STYLES } from '../combat/kits';
 import { BAL } from '../combat/balance';
 import { FACILITIES, facilityCost, maxed } from '../combat/hq';
 import { formatSub } from '../combat/sets';
@@ -101,11 +101,13 @@ export default function MainScreen({
     </button>
   );
 
+  const skillStyle = STYLES[SKILLS[mainCard?.skill?.effect]?.style];
   const kitInfo = mainCard && (
     <div style={{ fontSize: 11, color: '#778', lineHeight: 1.45, minWidth: 0, whiteSpace: mobile && portrait ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
       {mainCard.skill && (
         <div style={{ color: stats.skill ? '#4ade80' : '#556' }} title={abilityText(mainCard.skill, stats.si)}>
-          ✦ {mainCard.skill.name} {stats.skill?.weak && <span style={{ color: '#fbbf24' }} title={`Weaker until LV${SKILL_UNLOCK}`}>½ until LV{SKILL_UNLOCK}</span>}
+          ✦ {mainCard.skill.name} {skillStyle && <span style={{ color: skillStyle.color, fontSize: 10, border: `1px solid ${skillStyle.color}`, borderRadius: 3, padding: '0 4px', marginRight: 4 }} title={skillStyle.how}>{skillStyle.name} · {mobile ? skillStyle.phone : skillStyle.how}</span>}
+          {stats.skill?.weak && <span style={{ color: '#fbbf24' }} title={`Weaker until LV${SKILL_UNLOCK}`}>½ until LV{SKILL_UNLOCK}</span>}
         </div>
       )}
       {mainCard.rarity >= 5 && !mainCard.skill && !mainCard.ult && <div style={{ color: '#667', fontStyle: 'italic' }}>✦ Kit coming soon</div>}
@@ -159,6 +161,7 @@ export default function MainScreen({
           <div style={{ lineHeight: 1.2 }}>{statLine(10)}</div>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>
             {mainCard.skill && <div style={{ color: stats.skill ? '#4ade80' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>✦ {mainCard.skill.name}{stats.skill?.weak && <span style={{ color: '#fbbf24' }}> · ½ to LV{SKILL_UNLOCK}</span>}</div>}
+            {mainCard.skill && skillStyle && <div style={{ color: skillStyle.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 10 }}>{skillStyle.name} · {skillStyle.phone}</div>}
             {mainCard.rarity >= 5 && !mainCard.skill && !mainCard.ult && <div style={{ color: '#667', fontStyle: 'italic' }}>✦ Kit coming soon</div>}
             {mainCard.ult && <div style={{ color: stats.ult ? '#c084fc' : '#667', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>⚡ {mainCard.ult.name}{!stats.ult && <span style={{ color: '#f87171' }}> · LV{ULT_UNLOCK}</span>}</div>}
             {stats.sets.map(set => <div key={set.id} style={{ color: set.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>◆ {set.name}</div>)}

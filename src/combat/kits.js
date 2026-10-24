@@ -1,6 +1,13 @@
 // 5★/6★ kits, keyed by the `effect` id in characters.js.
 //
-// Skills are always-on upgrades to clicking. From LV1 you get a weaker
+// Each skill has a `style`: how you use it with the mouse (see STYLES below).
+//   click   – spam M1; the skill makes every click stronger
+//   special – M2 (right-click / Q / the SPECIAL button) fires it, then a cooldown
+//   charge  – spam M2 to charge it up, M1 fires what you've charged
+//   drag    – hold M1 and drag across enemies
+// Skills without a style are the older always-on upgrades to clicking.
+//
+// From LV1 you get a weaker
 // version (the `lv1` numbers); at LV20 the skill reaches full strength.
 // Ults (unlock at LV50) charge up from damage you deal and have a cooldown
 // (the `cooldown` in characters.js, in seconds). Press E or tap the orb.
@@ -17,14 +24,14 @@ export const SKILLS = {
                    lv1: { radius: 85, pct: 0.25 },
                    si: { radius: 18, pct: 0.12 },
                    desc: 'Every click also sends rock shards into enemies near the target for {pct} click DMG ({radius} range).' },
-  quantum_burst: { type: 'pulse',     interval: 2.5, radius: 120, pct: 1.5,
-                   lv1: { interval: 3.5, radius: 95, pct: 0.75 },
-                   si: { interval: -0.25, radius: 20, pct: 0.3 },
-                   desc: 'Every {interval}s a quantum pulse at your cursor deals {pct} click DMG in a {radius} radius.' },
-  swag_strike:   { type: 'gun',       pct: 1.0, shots: 1,
-                   lv1: { pct: 0.5 },
-                   si: { pct: 0.2, shots: 0.5 },
-                   desc: 'Click empty space to fire {shots} homing shot(s) at the nearest enemies for {pct} click DMG each.' },
+  quantum_burst: { type: 'pulse',     style: 'special', cooldown: 5, radius: 155, pct: 6,
+                   lv1: { cooldown: 7, radius: 125, pct: 3 },
+                   si: { cooldown: -0.5, radius: 15, pct: 1 },
+                   desc: 'M2: a quantum implosion at your cursor sucks enemies in ({radius} range), then bursts for {pct} click DMG. {cooldown}s cooldown.' },
+  swag_strike:   { type: 'gun',       style: 'click', pct: 0.55, shots: 1,
+                   lv1: { pct: 0.3 },
+                   si: { pct: 0.12, shots: 0.5 },
+                   desc: 'Every click also fires {shots} homing shot(s) at the nearest enemies for {pct} click DMG each, hit or miss. Spam it.' },
   frost_bolt:    { type: 'frost',     chance: 0.2, dur: 2, bonus: 0.4,
                    lv1: { chance: 0.07, dur: 1.2, bonus: 0.15 },
                    si: { chance: 0.04, dur: 0.4, bonus: 0.08 },
@@ -56,14 +63,14 @@ export const SKILLS = {
                lv1: { dps: 0.15, radius: 48, dur: 3 },
                si: { dps: 0.06, dur: 0.5 },
                desc: 'Kills erupt into lava ({radius} range, {dur}s) that burns enemies for {dps} click DMG per second. Every 6th hit leaves a small puddle too.' },
-  firetrail: { type: 'firetrail', pct: 0.5, dur: 1.6,
-               lv1: { pct: 0.25, dur: 1.0 },
-               si: { pct: 0.1, dur: 0.2 },
-               desc: 'Moving your cursor fast leaves a fire wall for {dur}s. It burns enemies for {pct} click DMG per second and stops enemy shots.' },
-  souls:     { type: 'souls',     cap: 20, perSoul: 0.07,
-               lv1: { cap: 12, perSoul: 0.035 },
-               si: { cap: 2.5, perSoul: 0.01 },
-               desc: 'Kills become spirits that orbit your cursor (up to {cap}; elites give 3). Each spirit deals {perSoul} click DMG per second to enemies they touch. Getting hit loses one.' },
+  firetrail: { type: 'firetrail', style: 'drag', slash: 0.5, pct: 0.5, dur: 1.6,
+               lv1: { slash: 0.3, pct: 0.25, dur: 1.0 },
+               si: { slash: 0.12, pct: 0.1, dur: 0.2 },
+               desc: 'Hold M1 and drag: Dismantle cuts every enemy your cursor passes through for {slash} click DMG and leaves a fire wall for {dur}s that burns for {pct} click DMG per second and stops enemy shots.' },
+  souls:     { type: 'souls',     style: 'charge', cap: 20, perSoul: 0.07, throwPct: 1.0,
+               lv1: { cap: 12, perSoul: 0.035, throwPct: 0.6 },
+               si: { cap: 2.5, perSoul: 0.01, throwPct: 0.18 },
+               desc: 'Spam M2 to summon cursed spirits (up to {cap}; kills add one, elites 3). They orbit your cursor for {perSoul} click DMG per second each. M1 hurls them all where you click: {throwPct} click DMG per spirit to everything in the blast, +50% to what you clicked. Getting hit loses one.' },
   infinity:  { type: 'infinity',  radius: 90, every: 4, crush: 2,
                lv1: { radius: 65, every: 5, crush: 1.2 },
                si: { radius: 10, every: -0.25, crush: 0.4 },
@@ -80,6 +87,14 @@ export const SKILLS = {
                lv1: { pct: 0.35 },
                si: { pct: 0.1 },
                desc: 'Combo 10 summons a Divine Dog, combo 25 a Toad that eats the next hit on you, combo 50 Nue. Shikigami hit for {pct} click DMG.' },
+};
+
+// How each style is used, for the UI (main screen, Deck, Records)
+export const STYLES = {
+  click:   { name: 'CLICK',  how: 'Spam M1',                         phone: 'Spam taps',                         color: '#facc15' },
+  special: { name: 'SPECIAL', how: 'M2 (right-click) or Q',          phone: 'The SPECIAL button',                color: '#a78bfa' },
+  charge:  { name: 'CHARGE', how: 'Spam M2 to charge, M1 to fire',   phone: 'Tap SPECIAL to charge, tap to fire', color: '#e879f9' },
+  drag:    { name: 'HOLD',   how: 'Hold M1 and drag',                phone: 'Hold and drag',                     color: '#fb923c' },
 };
 
 export const ULTS = {
@@ -139,13 +154,14 @@ export const ULTS = {
 export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
-const PCT_KEYS = new Set(['pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
+const PCT_KEYS = new Set(['slash', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+const MULT_KEYS = new Set(['throwPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'every' || key === 'cap') return String(Math.round(v));
+  if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
 }
 
@@ -185,7 +201,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', slash: 'cut', throwPct: 'throw', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

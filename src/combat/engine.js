@@ -33,6 +33,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     enemies: [], attacks: [], shots: [], effects: [], floaters: [], weakPts: [],
     player: { hp: stats.maxHp, maxHp: stats.maxHp, pos: null, invuln: 0, hitT: 0 },
     ult: { charge: 0, active: null, cd: 0, cdMax: 0 },
+    special: { cd: 0, cdMax: 0 },   // M2 skills' cooldown (kitRuntime.js)
     dev: { god: false, timeScale: 1 },   // sandbox menu switches
     combo: { n: 0, t: 0, best: 0 },      // landed hits in a row (see BAL.COMBO_*)
     hazards: [],                         // poison puddles from Toxic elites
@@ -98,7 +99,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // The Anemic Kaisen kits (kitRuntime.js) plug in through these hooks
   const rt = createKitRuntime({
     s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
-    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt,
+    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(),
     announce: (...a) => announce(...a),
   });
 
@@ -721,6 +722,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function pointerDown(x, y) {
     if (s.paused || s.choosing) return;
     s.player.pos = { x, y };
+    pointerHold(true);
     if (s.phase === 'defeat' || s.phase === 'clear') return;
     if (rt.onPointerDown(x, y)) return;   // suspended (Mahoraga) / Tyran's slashes
     // boss weak points first
@@ -738,14 +740,30 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
     const e = enemyAt(x, y);
     effect({ kind: 'ripple', x, y, miss: !e });
-    if (e) { clickEnemy(e); return; }
     const sk = rt.skill();
-    if (!sk || sk.type !== 'gun') sfx('miss');
-    // Gun skill: clicking empty space fires a homing shot
+    // Charge skills (Ivy): M1 fires what M2 charged
+    rt.fire(x, y, e);
+    if (e) clickEnemy(e);
+    else if (!sk || sk.type !== 'gun') sfx('miss');
+    // Swag Strike: every click, hit or miss, fires homing shots at the nearest enemies
     if (sk?.type === 'gun') {
-      const targets = s.enemies.filter(e => !(e.down > 0)).sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
+      const targets = s.enemies.filter(o => !(o.down > 0) && o.tier !== 'treasure').sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
       targets.forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult: sk.pct }));
     }
+  }
+
+  // Holding M1 (Doro's drag): BattleArena reports press and release
+  function pointerHold(on) {
+    s.player.held = on && !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time } : null;
+  }
+
+  // M2 / Q / the SPECIAL button: the skill's special move at (x, y), or at the cursor
+  function special(x, y) {
+    if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return false;
+    if (x != null) s.player.pos = { x, y };
+    const P = s.player.pos;
+    if (!P) return false;
+    return rt.special(P.x, P.y);
   }
 
   function updateShots(dt) {
@@ -891,6 +909,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.time += dt;
     const pl = s.player;
     s.ult.cd = Math.max(0, s.ult.cd - dt);
+    s.special.cd = Math.max(0, s.special.cd - dt);
 
     pl.invuln = Math.max(0, pl.invuln - dt);
     pl.hitT   = Math.max(0, pl.hitT - dt);
@@ -940,19 +959,6 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     updatePhase(dt);
     updateShots(dt);
     rt.update(dt);
-
-    // Pulse skill
-    const sk = rt.skill();
-    if (sk?.type === 'pulse' && pl.pos && s.phase !== 'defeat' && s.phase !== 'clear') {
-      s.timers.pulse -= dt;
-      if (s.timers.pulse <= 0) {
-        s.timers.pulse = sk.interval;
-        const R = K(sk.radius);
-        effect({ kind: 'burst', x: pl.pos.x, y: pl.pos.y, r: R, color: '#8B5CF6' });
-        s.enemies.filter(e => dist(e.x, e.y, pl.pos.x, pl.pos.y) <= R + e.size * s.k * 0.5)
-          .forEach(e => { const { dmg, crit } = rollClick(sk.pct); damageEnemy(e, dmg, { crit, color: '#a78bfa', label: '⚛' }); });
-      }
-    }
 
     // Time stop: enemies, their attacks and spawns are frozen; you keep hitting
     if (s.timeStop > 0) { s.timeStop -= dt; return; }
@@ -1116,7 +1122,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   const choose = (i) => rt.choose(i);   // Room 16's ult: pick a skill
 
-  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), update, resize, pointerMove, pointerDown, activateUlt, setStats, loadStage, announce, setReserved, dev };
+  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));
