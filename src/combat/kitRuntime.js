@@ -107,6 +107,13 @@ export function createKitRuntime(api) {
     }
     return best;
   }
+  // Where a beam points: from the spot you pressed (anchor) toward your cursor once you've moved
+  // it a little — so you aim by pressing and pulling. Not moved yet: the best line through the anchor.
+  function aimAngle(ax, ay, w, prev = null) {
+    const P = s.player.pos;
+    if (P && dist(P.x, P.y, ax, ay) > K(28)) return Math.atan2(P.y - ay, P.x - ax);
+    return bestAngle(ax, ay, w, prev);
+  }
   const nearest = (x, y, list = foes()) => list.reduce((b, e) => (!b || dist(x, y, e.x, e.y) < dist(x, y, b.x, b.y) ? e : b), null);
 
   // ── Who enemies attack ───────────────────────────────────────────────────
@@ -421,6 +428,15 @@ export function createKitRuntime(api) {
         sfx('shield');
         return true;
       }
+      case 'arrow': {   // Doro: Open — a fire arrow streaks down onto the cursor (huge inside the domain)
+        const dom = s.ult.active?.type === 'shrine';
+        if (!startCooldown(sk, x, y)) return false;
+        if (dom) s.special.cd = s.special.cdMax = sk.cooldown * 0.6;   // and comes back faster
+        s.kit.arrows = s.kit.arrows ?? [];
+        s.kit.arrows.push({ id: nextId(), tx: x, ty: y, t: 0, dur: dom ? 0.32 : 0.22, big: dom, pct: sk.pct * (dom ? 2 : 1), r: K(sk.radius) * (dom ? 3 : 1), burn: sk.burn * (dom ? 2 : 1) });
+        sfx('shield');
+        return true;
+      }
       // a tap stocks one (at most ~4 a second — holding is the fast way to charge)
       case 'souls':    return addCharge('souls', sk, x, y, 0.22, '#e879f9');
       case 'crawlers': return addCharge('crawlN', sk, x, y, 0.22, '#c084fc');
@@ -493,7 +509,7 @@ export function createKitRuntime(api) {
   }
 
   // Let go of M1 after holding: charged release moves (how long it was held → strength)
-  function release(held, x, y) {
+  function release(held, x, y, press = null) {
     const sk = skill();
     if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
@@ -501,7 +517,10 @@ export function createKitRuntime(api) {
     const list = foes();
     if (sk.type === 'lance') {   // Ice: through the cursor, lined up on the most enemies
       const w = K(sk.width) * (0.6 + 0.4 * f);
-      const ln = lineThrough(x, y, s.kit.aimA ?? bestAngle(x, y, w));
+      // through where you pressed, pointing where you pulled the cursor
+      const ax = press?.x ?? x, ay = press?.y ?? y;
+      const ln = lineThrough(ax, ay, aimAngle(ax, ay, w, s.kit.aimA));
+      x = ax; y = ay;
       let n = 0;
       // nearest to the cursor first; each enemy it goes through weakens it (−45% a time, down to 25%)
       list.filter(e => distToSegment(e.x, e.y, ln.x1, ln.y1, ln.x2, ln.y2) <= w / 2 + radius(e) * 0.7)
@@ -634,8 +653,14 @@ export function createKitRuntime(api) {
         shake(0.5);
         return true;
       }
+      case 'shrine':   // Doro: Domain Expansion — Malevolent Shrine
+        s.ult.active = { type: 'shrine', t: u.dur + 1, dur: u.dur + 1, pct: u.pct, cleave: u.cleave, tick: 0, cleaveT: 0.6, intro: 1, x: P.x, y: P.y };
+        s.banner = { text: 'DOMAIN EXPANSION', sub: 'MALEVOLENT SHRINE · 伏魔御廚子', t: 1.8, bad: true };
+        effect({ kind: 'flash', color: '#7f1d1d', life: 0.8 });
+        shake(0.6); sfx('boom');
+        return true;
       case 'purple':
-        s.kit.purple = { t: 0.6, dur: 0.6, width: K(u.width), mult: u.mult, x: P.x, y: P.y, a: bestAngle(P.x, P.y, K(u.width)) };
+        s.kit.purple = { t: 0.8, dur: 0.8, width: K(u.width), mult: u.mult, x: P.x, y: P.y, a: bestAngle(P.x, P.y, K(u.width)) };
         api.announce('HOLLOW PURPLE', '#a855f7');
         return true;
       case 'sorcerer':
@@ -671,6 +696,7 @@ export function createKitRuntime(api) {
       api.announce('COLLAPSE', '#22d3ee'); shake(0.4); sfx('boom');
     }
     if (act.type === 'ora') s.kit.oraSkill = null;
+    if (act.type === 'shrine') { effect({ kind: 'flash', color: '#450a0a', life: 0.6 }); shake(0.3); }   // the domain collapses
   }
   // Room 16's ult: you picked one of the three skills
   function choose(i) {
@@ -741,6 +767,58 @@ export function createKitRuntime(api) {
       }
     } else if (sk?.type === 'firetrail') kit.trailPt = null;
 
+    // Doro's fire arrows land
+    if (kit.arrows?.length) {
+      for (const ar of kit.arrows) {
+        ar.t += dt;
+        if (ar.t < ar.dur) continue;
+        ar.done = true;
+        let n = 0;
+        api.asYou(() => foes().filter(e => dist(e.x, e.y, ar.tx, ar.ty) <= ar.r + radius(e) * 0.5).forEach(e => {
+          kitHit(e, ar.pct, { color: '#fb923c', label: '🏹', quiet: n++ >= 4 });
+          if (e.hp > 0) e.burn = { dps: ar.burn, t: 3 };
+        }));
+        effect({ kind: 'shards', x: ar.tx, y: ar.ty, r: ar.r, color: '#f97316', n: ar.big ? 26 : 14 });
+        effect({ kind: 'burst', x: ar.tx, y: ar.ty, r: ar.r, color: '#fb923c' });
+        effect({ kind: 'ring', x: ar.tx, y: ar.ty, r: ar.r * 1.15, color: '#fde68a', life: 0.45 });
+        if (ar.big) { effect({ kind: 'flash', color: '#f97316', life: 0.35 }); shake(0.5); } else shake(0.2);
+        sfx('boom');
+      }
+      kit.arrows = kit.arrows.filter(a => !a.done);
+    }
+
+    // Malevolent Shrine: after the domain opens, Dismantle hits everything 4×/s, Cleave the toughest 1×/s
+    const dom = s.ult.active?.type === 'shrine' ? s.ult.active : null;
+    if (dom && live) {
+      if (dom.intro > 0) dom.intro -= dt;
+      else {
+        dom.tick -= dt;
+        if (dom.tick <= 0) {
+          dom.tick = 0.25;
+          dom.n = (dom.n ?? 0) + 1;
+          foes().forEach((e, i) => {
+            api.damageEnemy(e, s.stats.clickDmg * dom.pct, { color: '#fecaca', label: '✂', charge: 0, quiet: i >= 2 || dom.n % 2 === 0 });
+            const a = rand(0, Math.PI), L = e.size * s.k * 0.9;
+            effect({ kind: 'dslash', x1: e.x - Math.cos(a) * L, y1: e.y - Math.sin(a) * L, x2: e.x + Math.cos(a) * L, y2: e.y + Math.sin(a) * L, life: 0.22 });
+          });
+          if (dom.n % 3 === 0) { const a = rand(0, Math.PI), L = Math.hypot(s.W, s.H), cx = rand(s.W * 0.2, s.W * 0.8), cy = rand(s.H * 0.2, s.H * 0.8);
+            effect({ kind: 'dslash', x1: cx - Math.cos(a) * L, y1: cy - Math.sin(a) * L, x2: cx + Math.cos(a) * L, y2: cy + Math.sin(a) * L, life: 0.3, big: true }); }
+          sfx('hit');
+        }
+        dom.cleaveT -= dt;
+        if (dom.cleaveT <= 0) {
+          dom.cleaveT = 1;
+          const t = strongest();
+          if (t) {
+            api.damageEnemy(t, s.stats.clickDmg * dom.cleave, { color: '#ef4444', label: 'CLEAVE ', charge: 0, crit: true });
+            effect({ kind: 'dslash', x1: t.x - t.size * s.k, y1: t.y - t.size * s.k * 0.4, x2: t.x + t.size * s.k, y2: t.y + t.size * s.k * 0.4, life: 0.4, big: true });
+            effect({ kind: 'dslash', x1: t.x - t.size * s.k * 0.4, y1: t.y + t.size * s.k, x2: t.x + t.size * s.k * 0.4, y2: t.y - t.size * s.k, life: 0.4, big: true });
+            shake(0.25); sfx('crit');
+          }
+        }
+      }
+    }
+
     // Room 16: the punch barrage lands over a moment
     if (kit.barrage) {
       const b = kit.barrage;
@@ -763,23 +841,25 @@ export function createKitRuntime(api) {
     chargeWhileHeld(dt);
 
     // Ice: while you hold, keep the lance lined up (the dashed preview line)
-    if (sk?.type === 'lance' && s.player.held && P) kit.aimA = bestAngle(P.x, P.y, K(sk.width), kit.aimA);
+    if (sk?.type === 'lance' && s.player.held && P) { const h = s.player.held; kit.aimA = aimAngle(h.x ?? P.x, h.y ?? P.y, K(sk.width), kit.aimA); }
     else if (sk?.type === 'lance' && !s.player.held) kit.aimA = null;
 
     // refabiba: hold M1 → a continuous water beam through the cursor (Neuvillette-style)
     const held = s.player.held;
     if (sk?.type === 'tide' && held && P && live && !s.mahoraga && s.time - held.t0 >= sk.full && kit.tideHold !== held.t0) {
-      const tb = kit.tide ?? (kit.tide = { a: bestAngle(P.x, P.y, K(sk.width)), t: 0, tick: 0 });
+      // the beam pivots on where you pressed and points at your cursor (sweep it around)
+      const px = held.x ?? P.x, py = held.y ?? P.y;
+      const tb = kit.tide ?? (kit.tide = { a: aimAngle(px, py, K(sk.width)), t: 0, tick: 0 });
       tb.t += dt;
-      // the beam swings toward the best line instead of snapping
-      const want = bestAngle(P.x, P.y, K(sk.width), tb.a);
+      const manual = dist(P.x, P.y, px, py) > K(28);
+      const want = aimAngle(px, py, K(sk.width), tb.a);
       let d = ((want - tb.a) % Math.PI + Math.PI * 1.5) % Math.PI - Math.PI / 2;
-      tb.a += clamp(d, -4 * dt, 4 * dt);
-      tb.x = P.x; tb.y = P.y;
+      tb.a += manual ? d : clamp(d, -4 * dt, 4 * dt);   // your aim is followed exactly; the auto-aim swings smoothly
+      tb.x = px; tb.y = py;
       tb.tick -= dt;
       if (tb.tick <= 0) {
         tb.tick = 0.25;
-        const ln = lineThrough(P.x, P.y, tb.a), w = K(sk.width);
+        const ln = lineThrough(px, py, tb.a), w = K(sk.width);
         const hit = foes().filter(e => distToSegment(e.x, e.y, ln.x1, ln.y1, ln.x2, ln.y2) <= w / 2 + radius(e) * 0.7)
           .sort((a, b) => dist(P.x, P.y, a.x, a.y) - dist(P.x, P.y, b.x, b.y));
         api.asYou(() => hit.forEach((e, i) => kitHit(e, sk.dps * 0.25 * (i === 0 ? 1 : 0.35), { color: '#38bdf8', label: '💧', quiet: (kit.tideN = (kit.tideN ?? 0) + 1) % 4 !== 0 || i >= 2 })));
@@ -871,8 +951,7 @@ export function createKitRuntime(api) {
     if (kit.purple) {
       const pu = kit.purple;
       pu.t -= dt;
-      const aim = P ?? center();
-      pu.x = aim.x; pu.y = aim.y; pu.a = bestAngle(aim.x, aim.y, pu.width, pu.a);   // the preview follows your cursor
+      pu.a = aimAngle(pu.x, pu.y, pu.width, pu.a);   // press E where it should pass, pull the cursor the way it should point
       if (pu.t <= 0) {
         const ln = lineThrough(pu.x, pu.y, pu.a);
         foes().filter(e => distToSegment(e.x, e.y, ln.x1, ln.y1, ln.x2, ln.y2) <= pu.width / 2 + radius(e) * 0.7)
@@ -1030,7 +1109,7 @@ export function createKitRuntime(api) {
   // Stage cleared / lost / (re)loaded: wipe what's on the field
   function reset(why) {
     s.allies = []; s.zones = []; s.fire = [];
-    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null;
+    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = [];
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
     s.kit.barrage = null; s.kit.emberPt = null; s.kit.entangle = null;

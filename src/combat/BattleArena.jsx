@@ -166,7 +166,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
+  const OVER = new Set(['dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -256,6 +256,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         ))}
         <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX}px,${shakeY}px)` }}>
           <div style={{ position: 'absolute', inset: 0, background: s.stage.bg ? 'rgba(10,14,30,0.45)' : 'rgba(10,14,30,0.22)', pointerEvents: 'none' }} />
+
+          {/* ── Malevolent Shrine: the domain closes in from where you cast it ── */}
+          {s.ult.active?.type === 'shrine' && <ShrineDomain dom={s.ult.active} W={s.W} H={s.H} k={k} time={s.time} />}
 
           {/* ── Attack areas ─────────────────────────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4, overflow: 'visible' }}>
@@ -424,6 +427,33 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 </g>
               );
             })()}
+            {/* Malevolent Shrine aura around your cursor */}
+            {s.ult.active?.type === 'shrine' && P && (
+              <g style={{ filter: 'drop-shadow(0 0 10px #dc2626)' }}>
+                <circle cx={P.x} cy={P.y} r={44 * k} fill="none" stroke="#7f1d1d" strokeWidth={10 * k} opacity={0.55} />
+                <circle cx={P.x} cy={P.y} r={44 * k} fill="none" stroke="#ef4444" strokeWidth={3 * k} strokeDasharray={`${18 * k} ${10 * k}`}
+                  transform={`rotate(${s.time * 160} ${P.x} ${P.y})`} />
+                <circle cx={P.x} cy={P.y} r={30 * k} fill="none" stroke="#fca5a5" strokeWidth={2 * k} strokeDasharray={`${6 * k} ${9 * k}`}
+                  transform={`rotate(${-s.time * 240} ${P.x} ${P.y})`} />
+                {Array.from({ length: 8 }, (_, i) => {
+                  const a = i * 0.785 + s.time * 1.5, f = 1 + 0.35 * Math.sin(s.time * 9 + i * 1.7);
+                  return <path key={i} d={`M${P.x + Math.cos(a) * 44 * k},${P.y + Math.sin(a) * 44 * k} Q${P.x + Math.cos(a + 0.25) * 62 * k * f},${P.y + Math.sin(a + 0.25) * 62 * k * f} ${P.x + Math.cos(a + 0.05) * 74 * k * f},${P.y + Math.sin(a + 0.05) * 74 * k * f}`}
+                    fill="none" stroke="#dc2626" strokeWidth={3 * k} strokeLinecap="round" opacity={0.75} />;
+                })}
+              </g>
+            )}
+            {/* Doro's fire arrows streaking down */}
+            {(s.kit.arrows ?? []).map(ar => {
+              const p = Math.min(1, ar.t / ar.dur), sx = ar.tx - 340 * k, sy = ar.ty - 480 * k;
+              const x = sx + (ar.tx - sx) * p, y = sy + (ar.ty - sy) * p, ang = Math.atan2(ar.ty - sy, ar.tx - sx), len = (ar.big ? 150 : 80) * k;
+              return (
+                <g key={ar.id} style={{ filter: `drop-shadow(0 0 ${ar.big ? 16 : 8}px #f97316)` }}>
+                  <circle cx={ar.tx} cy={ar.ty} r={ar.r * (0.3 + 0.7 * p)} fill="rgba(249,115,22,0.12)" stroke="#fb923c" strokeWidth={2} strokeDasharray={`${8 * k} ${6 * k}`} />
+                  <line x1={x - Math.cos(ang) * len} y1={y - Math.sin(ang) * len} x2={x} y2={y} stroke="#fb923c" strokeWidth={(ar.big ? 14 : 7) * k} strokeLinecap="round" />
+                  <line x1={x - Math.cos(ang) * len * 0.6} y1={y - Math.sin(ang) * len * 0.6} x2={x} y2={y} stroke="#fef3c7" strokeWidth={(ar.big ? 5 : 3) * k} strokeLinecap="round" />
+                </g>
+              );
+            })}
             {/* Hollow Purple winding up: an aiming line through your cursor, blue and red closing in */}
             {s.kit.purple && s.kit.purple.a != null && (() => {
               const pu = s.kit.purple, p = 1 - pu.t / pu.dur, L = Math.hypot(s.W, s.H) * 1.2, d = 80 * k * (1 - p);
@@ -432,6 +462,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 <g>
                   <line x1={pu.x - cx * L} y1={pu.y - sy * L} x2={pu.x + cx * L} y2={pu.y + sy * L} stroke="#a855f7" strokeWidth={pu.width * (0.3 + 0.7 * p)} opacity={0.22 + 0.25 * p} />
                   <line x1={pu.x - cx * L} y1={pu.y - sy * L} x2={pu.x + cx * L} y2={pu.y + sy * L} stroke="#f5f3ff" strokeWidth={3} strokeDasharray={`${10 * k} ${8 * k}`} opacity={0.9} />
+                  <circle cx={pu.x} cy={pu.y} r={7 * k} fill="#f5f3ff" />
                   <circle cx={pu.x - sy * d} cy={pu.y + cx * d} r={16 * k} fill="#3b82f6" style={{ filter: 'drop-shadow(0 0 10px #3b82f6)' }} />
                   <circle cx={pu.x + sy * d} cy={pu.y - cx * d} r={16 * k} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
                 </g>
@@ -439,8 +470,14 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             })()}
             {/* Ice holding the lance: where it will go */}
             {curSkill?.type === 'lance' && pl.held && s.kit.aimA != null && P && (() => {
+              const ax = pl.held.x ?? P.x, ay = pl.held.y ?? P.y;
               const L = Math.hypot(s.W, s.H) * 1.2, cx = Math.cos(s.kit.aimA), sy = Math.sin(s.kit.aimA);
-              return <line x1={P.x - cx * L} y1={P.y - sy * L} x2={P.x + cx * L} y2={P.y + sy * L} stroke="#67e8f9" strokeWidth={2.5} strokeDasharray={`${12 * k} ${8 * k}`} opacity={0.75} />;
+              return (
+                <g>
+                  <line x1={ax - cx * L} y1={ay - sy * L} x2={ax + cx * L} y2={ay + sy * L} stroke="#67e8f9" strokeWidth={2.5} strokeDasharray={`${12 * k} ${8 * k}`} opacity={0.75} />
+                  <circle cx={ax} cy={ay} r={6 * k} fill="#67e8f9" />
+                </g>
+              );
             })()}
             {/* refabiba's water beam */}
             {s.kit.tide && (() => {
@@ -452,7 +489,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#075985" strokeWidth={w * 1.35 * grow} opacity={0.35} strokeLinecap="round" />
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#38bdf8" strokeWidth={w * grow} opacity={0.75} strokeLinecap="round" />
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#e0f2fe" strokeWidth={w * 0.3 * grow} strokeDasharray={`${40 * k} ${22 * k}`} strokeDashoffset={flow} />
-                  <circle cx={tb.x} cy={tb.y} r={w * 0.8} fill="none" stroke="#bae6fd" strokeWidth={3 * k} opacity={0.8} />
+                  <circle cx={tb.x} cy={tb.y} r={w * 0.6} fill="#0ea5e9" fillOpacity={0.35} stroke="#bae6fd" strokeWidth={3 * k} opacity={0.9} />
                 </g>
               );
             })()}
@@ -574,6 +611,44 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   );
 }
 
+// Malevolent Shrine's domain: a dark red world closing in from where it was cast, the shrine
+// (roofs, pillars, a fanged maw, skulls at its feet) rising at the bottom, and its name on the side.
+function ShrineDomain({ dom, W, H, k, time }) {
+  const open = Math.min(1, 1 - Math.max(0, dom.intro));            // 0 → 1 while it opens
+  const ending = Math.min(1, dom.t / 0.5);                           // fades out in the last half second
+  const R = Math.hypot(W, H) * (0.08 + 1.05 * (1 - (1 - open) ** 3));
+  const sw = Math.min(W * 0.62, 460 * k), sh = sw * 0.62, sx = W / 2 - sw / 2, sy = H - sh * (0.55 + 0.45 * open);
+  const pulse = 0.5 + 0.5 * Math.sin(time * 3);
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none', opacity: ending,
+      clipPath: `circle(${R}px at ${dom.x}px ${dom.y}px)` }}>
+      <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at 50% 85%, rgba(127,29,29,${0.55 + 0.15 * pulse}) 0%, rgba(40,4,4,0.82) 55%, rgba(5,0,0,0.92) 100%)` }} />
+      <div className="shrine-sky" />
+      <div style={{ position: 'absolute', right: '3%', top: '10%', writingMode: 'vertical-rl', fontFamily: 'serif', fontWeight: 900,
+        fontSize: Math.max(22, 44 * k), color: 'rgba(239,68,68,0.55)', letterSpacing: 6, textShadow: '0 0 18px rgba(220,38,38,0.8)' }}>伏魔御廚子</div>
+      <svg width={sw} height={sh} viewBox="0 0 400 248" style={{ position: 'absolute', left: sx, top: sy, overflow: 'visible', filter: 'drop-shadow(0 0 18px rgba(220,38,38,0.65))' }}>
+        {/* skulls piled at its feet */}
+        {Array.from({ length: 15 }, (_, i) => <circle key={i} cx={22 + i * 25 + (i % 2) * 6} cy={238 - (i % 3) * 5} r={11 + (i % 3) * 2} fill="#d6c7b0" stroke="#1a0505" strokeWidth={2} />)}
+        {Array.from({ length: 15 }, (_, i) => <g key={`e${i}`} fill="#1a0505"><circle cx={18 + i * 25 + (i % 2) * 6} cy={236 - (i % 3) * 5} r={2.6} /><circle cx={26 + i * 25 + (i % 2) * 6} cy={236 - (i % 3) * 5} r={2.6} /></g>)}
+        {/* the maw between the pillars */}
+        <rect x={120} y={128} width={160} height={92} fill={`rgba(220,38,38,${0.55 + 0.35 * pulse})`} />
+        {Array.from({ length: 9 }, (_, i) => <polygon key={`t${i}`} points={`${122 + i * 17.5},128 ${139 + i * 17.5},128 ${130.5 + i * 17.5},${150 + (i % 2) * 8}`} fill="#f5f5f4" />)}
+        {Array.from({ length: 9 }, (_, i) => <polygon key={`b${i}`} points={`${122 + i * 17.5},220 ${139 + i * 17.5},220 ${130.5 + i * 17.5},${200 - (i % 2) * 8}`} fill="#f5f5f4" />)}
+        {/* pillars */}
+        {[70, 112, 280, 322].map(x => <rect key={x} x={x} y={112} width={14} height={116} fill="#1a0505" stroke="#7f1d1d" strokeWidth={2} />)}
+        {/* lower roof, upturned ends */}
+        <path d="M20,118 Q60,96 110,92 L290,92 Q340,96 380,118 L362,104 Q330,84 290,80 L110,80 Q70,84 38,104 Z" fill="#1a0505" stroke="#ef4444" strokeWidth={2.5} />
+        {/* upper roof */}
+        <path d="M70,70 Q110,52 150,50 L250,50 Q290,52 330,70 L316,58 Q290,40 250,38 L150,38 Q110,40 84,58 Z" fill="#1a0505" stroke="#ef4444" strokeWidth={2.5} />
+        <rect x={140} y={50} width={120} height={30} fill="#240707" stroke="#7f1d1d" strokeWidth={2} />
+        <path d="M188,38 L200,6 L212,38 Z" fill="#1a0505" stroke="#ef4444" strokeWidth={2} />
+        {/* ribs hanging from the eaves */}
+        {[48, 88, 312, 352].map(x => <path key={`r${x}`} d={`M${x},108 q${x < 200 ? -8 : 8},18 0,34`} fill="none" stroke="#d6c7b0" strokeWidth={3} />)}
+      </svg>
+    </div>
+  );
+}
+
 function AttackShape({ a, k }) {
   if (a.phase === 'wait' || a.phase === 'done') return null;
   const p = a.phase === 'tele' ? Math.min(1, a.t / a.tele) : 0;
@@ -676,6 +751,13 @@ function EffectShape({ f, k }) {
       <circle cx={f.x} cy={f.y} r={f.r * (1 - p)} fill="none" stroke="#c4b5fd" strokeWidth={3 * k} strokeDasharray={`${10 * k} ${7 * k}`} />
       <circle cx={f.x} cy={f.y} r={f.r * 0.6 * (1 - p)} fill="rgba(139,92,246,0.12)" stroke="#8b5cf6" strokeWidth={2 * k} />
       <circle cx={f.x} cy={f.y} r={(6 + 10 * p) * k} fill="#ede9fe" style={{ filter: 'drop-shadow(0 0 12px #8b5cf6)' }} />
+    </g>
+  );
+  // Malevolent Shrine's Dismantle / Cleave: red slashes with a white edge
+  if (f.kind === 'dslash') return (
+    <g opacity={1 - p}>
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#b91c1c" strokeWidth={(f.big ? 10 : 5) * k * (1 - p * 0.5)} strokeLinecap="round" />
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#fff1f2" strokeWidth={(f.big ? 3 : 1.6) * k} strokeLinecap="round" />
     </g>
   );
   // Doro's drag: a bright cut along the path
@@ -987,6 +1069,10 @@ function holdButton(onDown, onUp) {
 }
 
 const ARENA_CSS = `
+  .shrine-sky { position:absolute; inset:0; opacity:0.35; mix-blend-mode:screen;
+    background: repeating-linear-gradient(115deg, transparent 0 46px, rgba(239,68,68,0.18) 47px 49px, transparent 50px 120px);
+    animation: shrineSky 2.4s linear infinite; }
+  @keyframes shrineSky { from { background-position: 0 0; } to { background-position: 240px 0; } }
   .sp-btn.display { pointer-events:none; }
   .mirror-aura { position:absolute; inset:-14%; border-radius:50%; pointer-events:none; z-index:-1; }
   .mirror-aura.warn { border:3px dashed rgba(226,232,240,0.85); animation: mirrorWarn .18s steps(2) infinite; }

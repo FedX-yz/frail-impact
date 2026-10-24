@@ -30,7 +30,7 @@ export const ENEMY_TYPES = {
   //   attacks: kind, or { kind, …options } (dmgKey, teleMult, small, debuff)
   xiao: {
     name: 'Xiao', tier: 'basic', move: 'kite', enter: true,
-    img: `${BASE}enemies/xiaoenemy.png`, size: 60,
+    img: `${BASE}enemies/xiaoenemy.png`, size: 60, drawScale: 1.35,
     hp: 20, coin: 12,
     speedRange: [0.3, 0.7],               // rolled per spawn; HP follows speed
     keep: [230, 330],
@@ -40,7 +40,7 @@ export const ENEMY_TYPES = {
   // Hexer: its purple shots WEAKEN you (−30% damage for a few seconds)
   xiaoHex: {
     name: 'Xiao Hexer', tier: 'basic', move: 'kite', enter: true, alwaysArmed: true, badge: { icon: '✦', color: '#c084fc' },
-    img: `${BASE}enemies/xiaoenemy.png`, size: 60, tint: 'hue-rotate(230deg) saturate(1.7)',
+    img: `${BASE}enemies/xiaoenemy.png`, size: 60, drawScale: 1.35, tint: 'saturate(1.8) brightness(0.75) contrast(1.15)',
     hp: 24, coin: 16, speedRange: [0.25, 0.55],
     keep: [270, 380],
     attacks: [{ kind: 'shot', dmgKey: 'hex', teleMult: 0.7, small: true, debuff: 'weak' }],
@@ -50,7 +50,7 @@ export const ENEMY_TYPES = {
   // them FORTIFIED (take 30% less damage). Kill it first.
   xiaoMedic: {
     name: 'Xiao Medic', tier: 'basic', move: 'still', enter: true, alwaysArmed: true, badge: { icon: '✚', color: '#4ade80' },
-    img: `${BASE}enemies/xiaoenemy.png`, size: 62, tint: 'hue-rotate(95deg) saturate(1.6) brightness(1.1)',
+    img: `${BASE}enemies/xiaoenemy.png`, size: 62, drawScale: 1.35, tint: 'hue-rotate(170deg) saturate(1.3) brightness(1.05)',
     hp: 30, coin: 18, speed: 0.4,
     support: { every: 4.5, radius: 240, heal: 0.08, fort: 0.3, dur: 3 },
     attacks: [{ kind: 'shot', dmgKey: 'pellet', teleMult: 0.6, small: true }],

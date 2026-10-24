@@ -850,13 +850,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const was = s.player.held;
     const charge = rt.skill()?.style === 'charge';
     if (on) {
-      if (!was) s.player.held = !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time } : null;
+      // (where you pressed: beams you hold pivot / aim from here)
+      if (!was) s.player.held = !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time, x: s.player.pos?.x, y: s.player.pos?.y } : null;
       if (charge && s.player.held && !s.player.m2) s.player.m2 = { t0: s.player.held.t0, viaM1: true };
       return;
     }
     s.player.held = null;
     if (s.player.m2?.viaM1) specialUp();
-    if (was && s.player.pos && !s.paused && !s.choosing) asYou(() => rt.release(s.time - was.t0, s.player.pos.x, s.player.pos.y));
+    if (was && s.player.pos && !s.paused && !s.choosing) asYou(() => rt.release(s.time - was.t0, s.player.pos.x, s.player.pos.y, was));
   }
 
   // M2 / Q / the SPECIAL button pressed: the skill's special move at (x, y), or at the cursor.
