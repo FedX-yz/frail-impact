@@ -46,7 +46,7 @@ export function createKitRuntime(api) {
       posHist: [],                    // Astrec: where your cursor was
       phantomT: 0,
       purple: null, meteor: null,     // ults that take a moment to land
-      implode: null,                  // Bio's quantum implosion (M2), mid-pull
+      entangle: null,                 // Bio's Quantum Entanglement: { ids, t, share }
       soulPressT: -9,                 // Ivy: when M2 last summoned a spirit
       tickT: ZONE_TICK,
       ratioU: 0, ratioWin: 0,
@@ -123,16 +123,17 @@ export function createKitRuntime(api) {
       return true;
     }
     const pv = passive();
-    if (pv?.type === 'infinity' && P && (kind === 'shot' || kind === 'dash' || kind === 'bite') && Math.random() < pv.chance) {
-      floater('∞ BLOCKED', P.x, P.y - K(40), '#93c5fd', true);
-      effect({ kind: 'burst', x: P.x, y: P.y, r: K(70), color: '#60a5fa' });
+    if (pv?.type === 'infinity' && P && s.kit.inf >= 10 && (kind === 'shot' || kind === 'dash' || kind === 'bite')) {
+      s.kit.inf = Math.max(0, s.kit.inf - 25); s.kit.infUsed = s.time;
+      floater('∞', P.x, P.y - K(40), '#93c5fd', true);
+      effect({ kind: 'burst', x: P.x, y: P.y, r: K(pv.radius), color: '#60a5fa' });
       if (src) {
         if (src.dashing) api.finishAttack(src.dashing);
         // a dasher gets thrown back hard (into a wall = crushed); the worm is
         // too long to throw, so its head is just shoved out of the bubble
         if (!launch(src, P, 1.3)) {
           const a = Math.atan2(src.y - P.y, src.x - P.x) || 0;
-          const d = K(70) + radius(src) + K(6);
+          const d = K(pv.radius) + radius(src) + K(6);
           src.x = clamp(P.x + Math.cos(a) * d, 0, s.W); src.y = clamp(P.y + Math.sin(a) * d, 0, s.H);
           if (src.move === 'worm') src.angle = a;
           src.target = null;
@@ -227,8 +228,14 @@ export function createKitRuntime(api) {
     }
   }
   // Shots slow to a crawl inside Infinity (draining it a little)
-  // (Infinity used to slow shots down; now it's a flat chance to block — see absorbHit)
-  function shotSpeed() { return 1; }
+  // Shots slow to a crawl inside Jerry's Infinity bubble (draining it a little)
+  function shotSpeed(a, dt) {
+    const pv = passive(), P = s.player.pos;
+    if (pv?.type !== 'infinity' || !P || s.kit.inf <= 0 || s.mahoraga) return 1;
+    if (dist(a.x, a.y, P.x, P.y) > K(pv.radius)) return 1;
+    s.kit.inf = Math.max(0, s.kit.inf - 15 * dt); s.kit.infUsed = s.time;
+    return 0.15;
+  }
   // Doro's fire walls burn up enemy shots
   function shotBlocked(a) {
     for (const f of s.fire) if (distToSegment(a.x, a.y, f.x1, f.y1, f.x2, f.y2) <= a.r + K(10)) return true;
@@ -292,6 +299,27 @@ export function createKitRuntime(api) {
     return false;
   }
 
+  // Something took damage: Bio's entanglement copies a share onto the other linked enemies
+  function onDamage(e, dmg, linked) {
+    const en = s.kit.entangle;
+    if (!en || linked || dmg <= 0 || !en.ids.includes(e.id)) return;
+    let n = 0;
+    for (const id of en.ids) {
+      if (id === e.id) continue;
+      const o = s.enemies.find(x => x.id === id);
+      if (o) api.damageEnemy(o, dmg * en.share, { color: '#c4b5fd', label: '🔗', quiet: n++ >= 2, linked: true, charge: 0.5 });
+    }
+  }
+
+  // Main card changed: nothing from the old card's kit carries over
+  function switchCard() {
+    init();
+    s.ult.active = null; s.ult.charge = 0; s.ult.cd = 0; s.timeStop = 0;
+    s.special.cd = 0; s.special.cdMax = 0;
+    s.player.m2 = null; s.player.held = null;
+    s.enemies.forEach(e => { e.burn = null; });
+  }
+
   // ── M2 (special), charge and hold moves ──────────────────────────────────
   // A cooldown special: false (and the seconds left above the cursor) while it's cooling down
   function startCooldown(sk, x, y) {
@@ -316,12 +344,18 @@ export function createKitRuntime(api) {
     const sk = skill();
     if (!sk || !fighting()) return false;
     switch (sk.type) {
-      case 'pulse':   // Bio: implosion
+      case 'entangle': {   // Bio: link enemies so damage to one hits them all
+        const list = foes(), first = nearest(x, y, list);
+        if (!first || dist(x, y, first.x, first.y) > K(sk.range)) { floater('no target', x, y - K(30), '#a78bfa'); return false; }
         if (!startCooldown(sk, x, y)) return false;
-        s.kit.implode = { x, y, t: 0, dur: 0.4, r: K(sk.radius), pct: sk.pct };
-        effect({ kind: 'implode', x, y, r: K(sk.radius) * 1.8, life: 0.4 });
+        const rest = list.filter(e => e !== first && dist(e.x, e.y, first.x, first.y) <= K(sk.range))
+          .sort((a, b) => dist(first.x, first.y, a.x, a.y) - dist(first.x, first.y, b.x, b.y)).slice(0, Math.floor(sk.links));
+        s.kit.entangle = { ids: [first.id, ...rest.map(e => e.id)], t: sk.dur, share: sk.share };
+        [first, ...rest].forEach(e => effect({ kind: 'implode', x: e.x, y: e.y, r: radius(e) * 2.2, life: 0.4 }));
+        floater(`🔗 ENTANGLED ×${rest.length + 1}`, first.x, first.y - K(50), '#c4b5fd', true);
         sfx('shield');
         return true;
+      }
       case 'spike': {   // Astrec: rock spikes
         if (!startCooldown(sk, x, y)) return false;
         const R = K(sk.radius);
@@ -683,12 +717,14 @@ export function createKitRuntime(api) {
         if (s.fire.length > MAX_FIRE) s.fire.shift();
         effect({ kind: 'cut', x1: a.x, y1: a.y, x2: P.x, y2: P.y, life: 0.22 });
         let cut = 0;
-        for (const e of foes()) {
-          if ((e.cutT ?? -9) > s.time - 0.3) continue;   // each enemy at most ~3 cuts a second
-          if (distToSegment(e.x, e.y, a.x, a.y, P.x, P.y) > K(12) + radius(e) * 0.75) continue;
-          e.cutT = s.time;
-          if (kitHit(e, sk.slash, { color: '#fdba74', label: '✂', quiet: cut >= 3 }) > 0) cut++;
-        }
+        api.asYou(() => {   // your own cuts: a mirrored big enemy sends them back
+          for (const e of foes()) {
+            if ((e.cutT ?? -9) > s.time - 0.3) continue;   // each enemy at most ~3 cuts a second
+            if (distToSegment(e.x, e.y, a.x, a.y, P.x, P.y) > K(12) + radius(e) * 0.75) continue;
+            e.cutT = s.time;
+            if (kitHit(e, sk.slash, { color: '#fdba74', label: '✂', quiet: cut >= 3 }) > 0) cut++;
+          }
+        });
         if (cut) { sfx(cut >= 3 ? 'crit' : 'hit'); api.comboHit?.(); }
         kit.trailPt = { x: P.x, y: P.y };
       }
@@ -714,32 +750,14 @@ export function createKitRuntime(api) {
     }
 
     chargeWhileHeld(dt);
-
-    // Bio: the implosion pulls enemies in, then bursts
-    if (kit.implode) {
-      const m = kit.implode;
-      m.t += dt;
-      for (const e of foes()) {
-        if (heavy(e) || e.kb) continue;
-        const dx = m.x - e.x, dy = m.y - e.y, d = Math.hypot(dx, dy);
-        if (d > m.r * 1.8 || d < K(8)) continue;
-        const step = Math.min(d - K(6), K(900) * dt);
-        e.x += dx / d * step; e.y += dy / d * step; e.target = null;
-      }
-      if (m.t >= m.dur) {
-        let n = 0;
-        foes().filter(e => dist(e.x, e.y, m.x, m.y) <= m.r + radius(e) * 0.5)
-          .forEach(e => kitHit(e, m.pct, { color: '#a78bfa', label: '⚛', quiet: n++ >= 4 }));
-        effect({ kind: 'burst', x: m.x, y: m.y, r: m.r, color: '#8B5CF6' });
-        effect({ kind: 'shards', x: m.x, y: m.y, r: m.r, color: '#c4b5fd', n: 14 });
-        shake(0.3); sfx('boom');
-        kit.implode = null;
-      }
+    // Jerry's bubble refills when it hasn't blocked anything for a second
+    if (pv?.type === 'infinity' && s.time - kit.infUsed > 1) kit.inf = Math.min(100, kit.inf + 30 * dt);
+    // Bio's entanglement wears off (and forgets enemies that died)
+    if (kit.entangle) {
+      kit.entangle.t -= dt;
+      kit.entangle.ids = kit.entangle.ids.filter(id => s.enemies.some(e => e.id === id));
+      if (kit.entangle.t <= 0 || kit.entangle.ids.length < 2) kit.entangle = null;
     }
-    s.fire.forEach(f => { f.t += dt; });
-    s.fire = s.fire.filter(f => f.t < f.life);
-    s.zones.forEach(z => { z.t += dt; });
-    s.zones = s.zones.filter(z => z.t < z.life);
 
     // Lava, fire and Ivy's spirits deal their damage a couple of times a second
     kit.tickT -= dt;
@@ -977,15 +995,15 @@ export function createKitRuntime(api) {
   // Stage cleared / lost / (re)loaded: wipe what's on the field
   function reset(why) {
     s.allies = []; s.zones = []; s.fire = [];
-    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.implode = null;
+    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = [];
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
-    s.kit.barrage = null; s.kit.emberPt = null;
+    s.kit.barrage = null; s.kit.emberPt = null; s.kit.entangle = null;
     if (why === 'defeat') { s.kit.souls = 0; s.kit.crawlN = 0; s.kit.punches = 0; }
   }
 
   return {
-    skill, passive, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
+    skill, passive, onDamage, switchCard, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
     clickMods, afterClick, onCritClick, onMiss, onPointerDown, onKill, onCombo,
     ultBlocked, activateUlt, endUlt, choose, hitMahoraga,
     update, reset, origin, slide,

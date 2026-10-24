@@ -24,32 +24,65 @@
 const BASE = import.meta.env.BASE_URL;
 
 export const ENEMY_TYPES = {
+  // ── Small fry: low HP, walk in from the sides, keep their distance and plink at you with
+  // quick weak shots. They spawn often — clear them out before you deal with the big ones.
+  //   keep:    the distance (design px) they try to stay from your cursor
+  //   attacks: kind, or { kind, …options } (dmgKey, teleMult, small, debuff)
   xiao: {
-    name: 'Xiao', tier: 'basic',
-    img: `${BASE}enemies/xiaoenemy.png`, size: 70,
-    hp: 30, coin: 12,
-    speedRange: [0, 0.9],                 // rolled per spawn; HP follows speed
-    attacks: [], armedAttacks: ['poke'],
-    cooldown: [5, 7],
+    name: 'Xiao', tier: 'basic', move: 'kite', enter: true,
+    img: `${BASE}enemies/xiaoenemy.png`, size: 60,
+    hp: 20, coin: 12,
+    speedRange: [0.3, 0.7],               // rolled per spawn; HP follows speed
+    keep: [230, 330],
+    attacks: [], armedAttacks: [{ kind: 'shot', dmgKey: 'pellet', teleMult: 0.55, small: true }],
+    cooldown: [2.2, 3.2],
   },
+  // Hexer: its purple shots WEAKEN you (−30% damage for a few seconds)
+  xiaoHex: {
+    name: 'Xiao Hexer', tier: 'basic', move: 'kite', enter: true, alwaysArmed: true, badge: { icon: '✦', color: '#c084fc' },
+    img: `${BASE}enemies/xiaoenemy.png`, size: 60, tint: 'hue-rotate(230deg) saturate(1.7)',
+    hp: 24, coin: 16, speedRange: [0.25, 0.55],
+    keep: [270, 380],
+    attacks: [{ kind: 'shot', dmgKey: 'hex', teleMult: 0.7, small: true, debuff: 'weak' }],
+    cooldown: [2.8, 3.8],
+  },
+  // Medic: stops at the edge and every few seconds heals the enemies around it and makes
+  // them FORTIFIED (take 30% less damage). Kill it first.
+  xiaoMedic: {
+    name: 'Xiao Medic', tier: 'basic', move: 'still', enter: true, alwaysArmed: true, badge: { icon: '✚', color: '#4ade80' },
+    img: `${BASE}enemies/xiaoenemy.png`, size: 62, tint: 'hue-rotate(95deg) saturate(1.6) brightness(1.1)',
+    hp: 30, coin: 18, speed: 0.4,
+    support: { every: 4.5, radius: 240, heal: 0.08, fort: 0.3, dur: 3 },
+    attacks: [{ kind: 'shot', dmgKey: 'pellet', teleMult: 0.6, small: true }],
+    cooldown: [3.5, 5],
+  },
+  // ── Big ones: lots of HP, come in from the sides and chase you, only attack up close —
+  // but those hits are heavy. Every so often they turn to MIRROR for a moment: hits you land
+  // on them yourself come back at you (auto-attacks, allies and burns don't).
+  //   reach:   how close (design px) they get before they swing
+  //   reflect: seconds between mirrors, warning time, how long it lasts
   bonk: {
-    name: 'Bonk', tier: 'elite',
-    img: `${BASE}enemies/bonkenemy.png`, size: 88,
-    hp: 120, coin: 60, speed: 0.15,
-    attacks: ['circle', 'slash'],
-    cooldown: [3.2, 4.5],
+    name: 'Bonk', tier: 'elite', move: 'chase', enter: true,
+    img: `${BASE}enemies/bonkenemy.png`, size: 104,
+    hp: 230, coin: 100, speed: 0.3,
+    reach: 150,
+    attacks: [{ kind: 'circle', dmgKey: 'smash', rK: 85, teleMult: 0.85 }],
+    cooldown: [2.2, 3.2],
+    reflect: { every: [9, 14], warn: 0.9, dur: 1.8 },
   },
   rusher: {
-    name: 'Rusher', tier: 'elite',
-    img: `${BASE}enemies/rusher_idle.png`, size: 80,                                     // red skull
+    name: 'Rusher', tier: 'elite', move: 'chase', enter: true,
+    img: `${BASE}enemies/rusher_idle.png`, size: 92,                                     // red skull
     poses: {
       warn:   [`${BASE}enemies/rusher_warn.png`, `${BASE}enemies/rusher_idle.png`],     // flickers yellow/red before attacking
-      attack: `${BASE}enemies/rusher_attack.png`,                                       // screaming, while dashing / shooting
+      attack: `${BASE}enemies/rusher_attack.png`,                                       // screaming, while dashing
     },
     poseFacing: 180,   // the skulls look left; they turn/flip to face where they attack
-    hp: 95, coin: 55, speed: 0.55,
-    attacks: ['dash', 'shot'],
-    cooldown: [3.5, 5],
+    hp: 180, coin: 90, speed: 0.6,
+    reach: 270,
+    attacks: [{ kind: 'dash', dmgKey: 'lunge', overshoot: 50, teleMult: 0.8 }],
+    cooldown: [2.4, 3.4],
+    reflect: { every: [10, 15], warn: 0.9, dur: 1.6 },
   },
   // Horde: small, fast, weak, they show up as a pack and crowd around you.
   // Some of them poke (small red circles), so a swarm next to you is dangerous.
@@ -133,9 +166,14 @@ export const AFFIXES = {
   splitter:  { name: 'Splitter',     color: '#facc15', desc: 'Splits into swarmlings when it dies.' },
 };
 
+// Player debuffs from enemies (engine.js): weak = you deal 30% less damage
+export const DEBUFFS = { weak: { name: 'WEAKENED', color: '#c084fc', dur: 4, dmg: 0.7 } };
+
 // Base damage of each attack at stage 1 (before DEF / damage reduction)
 export const ATTACK_DMG = {
   poke: 6, circle: 14, slash: 16, shot: 10, dash: 20,
+  pellet: 4, hex: 3,       // small fry: quick, weak shots
+  smash: 26, lunge: 24,    // big ones: heavy close-range hits
   slam: 28, ring: 14, cross: 18, barrage: 10, rain: 14,
   bite: 14,   // worm head touching your cursor
   blast: 24,  // Volatile elite explosion

@@ -162,6 +162,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const ultCd = s.ult.cd > 0 ? Math.ceil(s.ult.cd) : 0;
   const ultReady = ult && charge >= 1 && !ultCd && !s.ult.active && !s.ult.blocked;
   const curSkill = engine.curSkill?.();
+  const curPassive = engine.curPassive?.();
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
@@ -308,6 +309,13 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 strokeWidth={e.size * k * 0.45} strokeLinecap="round" opacity={0.3} />;
             })}
             {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} />)}
+            {/* something walking in from off-screen: an arrow on that edge (red = a big one) */}
+            {s.enemies.map(e => {
+              if (!e.entering || (e.x > 0 && e.x < s.W)) return null;
+              const left = e.x <= 0, x = left ? 6 * k : s.W - 6 * k, big = e.tier === 'elite', sz = (big ? 16 : 10) * k, d = left ? 1 : -1;
+              return <polygon key={`in${e.id}`} points={`${x},${e.y - sz} ${x + d * sz * 1.3},${e.y} ${x},${e.y + sz}`}
+                fill={big ? '#ef4444' : '#fbbf24'} opacity={0.6 + 0.4 * Math.abs(Math.sin(s.time * 8))} style={{ filter: `drop-shadow(0 0 6px ${big ? '#ef4444' : '#fbbf24'})` }} />;
+            })}
             {s.shots.map(sh => (
               <circle key={sh.id} cx={sh.x} cy={sh.y} r={8 * k} fill="#e9d5ff" stroke="#a855f7" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
             ))}
@@ -348,6 +356,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 affix={e.affix} pose={poseOf(e)} poses={e.type.poses} drawScale={e.drawScale} turns={e.facing != null}
                 sway={e.role === 'hydra' ? e.segIndex : null}
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
+                mirror={e.refl && e.refl.state !== 'idle' ? e.refl.state : null} fort={e.fortT > 0} badge={e.type.badge}
                 weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
             );
           })}
@@ -364,6 +373,25 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 })}
               </g>
             )}
+            {/* Jerry's Infinity bubble (passive) */}
+            {curPassive?.type === 'infinity' && P && !s.mahoraga && (
+              <g opacity={0.25 + 0.6 * s.kit.inf / 100}>
+                <circle cx={P.x} cy={P.y} r={curPassive.radius * k} fill="rgba(147,197,253,0.07)" stroke="#93c5fd" strokeWidth={2}
+                  strokeDasharray={s.kit.inf < 25 ? `${6 * k} ${6 * k}` : 'none'} />
+              </g>
+            )}
+            {/* Bio's entanglement: links between the enemies that share damage */}
+            {s.kit.entangle && (() => {
+              const es = s.kit.entangle.ids.map(id => s.enemies.find(e => e.id === id)).filter(Boolean);
+              const fade = Math.min(1, s.kit.entangle.t / 0.6);
+              return (
+                <g opacity={0.85 * fade} style={{ filter: 'drop-shadow(0 0 6px #8b5cf6)' }}>
+                  {es.slice(1).map(e => <line key={e.id} x1={es[0].x} y1={es[0].y} x2={e.x} y2={e.y} stroke="#c4b5fd" strokeWidth={2.5 * k}
+                    strokeDasharray={`${8 * k} ${5 * k}`} strokeDashoffset={-s.time * 40} />)}
+                  {es.map(e => <circle key={`c${e.id}`} cx={e.x} cy={e.y} r={e.size * k * 0.55} fill="none" stroke="#a78bfa" strokeWidth={2 * k} />)}
+                </g>
+              );
+            })()}
             {/* HOLD moves: a ring around the cursor fills while you charge */}
             {P && !s.mahoraga && ((curSkill?.style === 'hold' && pl.held) || (curSkill?.style === 'charge' && pl.m2)) && (() => {
               // HOLD: fills over the charge time. CHARGE (M2 held): fills over 1s, then it's charging
@@ -472,6 +500,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           <KitChip s={s} sk={s.stats.skill} cur={curSkill} />
           {s.stage.mod && <span title={s.stage.mod.desc}><Chip color={s.stage.mod.color}>◆ {s.stage.mod.name}</Chip></span>}
           {s.frenzy > 0 && <Chip color="#ff8c00">FRENZY {s.frenzy.toFixed(0)}s</Chip>}
+          {pl.debuffs?.weak > 0 && <Chip color="#c084fc">WEAKENED −30% DMG {pl.debuffs.weak.toFixed(0)}s</Chip>}
           {s.timeStop > 0 && <Chip color="#67e8f9">TIME STOP {s.timeStop.toFixed(1)}s</Chip>}
           {s.ult.active && (s.ult.active.type === 'mahoraga'
             ? <Chip color="#fde047">☸ MAHORAGA · {s.mahoraga ? Object.values(s.mahoraga.adapt).reduce((a, n) => a + Math.min(n, 3), 0) : 0} adapted</Chip>
@@ -548,11 +577,13 @@ function AttackShape({ a, k }) {
       style={{ filter: 'drop-shadow(0 0 10px #fff)' }} />;
   }
   if (a.kind === 'shot') {
+    const hex = !!a.opts?.debuff, col = hex ? '#c084fc' : '#ff2a2a';
     if (a.phase === 'tele') {
-      const L = 2000;
-      return <line x1={a.sx} y1={a.sy} x2={a.sx + a.ux * L} y2={a.sy + a.uy * L} stroke={redFill} strokeWidth={a.r * 2.2} strokeLinecap="round" strokeDasharray={`${14 * k} ${8 * k}`} />;
+      // small fry: a short pointer that grows (a full-screen line for every pellet was a mess)
+      const L = a.opts?.small ? (50 + 70 * p) * k : 2000;
+      return <line x1={a.sx} y1={a.sy} x2={a.sx + a.ux * L} y2={a.sy + a.uy * L} stroke={hex ? `rgba(192,132,252,${0.3 + 0.5 * p})` : redFill} strokeWidth={a.r * 2.2} strokeLinecap="round" strokeDasharray={a.opts?.small ? undefined : `${14 * k} ${8 * k}`} />;
     }
-    return <circle cx={a.x} cy={a.y} r={a.r} fill="#fff" stroke="#ff2a2a" strokeWidth={4 * k} style={{ filter: 'drop-shadow(0 0 8px #ff2a2a)' }} />;
+    return <circle cx={a.x} cy={a.y} r={a.r} fill="#fff" stroke={col} strokeWidth={(a.opts?.small ? 3 : 4) * k} style={{ filter: `drop-shadow(0 0 8px ${col})` }} />;
   }
   if (a.kind === 'dash' && a.phase === 'tele') {
     return <line x1={a.fx} y1={a.fy} x2={a.tx} y2={a.ty} stroke={`rgba(255,0,0,${0.25 + 0.4 * p})`} strokeWidth={6 * k} strokeDasharray={`${10 * k} ${8 * k}`} />;
@@ -718,7 +749,7 @@ function HydraNecks({ heads, k, time }) {
 }
 
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
@@ -744,8 +775,13 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       {tier === 'boss' && (role === 'hydra' || !grouped) && <div className="boss-shadow" style={{ top: `${50 + drawScale * 58}%` }} />}
       {dashing && <div className="dash-trail" />}
       {ax && <div className="affix-aura" style={{ '--ac': ax.color }} />}
+      {/* big ones' MIRROR: silver flicker while it's coming, a solid mirror while it reflects */}
+      {mirror && <div className={`mirror-aura ${mirror}`} />}
+      {mirror === 'on' && <div className="mirror-tag" style={{ fontSize: 11 * Math.max(0.85, k) }}>MIRROR · don't hit</div>}
+      {fort && <div className="fort-aura" />}
+      {badge && <div className="enemy-badge" style={{ color: badge.color, borderColor: badge.color, fontSize: 12 * Math.max(0.85, k) }}>{badge.icon}</div>}
       {ax && <div className="affix-tag" style={{ color: ax.color, fontSize: 10 * Math.max(0.85, k) }}>{ax.name}</div>}
-      <div className={`squash${hurt ? ' hit' : ''}`}>
+      <div className={`squash${hurt ? ' hit' : ''}${mirror === 'on' ? ' mirrored' : ''}`}>
       <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})` }}>
       {shape === 'segment' ? (
         <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
@@ -822,11 +858,13 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
 function KitChip({ s, sk, cur }) {
   if (!sk) return null;
   const out = [];
-  if (cur?.type === 'souls') out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to hurl' : ' · hold M2 to charge'}</Chip>);
+  if (cur?.type === 'souls') out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to hurl' : ' · hold to charge'}</Chip>);
   else if (s.kit.souls > 0) out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}</Chip>);
-  if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold M2 to charge'}</Chip>);
-  if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold M2 to charge'}</Chip>);
+  if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold to charge'}</Chip>);
+  if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
+  if (s.kit.entangle) out.push(<Chip key="e" color="#a78bfa">🔗 ENTANGLED {s.kit.entangle.t.toFixed(1)}s</Chip>);
+  if (s.stats.skill?.passive?.type === 'infinity' && !s.kit.oraSkill) out.push(<Chip key="i" color="#93c5fd">∞ {Math.round(s.kit.inf)}%</Chip>);
   if (cur?.style === 'hold') out.push(<Chip key="h" color="#67e8f9">{s.player.held ? 'CHARGING…' : 'hold M1, let go to fire'}</Chip>);
   if (sk.passive?.type === 'copy' && s.kit.copied) out.push(<Chip key="cp" color="#f472b6">⧉ {s.kit.copied.name} {Math.max(0, Math.ceil(s.kit.copyT))}s</Chip>);
   if (s.kit.oraSkill) out.push(<Chip key="o" color="#f472b6">ORA · {s.kit.oraSkill.name}</Chip>);
@@ -843,12 +881,12 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
         {/* SPECIAL (M2) button, next to the ult orb: fills up as the cooldown runs out / as you charge */}
         {spKind && (
-          <div className={`sp-btn${spKind === 'cd' && spFill >= 1 ? ' ready' : ''}`}
-            onPointerDown={e => { e.stopPropagation(); e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } onSpecial(true); }}
-            onPointerUp={e => { e.stopPropagation(); onSpecial(false); }} onPointerCancel={() => onSpecial(false)}
-            onMouseDown={e => e.stopPropagation()}
+          // PC: just a cooldown / counter (M2 and Q do the work). Phone: a button (tap / hold).
+          // Its touches never move your aim.
+          <div className={`sp-btn${spKind === 'cd' && spFill >= 1 ? ' ready' : ''}${mobile ? '' : ' display'}`}
+            {...(mobile ? holdButton(() => onSpecial(true), () => onSpecial(false)) : {})}
             onContextMenu={e => e.preventDefault()}
-            title={spKind === 'cd' ? 'Special: right-click (M2), Q, or tap here' : 'Charge: tap to stock up one; hold 1s to keep charging, let go to release (or M2 / Q)'}
+            title={mobile ? undefined : spKind === 'cd' ? 'Special: right-click (M2) or Q' : 'Charge: tap M2 / Q to stock one; hold M2, Q or M1 for 1s to keep charging, let go to release'}
             style={{ '--sp': spColor, width: mobile ? 52 : 46, height: mobile ? 52 : 46 }}>
             <span className="sp-fill" style={{ height: `${Math.min(1, spFill) * 100}%` }} />
             <span className="sp-txt">{spText || (mobile ? 'SPEC' : 'M2')}</span>
@@ -890,7 +928,7 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
         }} />
         <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         <div
-          onPointerDown={e => { e.stopPropagation(); onUlt(); }}
+          {...holdButton(onUlt, null)}
           title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : mainCard?.ult ? 'Ult unlocks at LV50' : 'No ult'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
@@ -913,7 +951,34 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
   );
 });
 
+// Touch/mouse handlers for an on-screen button inside the arena: the press stays on the button
+// (captured) and none of its moves reach the arena, so it doesn't drag your aim onto the button.
+function holdButton(onDown, onUp) {
+  const stop = e => e.stopPropagation();
+  return {
+    onPointerDown: e => { e.stopPropagation(); e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } onDown?.(); },
+    onPointerMove: stop,
+    onPointerUp: e => { e.stopPropagation(); onUp?.(); },
+    onPointerCancel: e => { e.stopPropagation(); onUp?.(); },
+    onLostPointerCapture: stop,
+    onMouseDown: stop,
+  };
+}
+
 const ARENA_CSS = `
+  .sp-btn.display { pointer-events:none; }
+  .mirror-aura { position:absolute; inset:-14%; border-radius:50%; pointer-events:none; z-index:-1; }
+  .mirror-aura.warn { border:3px dashed rgba(226,232,240,0.85); animation: mirrorWarn .18s steps(2) infinite; }
+  .mirror-aura.on { border:4px solid #f8fafc; background: radial-gradient(circle, rgba(226,232,240,0.28), rgba(148,163,184,0.12) 60%, transparent 72%);
+    box-shadow: 0 0 22px rgba(226,232,240,0.9), inset 0 0 18px rgba(255,255,255,0.6); animation: mirrorOn 0.6s ease-in-out infinite alternate; }
+  .squash.mirrored img { filter: grayscale(0.6) brightness(1.6) contrast(1.2) !important; }
+  .mirror-tag { position:absolute; left:50%; bottom:112%; transform:translateX(-50%); white-space:nowrap; font-weight:900; color:#0f172a;
+    background:#f1f5f9; padding:1px 6px; border-radius:4px; box-shadow:0 0 10px rgba(255,255,255,0.8); pointer-events:none; }
+  .enemy-badge { position:absolute; left:50%; bottom:100%; transform:translate(-50%, -2px); width:1.5em; height:1.5em; border-radius:50%; border:1.5px solid;
+    background:rgba(8,10,20,0.85); display:flex; align-items:center; justify-content:center; font-weight:900; line-height:1; pointer-events:none; }
+  .fort-aura { position:absolute; inset:-6%; border-radius:50%; border:2px solid rgba(74,222,128,0.9); box-shadow:0 0 12px rgba(74,222,128,0.7); pointer-events:none; z-index:-1; }
+  @keyframes mirrorWarn { 0% { opacity:1 } 50% { opacity:0.15 } }
+  @keyframes mirrorOn { from { transform: scale(0.97); } to { transform: scale(1.04); } }
   .sp-btn { position:absolute; left:100%; bottom:14%; margin-left:8px; border-radius:50%; overflow:hidden; cursor:pointer; touch-action:none;
     background:rgba(10,10,20,0.75); border:2px solid var(--sp); box-shadow:0 0 8px rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; }
   .sp-btn .sp-fill { position:absolute; left:0; right:0; bottom:0; background:var(--sp); opacity:0.35; transition:height .1s linear; }

@@ -3,7 +3,7 @@
 // Each skill has a `style`: how you use it with the mouse (see STYLES below).
 //   click   – spam M1; the skill makes every click stronger
 //   special – M2 (right-click / Q / the SPECIAL button) fires it, then a cooldown
-//   charge  – tap M2 to stock up one charge; hold M2 for 1s to keep charging, let go of M2 to release
+//   charge  – tap M2 to stock up one charge; hold M2 or M1 for 1s to keep charging, let go to release
 //   hold    – hold M1 to charge, let go to fire
 //   drag    – hold M1 and drag across enemies
 // Every skill also has a smaller always-on `passive` (with its own lv1 / si numbers).
@@ -59,10 +59,10 @@ export const SKILLS = {
                    passive: { type: 'shardProc', chance: 0.12, pct: 0.6, radius: 90,
                               lv1: { chance: 0.07, pct: 0.4 }, si: { chance: 0.02, pct: 0.1 },
                               desc: 'Clicks have a {chance} chance to burst into rock shards that hit enemies near the target for {pct} click DMG ({radius} range).' } },
-  quantum_burst: { type: 'pulse',     style: 'special', cooldown: 5, radius: 155, pct: 6,
-                   lv1: { cooldown: 7, radius: 125, pct: 3 },
-                   si: { cooldown: -0.5, radius: 15, pct: 1 },
-                   desc: 'M2: a quantum implosion at your cursor sucks enemies in ({radius} range), then bursts for {pct} click DMG. {cooldown}s cooldown.',
+  quantum_burst: { type: 'entangle',  style: 'special', cooldown: 8, links: 4, share: 0.5, dur: 6, range: 260,
+                   lv1: { cooldown: 10, links: 3, share: 0.3, dur: 5 },
+                   si: { cooldown: -0.5, links: 0.5, share: 0.08 },
+                   desc: 'M2: Quantum Entanglement links the enemy nearest your cursor with up to {links} others nearby ({range} range) for {dur}s. {share} of the damage any of them takes is copied onto all the others. {cooldown}s cooldown.',
                    passive: { type: 'pulseProc', chance: 0.08, pct: 0.8, radius: 90,
                               lv1: { chance: 0.05, pct: 0.5 }, si: { chance: 0.015, pct: 0.15 },
                               desc: 'Clicks have a {chance} chance to set off a small quantum pulse at your cursor: {pct} click DMG ({radius} range).' } },
@@ -70,9 +70,9 @@ export const SKILLS = {
                    lv1: { cooldown: 10, radius: 120, crush: 1.8 },
                    si: { cooldown: -0.5, radius: 10, crush: 0.4 },
                    desc: 'M2: Infinity repels everything within {radius} of your cursor. Slam them into a wall to CRUSH them for {crush} click DMG, or into another enemy to hurt both. Bosses are too heavy to move and take half. {cooldown}s cooldown.',
-                   passive: { type: 'infinity', chance: 0.15,
-                              lv1: { chance: 0.08 }, si: { chance: 0.03 },
-                              desc: 'Infinity: a {chance} chance to stop an enemy shot, dash or bite before it touches you.' } },
+                   passive: { type: 'infinity', radius: 75,
+                              lv1: { radius: 55 }, si: { radius: 8 },
+                              desc: "Infinity: a {radius} bubble around your cursor slows enemy shots to a crawl and stops dashes and the worm's bite (blocking drains it; it refills when nothing hits it)." } },
   lava:          { type: 'eruption',  style: 'special', cooldown: 9, radius: 115, pct: 2.5, dps: 0.6, dur: 5,
                    lv1: { cooldown: 11, radius: 95, pct: 1.4, dps: 0.35, dur: 4 },
                    si: { cooldown: -0.5, pct: 0.4, dps: 0.1, dur: 0.5 },
@@ -93,7 +93,7 @@ export const SKILLS = {
                    lv1: { cap: 12, throwPct: 0.75 },
                    si: { cap: 2.5, throwPct: 0.2 },
                    rate: 14,
-                   desc: 'Tap M2 to summon a cursed spirit (up to {cap}). Hold M2 for 1s to keep summoning, then let go to hurl them all at your cursor: {throwPct} click DMG per spirit to everything in the blast, +50% to the enemy you aim at.',
+                   desc: 'Tap M2 to summon a cursed spirit (up to {cap}). Hold M2 (or M1) for 1s to keep summoning, then let go to hurl them all at your cursor: {throwPct} click DMG per spirit to everything in the blast, +50% to the enemy you aim at.',
                    passive: { type: 'spirits', chance: 0.3,
                               lv1: { chance: 0.18 }, si: { chance: 0.05 },
                               desc: 'Kills have a {chance} chance to add a cursed spirit to your stock (elites always add 3).' } },
@@ -101,7 +101,7 @@ export const SKILLS = {
                    lv1: { cap: 5, pct: 1.2 },
                    si: { cap: 0.5, pct: 0.3 },
                    rate: 6,
-                   desc: 'Tap M2 to transfigure a crawler (up to {cap}). Hold M2 for 1s to keep transfiguring, then let go to set them all loose at the enemies around your cursor: each explodes for {pct} click DMG ({radius} range).',
+                   desc: 'Tap M2 to transfigure a crawler (up to {cap}). Hold M2 (or M1) for 1s to keep transfiguring, then let go to set them all loose at the enemies around your cursor: each explodes for {pct} click DMG ({radius} range).',
                    passive: { type: 'transfig', chance: 0.08, pct: 1.0, radius: 60,
                               lv1: { chance: 0.05, pct: 0.6 }, si: { chance: 0.015, pct: 0.15 },
                               desc: 'Kills have a {chance} chance to turn into a crawler that runs at an enemy and explodes for {pct} click DMG. Killed elites always turn.' } },
@@ -109,7 +109,7 @@ export const SKILLS = {
                    lv1: { cap: 8, pct: 1.1 },
                    si: { cap: 1, pct: 0.28 },
                    rate: 10,
-                   desc: 'Tap M2 to wind up a punch (up to {cap}). Hold M2 for 1s to keep winding up, then let go to unleash them all on the enemy nearest your cursor: {pct} click DMG per punch. ORA!',
+                   desc: 'Tap M2 to wind up a punch (up to {cap}). Hold M2 (or M1) for 1s to keep winding up, then let go to unleash them all on the enemy nearest your cursor: {pct} click DMG per punch. ORA!',
                    passive: { type: 'copy', every: 20,
                               lv1: { every: 30 }, si: { every: -2 },
                               desc: "Copies another 5★ agent's passive and switches to a new one every {every}s." } },
@@ -151,7 +151,7 @@ export const SKILLS = {
 export const STYLES = {
   click:   { name: 'CLICK',  how: 'Spam M1',                         phone: 'Spam taps',                         color: '#facc15' },
   special: { name: 'SPECIAL', how: 'M2 (right-click) or Q',          phone: 'The SPECIAL button',                color: '#a78bfa' },
-  charge:  { name: 'CHARGE', how: 'Tap M2 to stock up · hold M2 1s to charge, let go to release', phone: 'Tap SPECIAL to stock up · hold it to charge, let go to release', color: '#e879f9' },
+  charge:  { name: 'CHARGE', how: 'Tap M2 to stock up · hold M1 or M2 for 1s to charge, let go to release', phone: 'Tap SPECIAL to stock up · hold anywhere 1s to charge, let go to release', color: '#e879f9' },
   hold:    { name: 'HOLD',   how: 'Hold M1, release to fire',        phone: 'Hold, let go to fire',              color: '#67e8f9' },
   drag:    { name: 'DRAG',   how: 'Hold M1 and drag',                phone: 'Hold and drag',                     color: '#fb923c' },
 };
@@ -213,13 +213,13 @@ export const ULTS = {
 export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
-const PCT_KEYS = new Set(['slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
+const PCT_KEYS = new Set(['share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
 const MULT_KEYS = new Set(['throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
-  if (key === 'shots' || key === 'targets') return String(Math.floor(v));
+  if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
   if (key === 'every' || key === 'cap') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
@@ -272,7 +272,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

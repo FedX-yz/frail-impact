@@ -4,7 +4,7 @@
 // are design px × state.k so the same fight works on a phone and a PC.
 // ─────────────────────────────────────────────────────────────────────────────
 import { BAL, speedHpMult } from './balance';
-import { ENEMY_TYPES, ATTACK_DMG, AFFIXES } from './enemies';
+import { ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
 import { makeEndlessStage, MODIFIERS } from './stages';
 import { sfx } from '../utils/sfx';
 import { createKitRuntime } from './kitRuntime';
@@ -31,7 +31,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     phase: 'fight', phaseT: 0, kills: Math.min(kills, firstStage.killTarget),
     banner: null,
     enemies: [], attacks: [], shots: [], effects: [], floaters: [], weakPts: [],
-    player: { hp: stats.maxHp, maxHp: stats.maxHp, pos: null, invuln: 0, hitT: 0 },
+    player: { hp: stats.maxHp, maxHp: stats.maxHp, pos: null, invuln: 0, hitT: 0, debuffs: {} },
     ult: { charge: 0, active: null, cd: 0, cdMax: 0 },
     special: { cd: 0, cdMax: 0 },   // M2 skills' cooldown (kitRuntime.js)
     dev: { god: false, timeScale: 1 },   // sandbox menu switches
@@ -96,10 +96,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const effect = (e) => { s.effects.push({ id: uid++, t: 0, ...e }); if (s.effects.length > 60) s.effects.shift(); };
   const shake = (amt) => { s.shake = Math.max(s.shake, amt); };
 
+  let api_asYou = (fn) => fn();
   // The Anemic Kaisen kits (kitRuntime.js) plug in through these hooks
   const rt = createKitRuntime({
     s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
-    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(), heal: (n) => heal(n),
+    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(), heal: (n) => heal(n), asYou: (fn) => api_asYou(fn),
     announce: (...a) => announce(...a),
   });
 
@@ -114,7 +115,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       : type.tier === 'elite' && Math.random() < s.stage.affixChance + M('affixAdd', 0) ? pick(Object.keys(AFFIXES)) : null;
     const affixHp = affix === 'swift' ? 0.7 : affix ? 1.3 : 1;
     const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp * M('enemyHp') * affixHp));
-    const p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * 0.62, y: s.H * 0.42 } : randomPoint());
+    // most enemies walk in from the left or right edge instead of popping in
+    let p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * 0.62, y: s.H * 0.42 } : randomPoint());
+    let entering = null;
+    if (type.enter && !opts.pos && s.W) {
+      const left = Math.random() < 0.5, half = type.size * s.k * 0.6;
+      entering = randomPoint({ x: left ? s.W * 0.2 : s.W * 0.8, y: rand(s.H * 0.25, s.H * 0.75) }, K(90));
+      p = { x: left ? -half : s.W + half, y: clamp(entering.y + rand(-K(60), K(60)), s.H * 0.18, s.H * 0.85) };
+    }
     const shieldCfg = type.shield ?? (affix === 'shielded' ? { pct: 0.5, radius: type.size * 0.9, regen: 6 } : null);
     const e = {
       id: uid++, typeId, type, tier: type.tier, name: type.name, img: type.img,
@@ -129,9 +137,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       shieldCfg,
       shield: shieldCfg ? { hp: Math.round(hp * shieldCfg.pct), max: Math.round(hp * shieldCfg.pct), regenT: 0 } : null,
       // movement: still enemies stay put, others wander between random points
-      move: type.kind === 'worm' ? 'worm' : type.horde ? 'swarm' : (affix === 'swift' ? 1 : speed) < 0.12 ? 'still' : type.tier === 'treasure' ? 'hop' : 'wander',
-      target: null, hopT: 0,
-      armed: opts.armed ?? false,
+      move: type.kind === 'worm' ? 'worm' : type.horde ? 'swarm' : type.move ?? ((affix === 'swift' ? 1 : speed) < 0.12 ? 'still' : type.tier === 'treasure' ? 'hop' : 'wander'),
+      target: null, hopT: 0, entering, strafe: Math.random() < 0.5 ? -1 : 1,
+      armed: (opts.armed ?? false) || !!type.alwaysArmed,
+      refl: type.reflect ? { state: 'idle', t: rand(...type.reflect.every) } : null,   // big ones: mirror state
+      supT: type.support ? rand(1.5, type.support.every) : 0, fortT: 0,                // medic: next heal / fortified time
       cd: rand(...(type.cooldown ?? [4, 6])) * (type.tier === 'boss' ? 0.5 : 1) * M('enemyCd'),
       busy: 0,          // >0 while it has attacks queued / telegraphing
       flashRed: false,  // body-projectile telegraph
@@ -210,7 +220,12 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const cap = s.phase === 'boss' ? Math.max(1, Math.floor(st.basicCap / 4)) : st.basicCap;
       if (T.basic <= 0) {
         T.basic = st.basicEvery * (s.phase === 'boss' ? 4 : 1);
-        if (countTier('basic') < cap) spawnEnemy(pick(st.basics), { armed: Math.random() < st.armedBasicChance });
+        if (countTier('basic') < cap) {
+          let id = pick(st.basics);
+          // only one Medic at a time (two from stage 12)
+          if (id === 'xiaoMedic' && s.enemies.filter(e => e.typeId === 'xiaoMedic').length >= (s.stageNum >= 12 ? 2 : 1)) id = 'xiao';
+          spawnEnemy(id, { armed: Math.random() < st.armedBasicChance });
+        }
       }
       T.treasure -= dt;
       if (T.treasure <= 0) {
@@ -295,6 +310,30 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.move === 'worm') { moveWorm(e, dt); return; }
     if (e.role === 'hydra') { moveHydraHead(e, dt); return; }
     if (e.dashing) return;
+    // walking in from the edge of the screen
+    if (e.entering) {
+      const dx = e.entering.x - e.x, dy = e.entering.y - e.y, d = Math.hypot(dx, dy) || 1;
+      const step = Math.min(d, K(150 + e.speed * 120) * M('enemySpeed') * dt);
+      e.x += dx / d * step; e.y += dy / d * step;
+      if (d <= 4) e.entering = null;
+      return;
+    }
+    // small fry: keep their distance from you, drifting sideways around you
+    if (e.move === 'kite' && e.busy === 0) {
+      const P = aimPoint(), keep = e.type.keep ?? [230, 330];
+      const lo = K(keep[0]), hi = K(keep[1]);
+      let dx = e.x - P.x, dy = e.y - P.y;
+      const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+      const want = d < lo ? lo * 1.15 : d > hi ? hi * 0.9 : d;
+      const a = Math.atan2(dy, dx) + (d >= lo && d <= hi ? e.strafe * 0.5 : 0);
+      e.target = { x: clamp(P.x + Math.cos(a) * want, s.W * 0.06, s.W * 0.94), y: clamp(P.y + Math.sin(a) * want, s.H * 0.15, s.H * 0.88) };
+      if (Math.random() < dt * 0.15) e.strafe *= -1;
+    }
+    // big ones: walk straight at you and stop when they're close enough to swing
+    if (e.move === 'chase' && e.busy === 0) {
+      const P = aimPoint();
+      e.target = dist(e.x, e.y, P.x, P.y) > K(e.type.reach ?? 150) * 0.45 ? { x: P.x, y: P.y } : null;
+    }
     if (e.move === 'swarm' && e.busy === 0) {
       // crowd around you (not on you) at their own spot in the ring
       e.swarmOff.a += dt * 0.6;
@@ -313,7 +352,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         const p = anchor ? randomPoint(anchor, K(160)) : randomPoint({ x: e.x, y: e.y }, K(140));
         e.target = p;
       }
-    } else if (e.move !== 'swarm' && (!e.target || dist(e.x, e.y, e.target.x, e.target.y) < 4)) {
+    } else if (e.move === 'wander' && (!e.target || dist(e.x, e.y, e.target.x, e.target.y) < 4)) {
       e.target = randomPoint({ x: e.x, y: e.y }, K(220));
     }
     if (!e.target) return;
@@ -345,7 +384,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (a.kind === 'circle' || a.kind === 'poke') {
       const c = o.center ?? { x: owner.x, y: owner.y };
       a.cx = c.x; a.cy = c.y;
-      a.r = o.r ?? (owner.size * s.k * 0.5 + K(a.kind === 'poke' ? 28 : 60));
+      a.r = o.r ?? (owner.size * s.k * 0.5 + K(o.rK ?? (a.kind === 'poke' ? 28 : 60)));
     } else if (a.kind === 'slash') {
       const ang = o.angle ?? rand(0, Math.PI);
       const L = Math.hypot(s.W, s.H);
@@ -356,10 +395,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const ang = Math.atan2(P.y - owner.y, P.x - owner.x) + (o.spread ?? 0);
       a.sx = owner.x; a.sy = owner.y; a.ux = Math.cos(ang); a.uy = Math.sin(ang);
       owner.aim = ang;   // attack poses turn toward this
-      a.x = a.sx; a.y = a.sy; a.r = K(12); a.speed = K(520);
+      a.x = a.sx; a.y = a.sy; a.r = K(o.small ? 7 : 12); a.speed = K(o.small ? 470 : 520);
     } else if (a.kind === 'dash') {
       const ang = Math.atan2(P.y - owner.y, P.x - owner.x);
-      const d = dist(owner.x, owner.y, P.x, P.y) + K(110);
+      const d = dist(owner.x, owner.y, P.x, P.y) + K(o.overshoot ?? 110);
       owner.aim = ang;
       a.fx = owner.x; a.fy = owner.y;
       a.tx = clamp(owner.x + Math.cos(ang) * d, s.W * 0.04, s.W * 0.96);
@@ -374,8 +413,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     // armed basics use their armed list; everything else (incl. sandbox-spawned elites) its normal one
     const pool = e.armed && t.armedAttacks?.length ? t.armedAttacks : t.attacks;
     if (!pool?.length) return;
-    const kind = pick(pool);
-    queueAttack(e, kind);
+    const atk = pick(pool);   // a kind, or { kind, …options }
+    if (typeof atk === 'object') queueAttack(e, atk.kind, atk); else queueAttack(e, atk);
   }
 
   function startBossPattern(boss, pattern) {
@@ -446,7 +485,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (s.fire.length && rt.shotBlocked(a)) {         // Doro's fire walls burn them up
             effect({ kind: 'burst', x: a.x, y: a.y, r: K(18), color: '#fb923c' }); finishAttack(a); continue;
           }
-          if (!a.hitDone && T && dist(T.x, T.y, a.x, a.y) <= a.r + K(6) + T.r) { a.hitDone = true; hurt(a.dmg, 'shot'); }
+          if (!a.hitDone && T && dist(T.x, T.y, a.x, a.y) <= a.r + K(6) + T.r) {
+            a.hitDone = true;
+            if (hurt(a.dmg, 'shot') && a.opts.debuff) addDebuff(a.opts.debuff);   // Hexer: WEAKENED
+          }
           if (a.x < -50 || a.y < -50 || a.x > s.W + 50 || a.y > s.H + 50 || a.hitDone) finishAttack(a);
         } else if (a.kind === 'dash') {
           const spd = K(950);
@@ -466,14 +508,23 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // ── Player getting hit ──────────────────────────────────────────────────
   // An enemy attack connected with whatever it was aimed at
+  // true if it actually hurt you
   function hurt(raw, kind, src = null) {
-    if (s.mahoraga) { rt.hitMahoraga(raw, kind); return; }
-    hitPlayer(raw, kind, src);
+    if (s.mahoraga) { rt.hitMahoraga(raw, kind); return false; }
+    return hitPlayer(raw, kind, src);
+  }
+  function addDebuff(id) {
+    const d = DEBUFFS[id];
+    if (!d) return;
+    const fresh = !(s.player.debuffs[id] > 0);
+    s.player.debuffs[id] = d.dur;
+    const p = s.player.pos ?? { x: s.W / 2, y: s.H / 2 };
+    if (fresh) floater(d.name, p.x, p.y - K(64), d.color, true);
   }
   function hitPlayer(raw, kind = 'hit', src = null) {
     const pl = s.player;
-    if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return;
-    if (rt.absorbHit(kind, src)) { pl.invuln = Math.max(pl.invuln, 0.3); return; }   // Toad / Infinity
+    if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return false;
+    if (rt.absorbHit(kind, src)) { pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction)));
     pl.hp = Math.max(0, pl.hp - dmg);
     pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; shake(0.3);
@@ -484,6 +535,22 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.combo.n = 0;
     rt.onPlayerHit();
     cb('onPlayerHit', dmg);
+    if (pl.hp <= 0) startDefeat();
+    return true;
+  }
+
+  // A hit you landed on a mirrored big one: it comes back at you instead (capped, so one
+  // big crit can't one-shot you — but spamming into it adds up)
+  function reflectHit(e, dmg) {
+    const pl = s.player;
+    floater('↩ REFLECTED', e.x, e.y - e.size * s.k * 0.6, '#e2e8f0', true);
+    effect({ kind: 'ring', x: e.x, y: e.y, r: e.size * s.k * 0.7, color: '#e2e8f0', life: 0.3 });
+    if (s.dev.god || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return;
+    const back = Math.max(1, Math.round(Math.min(dmg, pl.maxHp * BAL.REFLECT_CAP)));
+    pl.hp = Math.max(0, pl.hp - back); pl.hitT = 0.25; shake(0.15);
+    const p = pl.pos ?? { x: s.W / 2, y: s.H / 2 };
+    floater(`-${back} HP`, p.x, p.y - K(24), '#e2e8f0', true);
+    sfx('hurt');
     if (pl.hp <= 0) startDefeat();
   }
 
@@ -515,6 +582,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     let dmg = st.clickDmg * mult * rand(0.9, 1.1);
     if (st.highHpAtkBonus && s.player.hp > s.player.maxHp / 2) dmg *= 1 + st.highHpAtkBonus;
     if (s.frenzy > 0) dmg *= 2;
+    if (s.player.debuffs.weak > 0) dmg *= DEBUFFS.weak.dmg;   // a Hexer got you
     if (s.ult.active?.type === 'transform') dmg *= s.ult.active.clickMult;
     if (s.ult.active?.type === 'overtime') dmg *= s.ult.active.mult;
     dmg *= 1 + Math.min(s.combo.n, BAL.COMBO_MAX) * BAL.COMBO_PER;
@@ -530,9 +598,12 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (m >= 0) { announce(`COMBO ${c.n}!  +${Math.round(Math.min(c.n, BAL.COMBO_MAX) * BAL.COMBO_PER * 100)}% DMG`, ['#facc15', '#fb923c', '#f43f5e'][m]); sfx('combo', m); rt.onCombo(m); }
   }
 
-  function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false } = {}) {
+  function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false, linked = false } = {}) {
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
     let dmg = rawDmg * M('playerDmg');
+    // mirrored: hits you land yourself come back at you, and it takes nothing
+    if (e.refl?.state === 'on' && s.direct) { reflectHit(e, dmg); return 0; }
+    if (e.fortT > 0) dmg *= 1 - BAL.FORTIFY;   // a Medic's buff
     e.lastHit = s.time;
     const pv = rt.passive();
     if (e.frozen > 0 && pv?.type === 'frost') dmg *= 1 + pv.bonus;
@@ -553,6 +624,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
 
     e.hp -= dmg; e.hurt = 0.12;
+    rt.onDamage(e, dmg, linked);
     if (!quiet) floater(`${crit ? 'CRIT ' : ''}${label}-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, color ?? (crit ? '#ff4444' : '#ffd84a'), crit, null, crit ? 'crit' : null);
     chargeUlt(dmg, charge);
     if (e.hp <= 0) {
@@ -675,6 +747,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── Player input ────────────────────────────────────────────────────────
+  // Hits made inside here count as yours (a mirrored big enemy reflects them); auto-attacks,
+  // allies, burns and shots already in the air don't.
+  function asYou(fn) { s.direct = true; try { return fn(); } finally { s.direct = false; } }
+  api_asYou = asYou;
   function pointerMove(x, y) { s.player.pos = { x, y }; }
 
   function enemyAt(x, y) {
@@ -734,7 +810,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
   }
 
-  function pointerDown(x, y) {
+  function pointerDown(x, y) { asYou(() => pointerDownNow(x, y)); }
+  function pointerDownNow(x, y) {
     if (s.paused || s.choosing) return;
     s.player.pos = { x, y };
     pointerHold(true);
@@ -760,7 +837,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     else { rt.onMiss(); if (!sk || sk.type !== 'gun') sfx('miss'); }
     // Swag Strike: every click, hit or miss, fires homing shots at the nearest enemies
     const shoot = (n, mult) => s.enemies.filter(o => !(o.down > 0) && o.tier !== 'treasure').sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y))
-      .slice(0, n).forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult }));
+      .slice(0, n).forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult, you: s.direct }));
     if (sk?.type === 'gun') shoot(sk.shots ?? 1, sk.pct);
     const pv = rt.passive();
     if (pv?.type === 'extraShot' && Math.random() < pv.chance) { shoot(pv.shots, pv.pct); floater('💃', x, y - K(26), '#c084fc'); }
@@ -768,17 +845,25 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // Holding M1 (Doro's drag): BattleArena reports press and release
   // Letting go after holding fires the charged moves (kitRuntime release)
+  // Charge cards: holding M1 (or a finger) anywhere also charges, like holding M2.
   function pointerHold(on) {
     const was = s.player.held;
-    if (on) { if (!was) s.player.held = !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time } : null; return; }
+    const charge = rt.skill()?.style === 'charge';
+    if (on) {
+      if (!was) s.player.held = !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time } : null;
+      if (charge && s.player.held && !s.player.m2) s.player.m2 = { t0: s.player.held.t0, viaM1: true };
+      return;
+    }
     s.player.held = null;
-    if (was && s.player.pos && !s.paused && !s.choosing) rt.release(s.time - was.t0, s.player.pos.x, s.player.pos.y);
+    if (s.player.m2?.viaM1) specialUp();
+    if (was && s.player.pos && !s.paused && !s.choosing) asYou(() => rt.release(s.time - was.t0, s.player.pos.x, s.player.pos.y));
   }
 
   // M2 / Q / the SPECIAL button pressed: the skill's special move at (x, y), or at the cursor.
   // Charge skills: a press stocks one charge; holding 1s+ keeps charging (kitRuntime), and
   // specialUp (letting go) releases it all.
-  function special(x, y) {
+  function special(x, y) { return asYou(() => specialNow(x, y)); }
+  function specialNow(x, y) {
     if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return false;
     if (x != null) s.player.pos = { x, y };
     const P = s.player.pos;
@@ -786,7 +871,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.player.m2 = { t0: s.time };
     return rt.special(P.x, P.y);
   }
-  function specialUp() {
+  function specialUp() { asYou(specialUpNow); }
+  function specialUpNow() {
     const m2 = s.player.m2;
     s.player.m2 = null;
     if (m2 && s.player.pos && !s.paused && !s.choosing) rt.specialRelease(s.time - m2.t0, s.player.pos.x, s.player.pos.y);
@@ -799,7 +885,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const dx = t.x - sh.x, dy = t.y - sh.y, d = Math.hypot(dx, dy) || 1;
       if (d <= t.size * s.k * 0.4) {
         const { dmg, crit } = rollClick(sh.mult);
-        if (damageEnemy(t, dmg, { crit, color: '#c084fc', label: '💃' }) > 0) { comboHit(); sfx(crit ? 'crit' : 'hit'); }
+        // shots fired by your clicks count as your hits (a mirror reflects them too)
+        const hitIt = () => damageEnemy(t, dmg, { crit, color: '#c084fc', label: '💃' });
+        if ((sh.you ? asYou(hitIt) : hitIt()) > 0) { comboHit(); sfx(crit ? 'crit' : 'hit'); }
         sh.dead = true; continue;
       }
       const step = Math.min(d, sh.speed * dt);
@@ -938,6 +1026,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.special.cd = Math.max(0, s.special.cd - dt);
 
     pl.invuln = Math.max(0, pl.invuln - dt);
+    for (const k of Object.keys(pl.debuffs)) { pl.debuffs[k] -= dt; if (pl.debuffs[k] <= 0) delete pl.debuffs[k]; }
     pl.hitT   = Math.max(0, pl.hitT - dt);
     s.shake   = Math.max(0, s.shake - dt);
     s.frenzy  = Math.max(0, s.frenzy - dt);
@@ -1018,6 +1107,30 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         }
         continue;
       }
+      if (e.fortT > 0) e.fortT -= dt;
+      // big ones: idle → warning (flicker) → MIRROR → idle
+      if (e.refl && s.phase !== 'clear' && s.phase !== 'defeat') {
+        const r = e.refl, cfg = e.type.reflect;
+        r.t -= dt;
+        if (r.t <= 0) {
+          if (r.state === 'idle') { r.state = 'warn'; r.t = cfg.warn; }
+          else if (r.state === 'warn') { r.state = 'on'; r.t = cfg.dur; floater('MIRROR!', e.x, e.y - e.size * s.k * 0.7, '#e2e8f0', true); sfx('shield'); }
+          else { r.state = 'idle'; r.t = rand(...cfg.every); }
+        }
+      }
+      // Medic: heals and fortifies the enemies around it
+      const sup = e.type.support;
+      if (sup && !e.entering && s.phase !== 'clear' && s.phase !== 'defeat' && !(e.frozen > 0)) {
+        e.supT -= dt;
+        if (e.supT <= 0) {
+          e.supT = sup.every;
+          const R = K(sup.radius);
+          const near = s.enemies.filter(o => o !== e && o.tier !== 'treasure' && !(o.down > 0) && dist(o.x, o.y, e.x, e.y) <= R);
+          near.forEach(o => { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * sup.heal); o.fortT = sup.dur; });
+          effect({ kind: 'ring', x: e.x, y: e.y, r: R, color: '#4ade80', life: 0.6 });
+          if (near.length) floater(`✚ MENDED ×${near.length}`, e.x, e.y - K(44), '#4ade80');
+        }
+      }
       if (e.kb) { rt.slide(e, dt); if (!s.enemies.includes(e)) continue; }   // thrown by Jerry's repel
       if (e.frozen > 0) { e.frozen -= dt; continue; }
       // affixes that act every frame
@@ -1050,7 +1163,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (canAttack) {
           e.cd -= dt;
           // brand-new spawns get a moment before their first attack
-          if (e.cd <= 0 && s.time - e.born > 1.2) startEnemyAttack(e);
+          // (big ones only swing when you're within reach; nobody shoots while still walking in)
+          const inReach = !e.type.reach || dist(e.x, e.y, aimPoint().x, aimPoint().y) <= K(e.type.reach);
+          if (e.cd <= 0 && s.time - e.born > 1.2 && !e.entering && inReach) startEnemyAttack(e);
         }
       }
     }
@@ -1089,6 +1204,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function setStats(st) {
+    // a different main card: its kit starts fresh (no spirits / buffs / ult carried over)
+    const key = `${st.skill?.effect ?? ''}|${st.ult?.effect ?? ''}`;
+    if (s.kitKey != null && s.kitKey !== key) rt.switchCard();
+    s.kitKey = key;
     s.stats = st;
     // This runs on every kill (XP changes the stats), so only touch HP when max HP really
     // changed: keep the same % of it, and never round a living player down to 0 HP (that

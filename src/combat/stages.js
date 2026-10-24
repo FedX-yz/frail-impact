@@ -50,15 +50,16 @@ export function makeEndlessStage(n) {
     name: `Stage ${n}`,
     killTarget: Math.min(40, 10 + n * 3),
 
-    basics: ['xiao'],
+    // small fry: Xiao from the start, Hexers from stage 3, Medics from stage 5 (picked by weight)
+    basics: n < 3 ? ['xiao'] : n < 5 ? ['xiao', 'xiao', 'xiaoHex'] : ['xiao', 'xiao', 'xiaoHex', 'xiaoMedic'],
     basicCap: Math.min(10, 4 + n),
-    basicEvery: Math.max(0.6, 1.4 - n * 0.06),
-    // basics are punching bags at first; from stage 3 some of them poke back
-    armedBasicChance: n < 3 ? 0 : Math.min(0.4, 0.1 * (n - 2)),
+    basicEvery: Math.max(0.5, 1.1 - n * 0.05),
+    // stage 1: Xiao don't shoot yet; stage 2: half of them do; then all of them
+    armedBasicChance: n < 2 ? 0 : n < 3 ? 0.5 : 1,
 
     elites: n < 2 ? ['bonk'] : n < 3 ? ['bonk', 'rusher'] : ['bonk', 'rusher', 'shielder'],
     eliteCap: Math.min(3, 1 + Math.floor(n / 3)),
-    eliteEvery: Math.max(5, 11 - n * 0.6),
+    eliteEvery: Math.max(8, 16 - n * 0.8),   // big ones come less often
 
     // a pack of swarmlings bursts in every so often (stage 2+)
     hordeEvery: n < 2 ? 0 : Math.max(12, 24 - n),

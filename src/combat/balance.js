@@ -52,6 +52,8 @@ export const BAL = {
 
   // Combo: every hit you land adds a stack (+1% DMG each, up to +50%).
   // Stacks reset if you don't land a hit for COMBO_WINDOW seconds, or if you get hit.
+  REFLECT_CAP:      0.05,  // a hit on a mirrored big enemy hurts you for at most 5% max HP
+  FORTIFY:          0.3,   // a Medic's buff: enemies take 30% less damage
   COMBO_PER:        0.01,
   COMBO_MAX:        50,
   COMBO_WINDOW:     2.5,
