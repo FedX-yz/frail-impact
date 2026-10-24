@@ -166,7 +166,6 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const origin = s.reserved ? { x: (s.reserved.x0 + s.reserved.x1) / 2, y: (s.reserved.y0 + s.reserved.y1) / 2 } : { x: s.W * 0.12, y: s.H * 0.85 };
   const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
@@ -396,9 +395,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             {P && !s.mahoraga && ((curSkill?.style === 'hold' && pl.held) || (curSkill?.style === 'charge' && pl.m2)) && (() => {
               // HOLD: fills over the charge time. CHARGE (M2 held): fills over 1s, then it's charging
               const f = curSkill.style === 'charge' ? Math.min(1, s.time - pl.m2.t0)
+                : curSkill.type === 'tide' ? (s.kit.tide ? 1 - s.kit.tide.t / curSkill.dur : s.kit.tideHold === pl.held.t0 ? 0 : Math.min(1, (s.time - pl.held.t0) / curSkill.full))
                 : Math.max(0, Math.min(1, (s.time - pl.held.t0 - 0.25) / Math.max(0.01, curSkill.full - 0.25)));
-              const R = 30 * k, C = 2 * Math.PI * R, col = { lance: '#67e8f9', wave: '#60a5fa', flashstep: '#fda4af', souls: '#e879f9', crawlers: '#c084fc', platinum: '#f472b6' }[curSkill.type] ?? '#fff';
-              const tideR = curSkill.type === 'wave' ? curSkill.radius * k * (0.4 + 0.6 * f) : 0;
+              const R = 30 * k, C = 2 * Math.PI * R, col = { lance: '#67e8f9', tide: '#38bdf8', flashstep: '#fda4af', souls: '#e879f9', crawlers: '#c084fc', platinum: '#f472b6' }[curSkill.type] ?? '#fff';
+              const tideR = 0;
               return (
                 <g>
                   {tideR > 0 && <circle cx={P.x} cy={P.y} r={tideR} fill="rgba(59,130,246,0.08)" stroke="#60a5fa" strokeWidth={2} strokeDasharray={`${8 * k} ${6 * k}`} />}
@@ -424,15 +424,35 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 </g>
               );
             })()}
-            {s.kit.purple && (() => {
-              const pu = s.kit.purple, p = 1 - pu.t / pu.dur, aim = P ?? { x: s.W / 2, y: s.H / 2 };
-              const d = 70 * k * (1 - p);
-              const dx = aim.x - origin.x, dy = aim.y - origin.y, len = Math.hypot(dx, dy) || 1, L = Math.hypot(s.W, s.H);
+            {/* Hollow Purple winding up: an aiming line through your cursor, blue and red closing in */}
+            {s.kit.purple && s.kit.purple.a != null && (() => {
+              const pu = s.kit.purple, p = 1 - pu.t / pu.dur, L = Math.hypot(s.W, s.H) * 1.2, d = 80 * k * (1 - p);
+              const cx = Math.cos(pu.a), sy = Math.sin(pu.a);
               return (
                 <g>
-                  <line x1={origin.x} y1={origin.y} x2={origin.x + dx / len * L} y2={origin.y + dy / len * L} stroke="#a855f7" strokeWidth={pu.width} opacity={0.12 + 0.15 * p} />
-                  <circle cx={origin.x - d} cy={origin.y} r={16 * k} fill="#3b82f6" style={{ filter: 'drop-shadow(0 0 10px #3b82f6)' }} />
-                  <circle cx={origin.x + d} cy={origin.y} r={16 * k} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
+                  <line x1={pu.x - cx * L} y1={pu.y - sy * L} x2={pu.x + cx * L} y2={pu.y + sy * L} stroke="#a855f7" strokeWidth={pu.width * (0.3 + 0.7 * p)} opacity={0.22 + 0.25 * p} />
+                  <line x1={pu.x - cx * L} y1={pu.y - sy * L} x2={pu.x + cx * L} y2={pu.y + sy * L} stroke="#f5f3ff" strokeWidth={3} strokeDasharray={`${10 * k} ${8 * k}`} opacity={0.9} />
+                  <circle cx={pu.x - sy * d} cy={pu.y + cx * d} r={16 * k} fill="#3b82f6" style={{ filter: 'drop-shadow(0 0 10px #3b82f6)' }} />
+                  <circle cx={pu.x + sy * d} cy={pu.y - cx * d} r={16 * k} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
+                </g>
+              );
+            })()}
+            {/* Ice holding the lance: where it will go */}
+            {curSkill?.type === 'lance' && pl.held && s.kit.aimA != null && P && (() => {
+              const L = Math.hypot(s.W, s.H) * 1.2, cx = Math.cos(s.kit.aimA), sy = Math.sin(s.kit.aimA);
+              return <line x1={P.x - cx * L} y1={P.y - sy * L} x2={P.x + cx * L} y2={P.y + sy * L} stroke="#67e8f9" strokeWidth={2.5} strokeDasharray={`${12 * k} ${8 * k}`} opacity={0.75} />;
+            })()}
+            {/* refabiba's water beam */}
+            {s.kit.tide && (() => {
+              const tb = s.kit.tide, L = Math.hypot(s.W, s.H) * 1.2, cx = Math.cos(tb.a), sy = Math.sin(tb.a), w = (curSkill?.width ?? 46) * k;
+              const x1 = tb.x - cx * L, y1 = tb.y - sy * L, x2 = tb.x + cx * L, y2 = tb.y + sy * L, flow = -s.time * 420;
+              const grow = Math.min(1, tb.t / 0.15);
+              return (
+                <g style={{ filter: 'drop-shadow(0 0 12px #0ea5e9)' }}>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#075985" strokeWidth={w * 1.35 * grow} opacity={0.35} strokeLinecap="round" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#38bdf8" strokeWidth={w * grow} opacity={0.75} strokeLinecap="round" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#e0f2fe" strokeWidth={w * 0.3 * grow} strokeDasharray={`${40 * k} ${22 * k}`} strokeDashoffset={flow} />
+                  <circle cx={tb.x} cy={tb.y} r={w * 0.8} fill="none" stroke="#bae6fd" strokeWidth={3 * k} opacity={0.8} />
                 </g>
               );
             })()}
@@ -865,7 +885,8 @@ function KitChip({ s, sk, cur }) {
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
   if (s.kit.entangle) out.push(<Chip key="e" color="#a78bfa">🔗 ENTANGLED {s.kit.entangle.t.toFixed(1)}s</Chip>);
   if (s.stats.skill?.passive?.type === 'infinity' && !s.kit.oraSkill) out.push(<Chip key="i" color="#93c5fd">∞ {Math.round(s.kit.inf)}%</Chip>);
-  if (cur?.style === 'hold') out.push(<Chip key="h" color="#67e8f9">{s.player.held ? 'CHARGING…' : 'hold M1, let go to fire'}</Chip>);
+  if (cur?.type === 'tide') out.push(<Chip key="h" color="#38bdf8">{s.kit.tide ? `💧 BEAM ${Math.max(0, cur.dur - s.kit.tide.t).toFixed(1)}s` : s.player.held && s.kit.tideHold === s.player.held.t0 ? 'let go, then hold again' : 'hold M1 for the beam'}</Chip>);
+  else if (cur?.style === 'hold') out.push(<Chip key="h" color="#67e8f9">{s.player.held ? 'CHARGING…' : 'hold M1, let go to fire'}</Chip>);
   if (sk.passive?.type === 'copy' && s.kit.copied) out.push(<Chip key="cp" color="#f472b6">⧉ {s.kit.copied.name} {Math.max(0, Math.ceil(s.kit.copyT))}s</Chip>);
   if (s.kit.oraSkill) out.push(<Chip key="o" color="#f472b6">ORA · {s.kit.oraSkill.name}</Chip>);
   return out.length ? <>{out}</> : null;

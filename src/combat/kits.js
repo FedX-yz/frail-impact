@@ -118,14 +118,14 @@ export const SKILLS = {
   frost_bolt:    { type: 'lance',     style: 'hold', full: 1.2, minPct: 2.5, pct: 10, width: 50, freeze: 1.5,
                    lv1: { minPct: 1.4, pct: 5.5, freeze: 1 },
                    si: { pct: 1.6, freeze: 0.25, width: 6 },
-                   desc: 'Hold M1 to charge (full in {full}s), release: an ice lance from you through your cursor hits everything on its line for up to {pct} click DMG (35% less for each enemy it has already gone through) and freezes it for {freeze}s.',
+                   desc: 'Hold M1 to charge (full in {full}s), release: an ice lance through your cursor (lined up to catch the most enemies — the dashed line shows it) hits everything on its line for up to {pct} click DMG (45% less for each enemy after the first) and freezes it for {freeze}s.',
                    passive: { type: 'frost', chance: 0.06, dur: 1, bonus: 0.2,
                               lv1: { chance: 0.03, bonus: 0.1 }, si: { chance: 0.015, bonus: 0.04 },
                               desc: 'Clicks have a {chance} chance to freeze an enemy for {dur}s. Frozen enemies take +{bonus} DMG.' } },
-  healing_tide:  { type: 'wave',      style: 'hold', full: 1.2, minPct: 1.8, radius: 175, pct: 8, heal: 0.03, maxHeal: 0.15,
-                   lv1: { minPct: 1, radius: 140, pct: 4.4, heal: 0.02, maxHeal: 0.1 },
-                   si: { radius: 10, pct: 1.3, heal: 0.004, maxHeal: 0.02 },
-                   desc: 'Hold M1 to gather a tide at your cursor (full in {full}s), release: the wave hits the enemy nearest your cursor for up to {pct} click DMG and everything else within up to {radius} for 40% of that, and heals you {heal} max HP per enemy hit (up to {maxHeal}).',
+  healing_tide:  { type: 'tide',      style: 'hold', full: 0.35, dur: 3, dps: 11, width: 46, heal: 0.003, maxHeal: 0.008,
+                   lv1: { dps: 6, heal: 0.002, maxHeal: 0.005 },
+                   si: { dps: 1.7, heal: 0.0005, maxHeal: 0.0015 },
+                   desc: 'Hold M1: after a moment a continuous water beam pours through your cursor for up to {dur}s, lined up to catch the most enemies. It deals {dps} click DMG per second to the enemy nearest your cursor and a third of that to everything else in the beam, and heals you {heal} max HP per enemy hit 4 times a second (up to {maxHeal} each time).',
                    passive: { type: 'lifesteal', pctHp: 0.001, pct: 0.008, maxPctHp: 0.004,
                               lv1: { pct: 0.004, maxPctHp: 0.002 }, si: { pct: 0.003, maxPctHp: 0.0015 },
                               desc: 'Clicks heal you a little: 0.1% max HP + {pct} of the damage dealt (up to {maxPctHp} max HP per click).' } },
@@ -197,7 +197,7 @@ export const ULTS = {
                      desc: 'Needs {min}+ spirits. Fires every spirit in a spiral: {base} click DMG to all enemies, plus {perSpirit} per spirit spent.' },
   hollow_purple:   { type: 'purple',     mult: 70, width: 90, charge: 1,
                      si: { mult: 10, width: 10 },
-                     desc: 'Hollow Purple: a beam from you through your cursor, {mult} click DMG to everything in its path ({width} wide). Deletes enemy shots it touches.' },
+                     desc: 'Hollow Purple: a beam through your cursor, lined up to catch the most enemies (bosses first), {mult} click DMG to everything in its path ({width} wide). Deletes enemy shots it touches.' },
   sorcerer_killer: { type: 'sorcerer',   dur: 8, speed: 5, mult: 1.5, pct: 0.8, threshold: 0.2, killsNeeded: 20, chargeOn: 'kills',
                      si: { dur: 1, pct: 0.06, threshold: 0.03 },
                      desc: 'Charges from kills ({killsNeeded} — elites count 3), not damage. For {dur}s you strike the nearest enemy 10 times a second for {pct} click DMG each and execute non-bosses under {threshold} HP.' },
@@ -215,7 +215,7 @@ export const ULT_CD_PER_SI = 0.08;
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+const MULT_KEYS = new Set(['dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;

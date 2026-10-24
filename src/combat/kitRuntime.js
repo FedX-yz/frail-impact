@@ -88,6 +88,25 @@ export function createKitRuntime(api) {
   const origin = () => (s.reserved
     ? { x: (s.reserved.x0 + s.reserved.x1) / 2, y: (s.reserved.y0 + s.reserved.y1) / 2 }
     : { x: s.W * 0.12, y: s.H * 0.85 });
+  // Beams go straight through your cursor (not out of the portrait in the corner), at the
+  // angle that catches the most enemies — bosses count 3, big ones 2. `prev` keeps a beam from
+  // flicking between two equally good angles.
+  function lineThrough(x, y, a) {
+    const L = Math.hypot(s.W, s.H) * 1.2;
+    return { x1: x - Math.cos(a) * L, y1: y - Math.sin(a) * L, x2: x + Math.cos(a) * L, y2: y + Math.sin(a) * L };
+  }
+  function bestAngle(x, y, w, prev = null) {
+    const list = foes();
+    let best = prev ?? 0, bestScore = -1;
+    for (let i = 0; i < 36; i++) {
+      const a = (i * Math.PI) / 36, L = lineThrough(x, y, a);
+      let sc = 0;
+      for (const e of list) if (distToSegment(e.x, e.y, L.x1, L.y1, L.x2, L.y2) <= w / 2 + radius(e) * 0.7) sc += e.tier === 'boss' ? 3 : e.tier === 'elite' ? 2 : 1;
+      if (prev != null) { const d = Math.abs(((a - prev) % Math.PI + Math.PI * 1.5) % Math.PI - Math.PI / 2); if (d < 0.1) sc += 0.5; }
+      if (sc > bestScore) { bestScore = sc; best = a; }
+    }
+    return best;
+  }
   const nearest = (x, y, list = foes()) => list.reduce((b, e) => (!b || dist(x, y, e.x, e.y) < dist(x, y, b.x, b.y) ? e : b), null);
 
   // ── Who enemies attack ───────────────────────────────────────────────────
@@ -480,31 +499,19 @@ export function createKitRuntime(api) {
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
     const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
     const list = foes();
-    if (sk.type === 'lance') {   // Ice: from you, through the cursor, to the edge
-      const o = origin();
-      let dx = x - o.x, dy = y - o.y;
-      const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
-      const L = Math.hypot(s.W, s.H) * 1.3, x2 = o.x + dx * L, y2 = o.y + dy * L;
+    if (sk.type === 'lance') {   // Ice: through the cursor, lined up on the most enemies
       const w = K(sk.width) * (0.6 + 0.4 * f);
+      const ln = lineThrough(x, y, s.kit.aimA ?? bestAngle(x, y, w));
       let n = 0;
-      // nearest first; each enemy it goes through weakens it (−35% a time, down to 30%)
-      list.filter(e => distToSegment(e.x, e.y, o.x, o.y, x2, y2) <= w / 2 + radius(e) * 0.7)
-        .sort((a, b) => dist(o.x, o.y, a.x, a.y) - dist(o.x, o.y, b.x, b.y)).forEach(e => {
-        kitHit(e, pct * Math.max(0.3, 1 - 0.35 * n), { color: '#67e8f9', label: '❄', quiet: n++ >= 4 });
+      // nearest to the cursor first; each enemy it goes through weakens it (−45% a time, down to 25%)
+      list.filter(e => distToSegment(e.x, e.y, ln.x1, ln.y1, ln.x2, ln.y2) <= w / 2 + radius(e) * 0.7)
+        .sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).forEach(e => {
+        kitHit(e, pct * Math.max(0.25, 1 - 0.45 * n), { color: '#67e8f9', label: '❄', quiet: n++ >= 4 });
         if (e.hp > 0) e.frozen = Math.max(e.frozen ?? 0, sk.freeze * (0.5 + 0.5 * f));
       });
-      effect({ kind: 'beam', x1: o.x, y1: o.y, x2, y2, w, life: 0.5, color: 'ice' });
+      effect({ kind: 'beam', x1: ln.x1, y1: ln.y1, x2: ln.x2, y2: ln.y2, w, life: 0.5, color: 'ice' });
+      s.kit.aimA = null;
       shake(0.15 + 0.25 * f); sfx(f >= 1 ? 'boom' : 'crit');
-    } else if (sk.type === 'wave') {   // refabiba: a tide that hits and heals
-      const R = K(sk.radius) * (0.4 + 0.6 * f);
-      const hit = list.filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5)
-        .sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y));
-      hit.forEach((e, i) => kitHit(e, i === 0 ? pct : pct * 0.4, { color: '#60a5fa', label: '🌊', quiet: i >= 4 }));   // full on the nearest, 40% on the rest
-      const healAmt = Math.min(sk.maxHeal, sk.heal * hit.length) * s.player.maxHp;
-      if (healAmt > 0) { api.heal(healAmt); floater(`+${Math.round(healAmt)} HP`, x, y - K(40), '#4ade80', true); }
-      effect({ kind: 'ring', x, y, r: R, color: '#60a5fa', life: 0.5 });
-      effect({ kind: 'burst', x, y, r: R, color: '#3b82f6' });
-      shake(0.12 + 0.2 * f); sfx('shield');
     } else if (sk.type === 'flashstep') {   // Astrec: dash through the nearest enemies
       const near = list.filter(e => dist(e.x, e.y, x, y) <= K(sk.range))
         .sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, Math.max(1, Math.floor(sk.targets)));
@@ -628,7 +635,7 @@ export function createKitRuntime(api) {
         return true;
       }
       case 'purple':
-        s.kit.purple = { t: 0.4, dur: 0.4, width: K(u.width), mult: u.mult };
+        s.kit.purple = { t: 0.6, dur: 0.6, width: K(u.width), mult: u.mult, x: P.x, y: P.y, a: bestAngle(P.x, P.y, K(u.width)) };
         api.announce('HOLLOW PURPLE', '#a855f7');
         return true;
       case 'sorcerer':
@@ -754,6 +761,32 @@ export function createKitRuntime(api) {
     }
 
     chargeWhileHeld(dt);
+
+    // Ice: while you hold, keep the lance lined up (the dashed preview line)
+    if (sk?.type === 'lance' && s.player.held && P) kit.aimA = bestAngle(P.x, P.y, K(sk.width), kit.aimA);
+    else if (sk?.type === 'lance' && !s.player.held) kit.aimA = null;
+
+    // refabiba: hold M1 → a continuous water beam through the cursor (Neuvillette-style)
+    const held = s.player.held;
+    if (sk?.type === 'tide' && held && P && live && !s.mahoraga && s.time - held.t0 >= sk.full && kit.tideHold !== held.t0) {
+      const tb = kit.tide ?? (kit.tide = { a: bestAngle(P.x, P.y, K(sk.width)), t: 0, tick: 0 });
+      tb.t += dt;
+      // the beam swings toward the best line instead of snapping
+      const want = bestAngle(P.x, P.y, K(sk.width), tb.a);
+      let d = ((want - tb.a) % Math.PI + Math.PI * 1.5) % Math.PI - Math.PI / 2;
+      tb.a += clamp(d, -4 * dt, 4 * dt);
+      tb.x = P.x; tb.y = P.y;
+      tb.tick -= dt;
+      if (tb.tick <= 0) {
+        tb.tick = 0.25;
+        const ln = lineThrough(P.x, P.y, tb.a), w = K(sk.width);
+        const hit = foes().filter(e => distToSegment(e.x, e.y, ln.x1, ln.y1, ln.x2, ln.y2) <= w / 2 + radius(e) * 0.7)
+          .sort((a, b) => dist(P.x, P.y, a.x, a.y) - dist(P.x, P.y, b.x, b.y));
+        api.asYou(() => hit.forEach((e, i) => kitHit(e, sk.dps * 0.25 * (i === 0 ? 1 : 0.35), { color: '#38bdf8', label: '💧', quiet: (kit.tideN = (kit.tideN ?? 0) + 1) % 4 !== 0 || i >= 2 })));
+        if (hit.length) api.heal(Math.min(sk.maxHeal, sk.heal * hit.length) * s.player.maxHp);
+      }
+      if (tb.t >= sk.dur) { kit.tideHold = held.t0; kit.tide = null; }   // spent: let go and hold again
+    } else if (kit.tide) kit.tide = null;
     // Jerry's bubble refills when it hasn't blocked anything for a second
     if (pv?.type === 'infinity' && s.time - kit.infUsed > 1) kit.inf = Math.min(100, kit.inf + 30 * dt);
     // Bio's entanglement wears off (and forgets enemies that died)
@@ -838,18 +871,16 @@ export function createKitRuntime(api) {
     if (kit.purple) {
       const pu = kit.purple;
       pu.t -= dt;
+      const aim = P ?? center();
+      pu.x = aim.x; pu.y = aim.y; pu.a = bestAngle(aim.x, aim.y, pu.width, pu.a);   // the preview follows your cursor
       if (pu.t <= 0) {
-        const o = origin(), aim = P ?? center();
-        let dx = aim.x - o.x, dy = aim.y - o.y;
-        const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
-        const L = Math.hypot(s.W, s.H) * 1.3;
-        const x2 = o.x + dx * L, y2 = o.y + dy * L;
-        foes().filter(e => distToSegment(e.x, e.y, o.x, o.y, x2, y2) <= pu.width / 2 + radius(e) * 0.7)
+        const ln = lineThrough(pu.x, pu.y, pu.a);
+        foes().filter(e => distToSegment(e.x, e.y, ln.x1, ln.y1, ln.x2, ln.y2) <= pu.width / 2 + radius(e) * 0.7)
           .forEach(e => ultHit(e, pu.mult, '#c084fc', '🟣'));
         s.attacks.forEach(a => {
-          if (a.kind === 'shot' && a.phase === 'fly' && distToSegment(a.x, a.y, o.x, o.y, x2, y2) <= pu.width / 2 + K(10)) api.finishAttack(a);
+          if (a.kind === 'shot' && a.phase === 'fly' && distToSegment(a.x, a.y, ln.x1, ln.y1, ln.x2, ln.y2) <= pu.width / 2 + K(10)) api.finishAttack(a);
         });
-        effect({ kind: 'beam', x1: o.x, y1: o.y, x2, y2, w: pu.width, life: 0.7 });
+        effect({ kind: 'beam', x1: ln.x1, y1: ln.y1, x2: ln.x2, y2: ln.y2, w: pu.width, life: 0.7 });
         effect({ kind: 'flash', color: '#a855f7', life: 0.4 });
         shake(0.6); sfx('boom');
         kit.purple = null;
@@ -999,7 +1030,7 @@ export function createKitRuntime(api) {
   // Stage cleared / lost / (re)loaded: wipe what's on the field
   function reset(why) {
     s.allies = []; s.zones = []; s.fire = [];
-    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = [];
+    s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null;
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
     s.kit.barrage = null; s.kit.emberPt = null; s.kit.entangle = null;
