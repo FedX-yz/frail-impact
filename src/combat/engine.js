@@ -212,7 +212,6 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function updateSpawns(dt) {
-    if (s.mahoraga) return;   // nothing new shows up while Mahoraga is out
     const st = s.stage, T = s.timers;
     if (s.phase === 'fight' || s.phase === 'boss') {
       T.basic -= dt;
@@ -230,7 +229,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       T.treasure -= dt;
       if (T.treasure <= 0) {
         T.treasure = BAL.TREASURE_EVERY / Math.sqrt(M('treasure'));
-        if (!countTier('treasure') && Math.random() < Math.min(1, BAL.TREASURE_CHANCE * s.stats.treasureMult * M('treasure'))) spawnTreasure();
+        // (not while Mahoraga is out: your clicks command it, you couldn't grab it)
+        if (!s.mahoraga && !countTier('treasure') && Math.random() < Math.min(1, BAL.TREASURE_CHANCE * s.stats.treasureMult * M('treasure'))) spawnTreasure();
       }
     }
     if (s.phase === 'fight' && st.hordeEvery) {
@@ -883,7 +883,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (d <= t.size * s.k * 0.4) {
         const { dmg, crit } = rollClick(sh.mult);
         // shots fired by your clicks count as your hits (a mirror reflects them too)
-        const hitIt = () => damageEnemy(t, dmg, { crit, color: '#c084fc', label: '💃' });
+        const hitIt = () => damageEnemy(t, dmg, { crit, color: sh.color ?? '#c084fc', label: sh.label ?? '💃' });
         if ((sh.you ? asYou(hitIt) : hitIt()) > 0) { comboHit(); sfx(crit ? 'crit' : 'hit'); }
         sh.dead = true; continue;
       }

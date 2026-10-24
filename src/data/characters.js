@@ -427,12 +427,12 @@ export const CHARACTERS = [
     stats: { hp: 1400, atk: 155, def: 85 },
     skill: {
       name: 'Ten Shadows',
-      description: 'Combo 10 / 25 / 50 summon a Divine Dog / Toad / Nue.',
+      description: 'Your hits fill a shadow meter; M2 spends it on Divine Dogs, Nue, the Great Serpent or Max Elephant.',
       effect: 'shadows',
     },
     ult: {
       name: 'Eight-Handled Sword Divergent Sila Divine General Mahoraga',
-      description: 'Mahoraga fights for you while you watch. It must clear the field, boss included. If it dies, you die.',
+      description: 'Summons Mahoraga to fight for you. Click to command it; when its wheel has turned enough it goes berserk.',
       effect: 'mahoraga',
       cooldown: 60,
     },
