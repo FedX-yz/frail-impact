@@ -109,11 +109,19 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       if (e.key === 'e' || e.key === 'E') engine.activateUlt();
       if (e.key === 'q' || e.key === 'Q') engine.special();   // M2 for trackpads
     };
-    // let go of the mouse outside the window / switch apps: the hold ends
-    const release = () => engine.pointerHold(false);
+    const onKeyUp = (e) => { if (e.key === 'q' || e.key === 'Q') engine.specialUp(); };
+    // M2 is tracked with mouse events: a right-press while M1 is already held doesn't fire pointerdown
+    const onMouseUp = (e) => { if (e.button === 2) engine.specialUp(); };
+    // let go of the mouse outside the window / switch apps: the holds end
+    const release = () => { engine.pointerHold(false); engine.specialUp(); };
     window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('blur', release);
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('blur', release); };
+    return () => {
+      window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('mouseup', onMouseUp); window.removeEventListener('blur', release);
+    };
   }, [engine]);
 
   const toLocal = (e) => {
@@ -122,16 +130,16 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   };
   const onPointerDown = (e) => {
     if (e.pointerType === 'touch' !== touchMode) setTouchMode(e.pointerType === 'touch');
+    if (e.button !== 0) return;   // M2 comes through onMouseDown
     const [x, y] = toLocal(e);
-    if (e.button === 2) { engine.special(x, y); return; }   // M2: the card's special move
-    if (e.button !== 0) return;
     // keep getting moves / the release even if the cursor leaves the arena while held
     try { ref.current.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
     engine.pointerDown(x, y);
   };
   const onPointerMove = (e) => { const [x, y] = toLocal(e); engine.pointerMove(x, y); };
   const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
-  const onSpecial = useCallback(() => engine.special(), [engine]);
+  const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); engine.special(x, y); } };   // M2: the card's special move
+  const onSpecial = useCallback((down) => (down ? engine.special() : engine.specialUp()), [engine]);
 
   const s = engine.state;
   const k = s.k;
@@ -158,7 +166,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
   const origin = s.reserved ? { x: (s.reserved.x0 + s.reserved.x1) / 2, y: (s.reserved.y0 + s.reserved.y1) / 2 } : { x: s.W * 0.12, y: s.H * 0.85 };
-  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode']);   // effects drawn above enemies
+  const OVER = new Set(['beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -227,6 +235,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         className="battle-arena"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
+        onMouseDown={onMouseDown}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onLostPointerCapture={onPointerUp}
@@ -345,7 +354,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* ── Kit visuals above the enemies ───────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 9, overflow: 'visible' }}>
-            {s.kit.souls > 0 && P && curSkill?.type === 'souls' && (
+            {s.kit.souls > 0 && P && (
               <g>
                 {Array.from({ length: s.kit.souls }, (_, i) => {
                   const a = s.time * 1.8 + (i / s.kit.souls) * Math.PI * 2;
@@ -355,14 +364,20 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 })}
               </g>
             )}
-            {curSkill?.type === 'infinity' && P && !s.mahoraga && (() => {
-              const ready = s.kit.repelN >= Math.max(2, Math.round(curSkill.every ?? 4)) - 1;   // the next hit repels
+            {/* HOLD moves: a ring around the cursor fills while you charge */}
+            {P && !s.mahoraga && ((curSkill?.style === 'hold' && pl.held) || (curSkill?.style === 'charge' && pl.m2)) && (() => {
+              // HOLD: fills over the charge time. CHARGE (M2 held): fills over 1s, then it's charging
+              const f = curSkill.style === 'charge' ? Math.min(1, s.time - pl.m2.t0)
+                : Math.max(0, Math.min(1, (s.time - pl.held.t0 - 0.25) / Math.max(0.01, curSkill.full - 0.25)));
+              const R = 30 * k, C = 2 * Math.PI * R, col = { lance: '#67e8f9', wave: '#60a5fa', flashstep: '#fda4af', souls: '#e879f9', crawlers: '#c084fc', platinum: '#f472b6' }[curSkill.type] ?? '#fff';
+              const tideR = curSkill.type === 'wave' ? curSkill.radius * k * (0.4 + 0.6 * f) : 0;
               return (
-                <g opacity={0.25 + 0.6 * s.kit.inf / 100}>
-                  <circle cx={P.x} cy={P.y} r={curSkill.radius * k} fill={ready ? 'rgba(191,219,254,0.14)' : 'rgba(147,197,253,0.07)'}
-                    stroke={ready ? '#eff6ff' : '#93c5fd'} strokeWidth={ready ? 3.5 : 2}
-                    strokeDasharray={s.kit.inf < 25 ? `${6 * k} ${6 * k}` : 'none'} />
-                  <text x={P.x} y={P.y - curSkill.radius * k - 4} textAnchor="middle" fill="#bfdbfe" fontSize={12 * k} fontWeight={900}>∞ {Math.round(s.kit.inf)}%{ready ? ' · REPEL' : ''}</text>
+                <g>
+                  {tideR > 0 && <circle cx={P.x} cy={P.y} r={tideR} fill="rgba(59,130,246,0.08)" stroke="#60a5fa" strokeWidth={2} strokeDasharray={`${8 * k} ${6 * k}`} />}
+                  {curSkill.type === 'flashstep' && <circle cx={P.x} cy={P.y} r={curSkill.range * k} fill="none" stroke="#fda4af" strokeOpacity={0.35} strokeWidth={1.5} strokeDasharray={`${4 * k} ${8 * k}`} />}
+                  <circle cx={P.x} cy={P.y} r={R} fill="none" stroke="rgba(0,0,0,0.45)" strokeWidth={6 * k} />
+                  <circle cx={P.x} cy={P.y} r={R} fill="none" stroke={col} strokeWidth={5 * k} strokeDasharray={`${C * f} ${C}`}
+                    transform={`rotate(-90 ${P.x} ${P.y})`} style={f >= 1 ? { filter: `drop-shadow(0 0 8px ${col})` } : undefined} />
                 </g>
               );
             })()}
@@ -549,8 +564,8 @@ function EffectShape({ f, k }) {
   const p = Math.min(1, f.t / (f.life ?? 0.5));
   if (f.kind === 'beam') return (
     <g opacity={1 - p * p}>
-      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#7e22ce" strokeWidth={f.w * 1.25} strokeLinecap="round" opacity={0.35} />
-      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#c084fc" strokeWidth={f.w} strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 18px #a855f7)' }} />
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke={f.color === 'ice' ? '#0e7490' : '#7e22ce'} strokeWidth={f.w * 1.25} strokeLinecap="round" opacity={0.35} />
+      <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke={f.color === 'ice' ? '#67e8f9' : '#c084fc'} strokeWidth={f.w} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 18px ${f.color === 'ice' ? '#22d3ee' : '#a855f7'})` }} />
       <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#fff" strokeWidth={f.w * 0.3} strokeLinecap="round" />
     </g>
   );
@@ -614,6 +629,21 @@ function EffectShape({ f, k }) {
   );
   // Doro's drag: a bright cut along the path
   if (f.kind === 'cut') return <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="#fff7ed" strokeWidth={5 * k * (1 - p)} strokeLinecap="round" opacity={1 - p} style={{ filter: 'drop-shadow(0 0 5px #f97316)' }} />;
+  // a ring sweeping outward (Jerry's repel, refabiba's wave)
+  if (f.kind === 'ring') return <circle cx={f.x} cy={f.y} r={f.r * (0.3 + 0.7 * p)} fill="none" stroke={f.color} strokeWidth={6 * k * (1 - p)} opacity={1 - p} />;
+  // Astrec's rock spikes: jagged spikes jutting up across the area
+  if (f.kind === 'spikes') {
+    const up = Math.min(1, p * 4), fade = p < 0.6 ? 1 : (1 - p) / 0.4;
+    return (
+      <g opacity={fade}>
+        {Array.from({ length: 9 }, (_, i) => {
+          const a = i * 2.4 + f.id, d = f.r * (i === 0 ? 0 : 0.25 + ((i * 37) % 10) / 14), x = f.x + Math.cos(a) * d, y = f.y + Math.sin(a) * d * 0.6;
+          const h = (26 + ((i * 13) % 5) * 7) * k * up, w = 9 * k;
+          return <polygon key={i} points={`${x - w},${y} ${x + w},${y} ${x + w * 0.2},${y - h}`} fill="#b45309" stroke="#fcd34d" strokeWidth={1.5} />;
+        })}
+      </g>
+    );
+  }
   if (f.kind === 'poof') return <circle cx={f.x} cy={f.y} r={f.r * (0.6 + p)} fill="none" stroke="#fff" strokeWidth={3 * k} opacity={1 - p} />;
   if (f.kind === 'burst') return <circle cx={f.x} cy={f.y} r={f.r * (0.4 + 0.6 * p)} fill={f.color} fillOpacity={0.15 * (1 - p)} stroke={f.color} strokeWidth={4 * k} opacity={1 - p} />;
   return null;
@@ -788,18 +818,19 @@ const ComboMeter = memo(function ComboMeter({ n, left, k, top }) {
   );
 }, (a, b) => a.n === b.n && Math.abs(a.left - b.left) < 0.04 && a.k === b.k);
 
-// What the main card's kit is doing right now (spirits, Infinity, copied skill…)
+// What the main card's kit is doing right now (charges, Infinity, copied passive…)
 function KitChip({ s, sk, cur }) {
   if (!sk) return null;
-  if (sk.type === 'souls') return <Chip color="#e879f9">👻 {s.kit.souls}/{Math.round(sk.cap)}{s.kit.souls > 0 ? ' · click to hurl' : ' · M2 to summon'}</Chip>;
-  if (sk.type === 'firetrail') return <Chip color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>;
-  if (sk.type === 'infinity') {
-    const left = Math.max(2, Math.round(sk.every ?? 4)) - s.kit.repelN;
-    return <Chip color="#93c5fd">∞ {Math.round(s.kit.inf)}% · {left > 1 ? `repel in ${left}` : 'next hit REPELS'}</Chip>;
-  }
-  if (sk.type === 'transfig') { const ev = Math.max(2, Math.round(sk.every)); return <Chip color="#c084fc">✋ next in {ev - (s.kit.kills % ev)}</Chip>; }
-  if (sk.type === 'copy' && cur) return <Chip color="#f472b6">{s.kit.oraSkill ? 'ORA' : '⧉'} {cur.name}{!s.kit.oraSkill && ` ${Math.max(0, Math.ceil(s.kit.copyT))}s`}</Chip>;
-  return null;
+  const out = [];
+  if (cur?.type === 'souls') out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to hurl' : ' · hold M2 to charge'}</Chip>);
+  else if (s.kit.souls > 0) out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}</Chip>);
+  if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold M2 to charge'}</Chip>);
+  if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold M2 to charge'}</Chip>);
+  if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
+  if (cur?.style === 'hold') out.push(<Chip key="h" color="#67e8f9">{s.player.held ? 'CHARGING…' : 'hold M1, let go to fire'}</Chip>);
+  if (sk.passive?.type === 'copy' && s.kit.copied) out.push(<Chip key="cp" color="#f472b6">⧉ {s.kit.copied.name} {Math.max(0, Math.ceil(s.kit.copyT))}s</Chip>);
+  if (s.kit.oraSkill) out.push(<Chip key="o" color="#f472b6">ORA · {s.kit.oraSkill.name}</Chip>);
+  return out.length ? <>{out}</> : null;
 }
 
 const Chip = ({ color, children }) => (
@@ -812,9 +843,12 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
         {/* SPECIAL (M2) button, next to the ult orb: fills up as the cooldown runs out / as you charge */}
         {spKind && (
-          <div className={`sp-btn${spKind === 'cd' && spFill >= 1 ? ' ready' : ''}`} onPointerDown={e => { e.stopPropagation(); e.preventDefault(); onSpecial(); }}
+          <div className={`sp-btn${spKind === 'cd' && spFill >= 1 ? ' ready' : ''}`}
+            onPointerDown={e => { e.stopPropagation(); e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } onSpecial(true); }}
+            onPointerUp={e => { e.stopPropagation(); onSpecial(false); }} onPointerCancel={() => onSpecial(false)}
+            onMouseDown={e => e.stopPropagation()}
             onContextMenu={e => e.preventDefault()}
-            title={spKind === 'cd' ? 'Special: right-click (M2), Q, or tap here' : 'Charge: right-click (M2), Q or tap here; then click to fire'}
+            title={spKind === 'cd' ? 'Special: right-click (M2), Q, or tap here' : 'Charge: tap to stock up one; hold 1s to keep charging, let go to release (or M2 / Q)'}
             style={{ '--sp': spColor, width: mobile ? 52 : 46, height: mobile ? 52 : 46 }}>
             <span className="sp-fill" style={{ height: `${Math.min(1, spFill) * 100}%` }} />
             <span className="sp-txt">{spText || (mobile ? 'SPEC' : 'M2')}</span>

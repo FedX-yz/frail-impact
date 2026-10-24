@@ -1244,7 +1244,7 @@ zIndex: 10,
             {[['✦ Skill', selectedResult.skill], ['⚡ Ult', selectedResult.ult]].filter(([, a]) => a).map(([tag, a]) => (
               <div key={tag} style={{ background:'rgba(240,192,64,0.07)', border:'1px solid rgba(240,192,64,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:8 }}>
                 <div style={{ color:'#f0c040', fontWeight:700, marginBottom:4 }}>{tag}: {a.name}</div>
-                <div style={{ color:'#aaa', fontSize:12 }}>{abilityText(a)}</div>
+                <div style={{ color:'#aaa', fontSize:12, whiteSpace:'pre-line' }}>{abilityText(a)}</div>
                 <div style={{ color:'#556', fontSize:11, marginTop:4 }}>{tag.includes('Ult') ? 'Unlocks at LV50 · charges from damage' : 'Always on from LV1 · full strength at LV20'}</div>
               </div>
             ))}

@@ -99,7 +99,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // The Anemic Kaisen kits (kitRuntime.js) plug in through these hooks
   const rt = createKitRuntime({
     s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
-    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(),
+    rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(), heal: (n) => heal(n),
     announce: (...a) => announce(...a),
   });
 
@@ -511,7 +511,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     let crit = Math.random() < critRate;
     let critMult = 1 + critDmg;
     if (!mods.noCount && st.labubuEvery && s.clickCount % st.labubuEvery === 0) { crit = true; critMult = Math.max(critMult, 3); }
-    if (mods.ratio) { crit = true; critMult = 1 + critDmg + mods.bonus; }
+    if (mods.ratio || mods.forceCrit) { crit = true; critMult = 1 + critDmg + (mods.bonus ?? 0); }
     let dmg = st.clickDmg * mult * rand(0.9, 1.1);
     if (st.highHpAtkBonus && s.player.hp > s.player.maxHp / 2) dmg *= 1 + st.highHpAtkBonus;
     if (s.frenzy > 0) dmg *= 2;
@@ -534,8 +534,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
     let dmg = rawDmg * M('playerDmg');
     e.lastHit = s.time;
-    const sk = rt.skill();
-    if (e.frozen > 0 && sk?.type === 'frost') dmg *= 1 + sk.bonus;
+    const pv = rt.passive();
+    if (e.frozen > 0 && pv?.type === 'frost') dmg *= 1 + pv.bonus;
+    if (crit && pv?.type === 'critCharge') charge *= 1 + pv.bonus;   // Stephen: crits charge the ult faster
     if (e.tier === 'boss') dmg *= s.stats.bossDmgMult;
     dmg = Math.max(1, Math.round(dmg));
 
@@ -702,20 +703,34 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (crit) shake(mods?.ratio ? 0.14 : 0.08);
     }
     rt.afterClick(e, dmg, auto, mods);
-    if (!sk) return;
-    if (sk.type === 'splash') {
-      effect({ kind: 'burst', x: e.x, y: e.y, r: K(sk.radius), color: '#F59E0B' });
-      // numbers only on the first couple (a floater per enemy per click was the slowest thing on phones)
-      s.enemies.filter(o => o !== e && dist(o.x, o.y, e.x, e.y) <= K(sk.radius))
-        .forEach((o, i) => damageEnemy(o, dmg * sk.pct, { color: '#F59E0B', label: '🪨', quiet: i >= 2 }));
-    } else if (sk.type === 'frost' && e.hp > 0 && Math.random() < sk.chance) {
-      e.frozen = sk.dur; floater('❄ FROZEN', e.x, e.y - K(36), '#67e8f9');
-    } else if (sk.type === 'lifesteal' && !auto) {
-      const mx = s.player.maxHp;
-      heal(Math.min(sk.maxPctHp * mx, sk.pctHp * mx + dmg * sk.pct));
-    } else if (sk.type === 'devour' && e.hp > 0) {
+    if (crit && !auto) rt.onCritClick(e);
+    // main move (click style)
+    if (sk?.type === 'devour' && e.hp > 0) {
       damageEnemy(e, e.hp * sk.pct, { color: '#ff3355', label: '👁' });
       if (!auto) heal(sk.healPctHp * s.player.maxHp);
+    }
+    // passives that ride on clicks (small chances)
+    const pv = rt.passive();
+    if (auto) return;
+    if (pv?.type === 'shardProc' && Math.random() < pv.chance) {
+      effect({ kind: 'burst', x: e.x, y: e.y, r: K(pv.radius), color: '#F59E0B' });
+      effect({ kind: 'shards', x: e.x, y: e.y, r: K(pv.radius), color: '#d97706', n: 10 });
+      // numbers only on the first couple (a floater per enemy per click was the slowest thing on phones)
+      s.enemies.filter(o => o !== e && !(o.down > 0) && dist(o.x, o.y, e.x, e.y) <= K(pv.radius))
+        .forEach((o, i) => damageEnemy(o, s.stats.clickDmg * pv.pct, { color: '#F59E0B', label: '🪨', quiet: i >= 2 }));
+    } else if (pv?.type === 'pulseProc' && Math.random() < pv.chance) {
+      const P = s.player.pos ?? e, R = K(pv.radius);
+      effect({ kind: 'burst', x: P.x, y: P.y, r: R, color: '#8B5CF6' });
+      s.enemies.filter(o => !(o.down > 0) && dist(o.x, o.y, P.x, P.y) <= R + o.size * s.k * 0.5)
+        .forEach((o, i) => { const r = rollClick(pv.pct, { noCount: true }); damageEnemy(o, r.dmg, { crit: r.crit, color: '#a78bfa', label: '⚛', quiet: i >= 3 }); });
+    } else if (pv?.type === 'ignite' && e.hp > 0 && Math.random() < pv.chance) {
+      e.burn = { dps: pv.dps, t: pv.dur };
+      floater('🔥 IGNITED', e.x, e.y - K(36), '#fb923c');
+    } else if (pv?.type === 'frost' && e.hp > 0 && Math.random() < pv.chance) {
+      e.frozen = pv.dur; floater('❄ FROZEN', e.x, e.y - K(36), '#67e8f9');
+    } else if (pv?.type === 'lifesteal' && !auto) {
+      const mx = s.player.maxHp;
+      heal(Math.min(pv.maxPctHp * mx, pv.pctHp * mx + dmg * pv.pct));
     }
   }
 
@@ -741,29 +756,40 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const e = enemyAt(x, y);
     effect({ kind: 'ripple', x, y, miss: !e });
     const sk = rt.skill();
-    // Charge skills (Ivy): M1 fires what M2 charged
-    rt.fire(x, y, e);
     if (e) clickEnemy(e);
-    else if (!sk || sk.type !== 'gun') sfx('miss');
+    else { rt.onMiss(); if (!sk || sk.type !== 'gun') sfx('miss'); }
     // Swag Strike: every click, hit or miss, fires homing shots at the nearest enemies
-    if (sk?.type === 'gun') {
-      const targets = s.enemies.filter(o => !(o.down > 0) && o.tier !== 'treasure').sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, sk.shots ?? 1);
-      targets.forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult: sk.pct }));
-    }
+    const shoot = (n, mult) => s.enemies.filter(o => !(o.down > 0) && o.tier !== 'treasure').sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y))
+      .slice(0, n).forEach(t => s.shots.push({ id: uid++, x, y, target: t.id, speed: K(900), mult }));
+    if (sk?.type === 'gun') shoot(sk.shots ?? 1, sk.pct);
+    const pv = rt.passive();
+    if (pv?.type === 'extraShot' && Math.random() < pv.chance) { shoot(pv.shots, pv.pct); floater('💃', x, y - K(26), '#c084fc'); }
   }
 
   // Holding M1 (Doro's drag): BattleArena reports press and release
+  // Letting go after holding fires the charged moves (kitRuntime release)
   function pointerHold(on) {
-    s.player.held = on && !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time } : null;
+    const was = s.player.held;
+    if (on) { if (!was) s.player.held = !s.paused && s.phase !== 'defeat' && s.phase !== 'clear' ? { t0: s.time } : null; return; }
+    s.player.held = null;
+    if (was && s.player.pos && !s.paused && !s.choosing) rt.release(s.time - was.t0, s.player.pos.x, s.player.pos.y);
   }
 
-  // M2 / Q / the SPECIAL button: the skill's special move at (x, y), or at the cursor
+  // M2 / Q / the SPECIAL button pressed: the skill's special move at (x, y), or at the cursor.
+  // Charge skills: a press stocks one charge; holding 1s+ keeps charging (kitRuntime), and
+  // specialUp (letting go) releases it all.
   function special(x, y) {
     if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return false;
     if (x != null) s.player.pos = { x, y };
     const P = s.player.pos;
     if (!P) return false;
+    s.player.m2 = { t0: s.time };
     return rt.special(P.x, P.y);
+  }
+  function specialUp() {
+    const m2 = s.player.m2;
+    s.player.m2 = null;
+    if (m2 && s.player.pos && !s.paused && !s.choosing) rt.specialRelease(s.time - m2.t0, s.player.pos.x, s.player.pos.y);
   }
 
   function updateShots(dt) {
@@ -1122,7 +1148,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   const choose = (i) => rt.choose(i);   // Room 16's ult: pick a skill
 
-  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, activateUlt, setStats, loadStage, announce, setReserved, dev };
+  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), curPassive: () => rt.passive(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, specialUp, activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

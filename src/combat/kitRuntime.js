@@ -10,16 +10,20 @@
 //   s.mahoraga – Bio's ult: enemies attack it instead of you
 // ─────────────────────────────────────────────────────────────────────────────
 import { BAL } from './balance';
-import { SKILLS, scaleKit, weakKit } from './kits';
+import { SKILLS, scaleKit } from './kits';
 import { CHARACTERS } from '../data/characters';
 
+// Every skill has a main move (its `style`: click / special / charge / hold / drag) and a
+// small always-on passive: skill() is the main move, passive() the passive.
+//
 // skill id → the skill's name on its card (for Room 16's copies)
 export const SKILL_NAMES = Object.fromEntries(CHARACTERS.filter(c => c.skill?.effect).map(c => [c.skill.effect, c.skill.name]));
-// Room 16 copies 5★ skills only (not the 6★ ones, e.g. Devour's % of current HP bite)
+// Room 16 copies 5★ passives (and its ult picks 5★ skills), not the 6★ ones
 const COPY_POOL = [...new Set(CHARACTERS.filter(c => c.rarity === 5 && c.skill?.effect && SKILLS[c.skill.effect]).map(c => c.skill.effect))]
   .filter(id => id !== 'copy');
 
-const MAX_LAVA = 6, MAX_FIRE = 50, MAX_CRAWLERS = 4, MAX_SHIKI = 3;
+const MAX_LAVA = 6, MAX_FIRE = 50, MAX_CRAWLERS = 10, MAX_SHIKI = 3;
+const HOLD_MIN = 0.25;          // shorter than this is just a click, not a charged release
 const ZONE_TICK = 0.5;            // lava / fire / spirits deal damage this often
 const SHIKI = ['dog', 'toad', 'nue'];
 // Jerry's repel: launch speed (slides about speed / friction px), how fast it
@@ -34,7 +38,9 @@ export function createKitRuntime(api) {
       souls: 0, kills: 0, hits: 0,
       inf: 100, infUsed: -9,          // Infinity meter (0–100) and when it last blocked
       repelN: 0,                      // Jerry: hits toward the next repel
-      copied: null, copyT: 0,         // Room 16
+      copied: null, copyT: 0,         // Room 16: the copied passive
+      punches: 0, crawlN: 0,          // Room 16 / Tyran: charged with M2
+      beatN: 0,                       // Swag: hits in a row
       oraSkill: null,
       trailPt: null, trailT: 0,       // Doro's trail
       posHist: [],                    // Astrec: where your cursor was
@@ -50,11 +56,20 @@ export function createKitRuntime(api) {
   }
   init();
 
-  // The skill that's active right now (Room 16 swaps in a copied one)
+  // The main move right now (Room 16's ult swaps in the skill you picked)
   function skill() {
     const sk = s.stats.skill;
-    if (!sk || sk.type !== 'copy') return sk;
-    return s.kit.oraSkill ?? s.kit.copied ?? null;
+    if (sk?.type === 'platinum' && s.kit.oraSkill) return s.kit.oraSkill;
+    return sk;
+  }
+  // The passive right now: the main card's, the copied one (Room 16), or during
+  // Room 16's ult the picked skill's
+  function passive() {
+    const sk = skill();
+    if (sk && sk !== s.stats.skill) return sk.passive ?? null;
+    const pv = s.stats.skill?.passive;
+    if (pv?.type === 'copy') return s.kit.copied;
+    return pv ?? null;
   }
 
   // A skill effect's hit: can crit, gets combo/frenzy bonuses, doesn't build combo
@@ -80,9 +95,9 @@ export function createKitRuntime(api) {
   // where your cursor was a moment ago.
   function aimPoint() {
     if (s.mahoraga) return { x: s.mahoraga.x, y: s.mahoraga.y };
-    const sk = skill();
-    if (sk?.type === 'phantom' && s.kit.posHist.length) {
-      const want = s.time - sk.lag;
+    const pv = passive();
+    if (pv?.type === 'phantom' && s.kit.posHist.length) {
+      const want = s.time - pv.lag;
       let p = s.kit.posHist[0];
       for (const h of s.kit.posHist) { if (h.t <= want) p = h; else break; }
       return { x: p.x, y: p.y };
@@ -107,18 +122,17 @@ export function createKitRuntime(api) {
       effect({ kind: 'burst', x: toad.x, y: toad.y, r: K(50), color: '#22c55e' });
       return true;
     }
-    const sk = skill();
-    if (sk?.type === 'infinity' && P && s.kit.inf >= 10 && (kind === 'shot' || kind === 'dash' || kind === 'bite')) {
-      s.kit.inf = Math.max(0, s.kit.inf - 25); s.kit.infUsed = s.time;
-      floater('∞', P.x, P.y - K(40), '#93c5fd', true);
-      effect({ kind: 'burst', x: P.x, y: P.y, r: K(sk.radius), color: '#60a5fa' });
+    const pv = passive();
+    if (pv?.type === 'infinity' && P && (kind === 'shot' || kind === 'dash' || kind === 'bite') && Math.random() < pv.chance) {
+      floater('∞ BLOCKED', P.x, P.y - K(40), '#93c5fd', true);
+      effect({ kind: 'burst', x: P.x, y: P.y, r: K(70), color: '#60a5fa' });
       if (src) {
         if (src.dashing) api.finishAttack(src.dashing);
         // a dasher gets thrown back hard (into a wall = crushed); the worm is
         // too long to throw, so its head is just shoved out of the bubble
         if (!launch(src, P, 1.3)) {
           const a = Math.atan2(src.y - P.y, src.x - P.x) || 0;
-          const d = K(sk.radius) + radius(src) + K(6);
+          const d = K(70) + radius(src) + K(6);
           src.x = clamp(P.x + Math.cos(a) * d, 0, s.W); src.y = clamp(P.y + Math.sin(a) * d, 0, s.H);
           if (src.move === 'worm') src.angle = a;
           src.target = null;
@@ -206,21 +220,15 @@ export function createKitRuntime(api) {
     if (Math.hypot(kb.vx, kb.vy) < K(50)) e.kb = null;
   }
   function onPlayerHit() {
-    const sk = skill();
-    if (sk?.type === 'souls' && s.kit.souls > 0) {
+    if (s.kit.souls > 0) {
       s.kit.souls--;
       const P = s.player.pos;
       if (P) floater('-1 👻', P.x + K(20), P.y - K(10), '#e879f9');
     }
   }
   // Shots slow to a crawl inside Infinity (draining it a little)
-  function shotSpeed(a, dt) {
-    const sk = skill(), P = s.player.pos;
-    if (sk?.type !== 'infinity' || !P || s.kit.inf <= 0 || s.mahoraga) return 1;
-    if (dist(a.x, a.y, P.x, P.y) > K(sk.radius)) return 1;
-    s.kit.inf = Math.max(0, s.kit.inf - 15 * dt); s.kit.infUsed = s.time;
-    return 0.15;
-  }
+  // (Infinity used to slow shots down; now it's a flat chance to block — see absorbHit)
+  function shotSpeed() { return 1; }
   // Doro's fire walls burn up enemy shots
   function shotBlocked(a) {
     for (const f of s.fire) if (distToSegment(a.x, a.y, f.x1, f.y1, f.x2, f.y2) <= a.r + K(10)) return true;
@@ -236,30 +244,33 @@ export function createKitRuntime(api) {
   function clickMods() {
     const act = s.ult.active, sk = skill();
     if (act?.type === 'overtime') return { ratio: true, bonus: sk?.type === 'ratio' ? sk.bonus : 1.5, label: 'RATIO ' };
-    if (sk?.type !== 'ratio') return undefined;
-    if (Math.abs(ratioU(sk) - 0.7) <= sk.window / 2) return { ratio: true, bonus: sk.bonus, label: 'RATIO ' };
+    if (sk?.type === 'ratio' && Math.abs(ratioU(sk) - 0.7) <= sk.window / 2) return { ratio: true, bonus: sk.bonus, label: 'RATIO ' };
+    // Swag's beat: every Nth hit in a row crits
+    const pv = passive();
+    if (pv?.type === 'beat') {
+      s.kit.beatN++;
+      if (s.kit.beatN >= Math.max(3, Math.round(pv.every))) { s.kit.beatN = 0; return { forceCrit: true, bonus: pv.bonus, label: '💃 ' }; }
+    }
     return undefined;
   }
+  const onMiss = () => { s.kit.beatN = 0; };
   function afterClick(e, dmg, auto, mods) {
     if (!auto) { s.kit.lastHitId = e.id; s.kit.lastHitT = s.time; }   // the ratio bar sticks to it (phones can't hover)
     if (mods?.ratio) effect({ kind: 'ratio', x: e.x, y: e.y, r: radius(e) });
+    const pv = passive();
+    if (mods?.ratio && pv?.type === 'ratioHeal') api.heal(pv.heal * s.player.maxHp);
+  }
+  // Stephen: a crit click slices a line through the target
+  function onCritClick(e) {
     const sk = skill();
-    if (sk?.type === 'lava' && !auto) {
-      s.kit.hits++;
-      if (s.kit.hits % 6 === 0) addLava(e.x, e.y, K(sk.radius) * 0.6, sk.dur * 0.7, sk.dps);
-    }
-    // Jerry: every Nth hit repels. A hit that kills keeps the repel for the next one;
-    // bosses (and other heavy things) can't be thrown, so they take half the crush instead
-    if (sk?.type === 'infinity' && !auto && !(e.down > 0)) {
-      const every = Math.max(2, Math.round(sk.every ?? 4));
-      s.kit.repelN = Math.min(every, s.kit.repelN + 1);
-      if (s.kit.repelN >= every && e.hp > 0 && s.enemies.includes(e)) {
-        const P = s.player.pos ?? { x: e.x, y: e.y };
-        if (launch(e, P)) sfx('shield');
-        else { crushHit(e, (sk.crush ?? 2) * 0.5, false); effect({ kind: 'burst', x: e.x, y: e.y, r: radius(e), color: '#93c5fd' }); }
-        s.kit.repelN = 0;
-      }
-    }
+    if (sk?.type !== 'crit' || !sk.cut) return;
+    const a = rand(0, Math.PI), L = Math.hypot(s.W, s.H);
+    const x1 = e.x - Math.cos(a) * L, y1 = e.y - Math.sin(a) * L, x2 = e.x + Math.cos(a) * L, y2 = e.y + Math.sin(a) * L;
+    effect({ kind: 'slash', x1, y1, x2, y2, life: 0.25 });
+    let n = 0;
+    foes().forEach(o => {
+      if (o !== e && distToSegment(o.x, o.y, x1, y1, x2, y2) <= K(22) + radius(o) * 0.7) kitHit(o, sk.cut, { color: '#fde047', label: '✂', quiet: n++ >= 3 });
+    });
   }
   // true = swallow the click (you're suspended while Mahoraga fights)
   function onPointerDown(x, y) {
@@ -281,55 +292,207 @@ export function createKitRuntime(api) {
     return false;
   }
 
-  // ── M2 (special) and charge skills ───────────────────────────────────────
+  // ── M2 (special), charge and hold moves ──────────────────────────────────
+  // A cooldown special: false (and the seconds left above the cursor) while it's cooling down
+  function startCooldown(sk, x, y) {
+    if (s.special.cd > 0) { floater(`${Math.ceil(s.special.cd)}s`, x, y - K(30), '#a78bfa'); return false; }
+    s.special.cd = s.special.cdMax = sk.cooldown;
+    return true;
+  }
+  // A charge: one per press, at most one every `gap` seconds, up to `cap`
+  function addCharge(key, sk, x, y, gap, color) {
+    if (s.time - (s.kit.chargeT ?? -9) < gap) return false;
+    const cap = Math.round(sk.cap);
+    if (s.kit[key] >= cap) { floater('FULL', x, y - K(34), color); return false; }
+    s.kit.chargeT = s.time;
+    s.kit[key]++;
+    effect({ kind: 'burst', x, y, r: K(28), color });
+    sfx('hit');
+    return true;
+  }
+
   // M2 / Q / SPECIAL button. true = something happened
   function special(x, y) {
     const sk = skill();
     if (!sk || !fighting()) return false;
-    if (sk.type === 'pulse') {
-      if (s.special.cd > 0) { floater(`${Math.ceil(s.special.cd)}s`, x, y - K(30), '#a78bfa'); return false; }
-      s.special.cd = s.special.cdMax = sk.cooldown;
-      s.kit.implode = { x, y, t: 0, dur: 0.4, r: K(sk.radius), pct: sk.pct };
-      effect({ kind: 'implode', x, y, r: K(sk.radius) * 1.8, life: 0.4 });
-      sfx('shield');
-      return true;
+    switch (sk.type) {
+      case 'pulse':   // Bio: implosion
+        if (!startCooldown(sk, x, y)) return false;
+        s.kit.implode = { x, y, t: 0, dur: 0.4, r: K(sk.radius), pct: sk.pct };
+        effect({ kind: 'implode', x, y, r: K(sk.radius) * 1.8, life: 0.4 });
+        sfx('shield');
+        return true;
+      case 'spike': {   // Astrec: rock spikes
+        if (!startCooldown(sk, x, y)) return false;
+        const R = K(sk.radius);
+        let n = 0;
+        foes().filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5).forEach(e => {
+          kitHit(e, sk.pct, { color: '#F59E0B', label: '🪨', quiet: n++ >= 4 });
+          if (e.hp > 0 && e.tier !== 'boss' && !e.group) e.frozen = Math.max(e.frozen ?? 0, sk.stun);
+        });
+        effect({ kind: 'spikes', x, y, r: R, life: 0.6 });
+        effect({ kind: 'shards', x, y, r: R, color: '#d97706', n: 16 });
+        shake(0.3); sfx('boom');
+        return true;
+      }
+      case 'repel': {   // Jerry: Infinity pushes everything away from the cursor
+        if (!startCooldown(sk, x, y)) return false;
+        const R = K(sk.radius), P = { x, y };
+        foes().filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5).forEach(e => {
+          if (!launch(e, P, 1.15)) { crushHit(e, (sk.crush ?? 2) * 0.5, false); effect({ kind: 'burst', x: e.x, y: e.y, r: radius(e), color: '#93c5fd' }); }
+        });
+        // shots inside are flung away (deleted)
+        s.attacks.forEach(a => { if (a.kind === 'shot' && a.phase === 'fly' && dist(a.x, a.y, x, y) <= R) api.finishAttack(a); });
+        effect({ kind: 'burst', x, y, r: R, color: '#93c5fd' });
+        effect({ kind: 'ring', x, y, r: R, color: '#bfdbfe', life: 0.45 });
+        shake(0.2); sfx('shield');
+        return true;
+      }
+      case 'eruption': {   // Ice: lava eruption
+        if (!startCooldown(sk, x, y)) return false;
+        const R = K(sk.radius);
+        let n = 0;
+        foes().filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5).forEach(e => kitHit(e, sk.pct, { color: '#f97316', label: '🌋', quiet: n++ >= 4 }));
+        addLava(x, y, R, sk.dur, sk.dps, true);
+        effect({ kind: 'shards', x, y, r: R, color: '#f97316', n: 18 });
+        effect({ kind: 'burst', x, y, r: R, color: '#fb923c' });
+        shake(0.35); sfx('boom');
+        return true;
+      }
+      case 'dogs': {   // Bio (Ten Shadows): two Divine Dogs
+        if (!startCooldown(sk, x, y)) return false;
+        s.allies = s.allies.filter(a => !(a.kind === 'dog' && a.summoned));   // a fresh pair replaces the old one
+        for (let i = 0; i < 2; i++) s.allies.push({ id: nextId(), kind: 'dog', summoned: true, x: x + (i ? K(30) : -K(30)), y, pct: sk.pct, life: sk.dur, biteT: i * 0.2, target: null });
+        effect({ kind: 'burst', x, y, r: K(70), color: '#6366f1' });
+        floater('🐺🐺 DIVINE DOGS', x, y - K(50), '#a5b4fc', true);
+        sfx('shield');
+        return true;
+      }
+      case 'souls':    return addCharge('souls', sk, x, y, 0.11, '#e879f9');
+      case 'crawlers': return addCharge('crawlN', sk, x, y, 0.12, '#c084fc');
+      case 'platinum': return addCharge('punches', sk, x, y, 0.09, '#f472b6');
+      default: return false;
     }
-    if (sk.type === 'souls') {
-      // spam it: one spirit per press, at most ~9 a second
-      if (s.time - s.kit.soulPressT < 0.11) return false;
-      const cap = Math.round(sk.cap);
-      if (s.kit.souls >= cap) { floater('FULL', x, y - K(34), '#e879f9'); return false; }
-      s.kit.soulPressT = s.time;
-      s.kit.souls++;
-      effect({ kind: 'burst', x, y, r: K(28), color: '#e879f9' });
-      sfx('hit');
-      return true;
-    }
-    return false;
   }
-  // M1 with something charged: Ivy hurls every spirit where you clicked
-  function fire(x, y, under) {
+
+  // Letting go of M2 after holding it (1s+): release everything charged at the cursor
+  const CHARGE_HOLD = 1;   // seconds of holding M2 before it starts charging by itself
+  function specialRelease(held, x, y) {
     const sk = skill();
-    if (sk?.type !== 'souls' || s.kit.souls <= 0 || !fighting()) return;
-    const list = foes();
-    // aim: what you clicked, or the nearest enemy to the click (within reach)
-    const t = under && list.includes(under) ? under : nearest(x, y, list);
-    if (!t || (!under && dist(x, y, t.x, t.y) > K(160))) return;
-    const n = s.kit.souls, R = K(125);
-    s.kit.souls = 0;
-    kitHit(t, sk.throwPct * n * 1.5, { color: '#f0abfc', label: `👻×${n} ` });
-    list.filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6)
-      .forEach((e, i) => kitHit(e, sk.throwPct * n, { color: '#e879f9', label: '👻', quiet: i >= 3 }));
-    effect({ kind: 'spiral', x: t.x, y: t.y, r: R * 1.3, life: 0.5 });
-    effect({ kind: 'burst', x: t.x, y: t.y, r: R, color: '#d946ef' });
-    shake(Math.min(0.4, 0.06 + n * 0.015)); sfx(n >= 8 ? 'boom' : 'crit');
+    if (sk?.style !== 'charge' || held < CHARGE_HOLD) return;   // a tap only stocks up (done on press)
+    fire(x, y);
   }
-  // For the UI: what M2 does right now
+  // While M2 is held 1s+: keep charging at the skill's rate
+  function chargeWhileHeld(dt) {
+    const sk = skill(), m2 = s.player.m2;
+    if (sk?.style !== 'charge' || !m2 || s.time - m2.t0 < CHARGE_HOLD || !fighting()) return;
+    const key = { souls: 'souls', crawlers: 'crawlN', platinum: 'punches' }[sk.type];
+    if (!key) return;
+    const cap = Math.round(sk.cap);
+    m2.acc = (m2.acc ?? 0) + dt * (sk.rate ?? 6);
+    while (m2.acc >= 1) {
+      m2.acc -= 1;
+      if (s.kit[key] >= cap) { m2.acc = 0; break; }
+      s.kit[key]++;
+      const P = s.player.pos ?? center();
+      effect({ kind: 'burst', x: P.x + rand(-K(20), K(20)), y: P.y + rand(-K(20), K(20)), r: K(22), color: { souls: '#e879f9', crawlN: '#c084fc', punches: '#f472b6' }[key] });
+    }
+  }
+
+  // Release what's charged at (x, y): aimed at the enemy nearest the cursor
+  function fire(x, y) {
+    const sk = skill();
+    if (!sk || !fighting()) return;
+    const list = foes();
+    const aim = () => nearest(x, y, list);
+    if (sk.type === 'souls' && s.kit.souls > 0) {
+      const t = aim();
+      if (!t) { floater('no target', x, y - K(30), '#e879f9'); return; }
+      const n = s.kit.souls, R = K(150);
+      s.kit.souls = 0;
+      kitHit(t, sk.throwPct * n * 1.5, { color: '#f0abfc', label: `👻×${n} ` });
+      list.filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6)
+        .forEach((e, i) => kitHit(e, sk.throwPct * n, { color: '#e879f9', label: '👻', quiet: i >= 3 }));
+      effect({ kind: 'spiral', x: t.x, y: t.y, r: R * 1.3, life: 0.5 });
+      effect({ kind: 'burst', x: t.x, y: t.y, r: R, color: '#d946ef' });
+      shake(Math.min(0.4, 0.06 + n * 0.015)); sfx(n >= 8 ? 'boom' : 'crit');
+    } else if (sk.type === 'crawlers' && s.kit.crawlN > 0) {
+      // crawlers pour out of the cursor, each picking a different enemy near the click
+      const n = s.kit.crawlN;
+      s.kit.crawlN = 0;
+      const near = list.slice().sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y));
+      for (let i = 0; i < n; i++) {
+        const t = near[i % Math.max(1, near.length)];
+        s.allies.push({ id: nextId(), kind: 'crawler', x: x + rand(-K(12), K(12)), y: y + rand(-K(12), K(12)), img: t?.img ?? s.enemies[0]?.img, size: 34,
+          big: false, pct: sk.pct, r: K(sk.radius), life: 6, target: t?.id ?? null });
+      }
+      floater(`✋ ×${n}`, x, y - K(40), '#c084fc', true);
+      sfx('kill');
+    } else if (sk.type === 'platinum' && s.kit.punches > 0) {
+      const t = aim();
+      if (!t) { floater('no target', x, y - K(30), '#f472b6'); return; }
+      const n = s.kit.punches;
+      s.kit.punches = 0;
+      s.kit.barrage = { target: t.id, left: n, acc: 0, pct: sk.pct, n };
+      api.announce(n >= 8 ? 'ORA ORA ORA!' : 'ORA!', '#f472b6');
+    }
+  }
+
+  // Let go of M1 after holding: charged release moves (how long it was held → strength)
+  function release(held, x, y) {
+    const sk = skill();
+    if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
+    const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
+    const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
+    const list = foes();
+    if (sk.type === 'lance') {   // Ice: from you, through the cursor, to the edge
+      const o = origin();
+      let dx = x - o.x, dy = y - o.y;
+      const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+      const L = Math.hypot(s.W, s.H) * 1.3, x2 = o.x + dx * L, y2 = o.y + dy * L;
+      const w = K(sk.width) * (0.6 + 0.4 * f);
+      let n = 0;
+      list.filter(e => distToSegment(e.x, e.y, o.x, o.y, x2, y2) <= w / 2 + radius(e) * 0.7).forEach(e => {
+        kitHit(e, pct, { color: '#67e8f9', label: '❄', quiet: n++ >= 4 });
+        if (e.hp > 0) e.frozen = Math.max(e.frozen ?? 0, sk.freeze * (0.5 + 0.5 * f));
+      });
+      effect({ kind: 'beam', x1: o.x, y1: o.y, x2, y2, w, life: 0.5, color: 'ice' });
+      shake(0.15 + 0.25 * f); sfx(f >= 1 ? 'boom' : 'crit');
+    } else if (sk.type === 'wave') {   // refabiba: a tide that hits and heals
+      const R = K(sk.radius) * (0.4 + 0.6 * f);
+      const hit = list.filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5);
+      hit.forEach((e, i) => kitHit(e, pct, { color: '#60a5fa', label: '🌊', quiet: i >= 4 }));
+      const healAmt = Math.min(sk.maxHeal, sk.heal * hit.length) * s.player.maxHp;
+      if (healAmt > 0) { api.heal(healAmt); floater(`+${Math.round(healAmt)} HP`, x, y - K(40), '#4ade80', true); }
+      effect({ kind: 'ring', x, y, r: R, color: '#60a5fa', life: 0.5 });
+      effect({ kind: 'burst', x, y, r: R, color: '#3b82f6' });
+      shake(0.12 + 0.2 * f); sfx('shield');
+    } else if (sk.type === 'flashstep') {   // Astrec: dash through the nearest enemies
+      const near = list.filter(e => dist(e.x, e.y, x, y) <= K(sk.range))
+        .sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y)).slice(0, Math.max(1, Math.floor(sk.targets)));
+      if (!near.length) return;
+      // every strike lands: with fewer enemies than strikes, they go round again
+      const strikes = Array.from({ length: Math.max(1, Math.floor(sk.targets)) }, (_, i) => near[i % near.length]);
+      let px = x, py = y;
+      strikes.forEach((e, i) => {
+        if (e.hp <= 0 || !s.enemies.includes(e)) return;
+        effect({ kind: 'slash', x1: px, y1: py, x2: e.x, y2: e.y, life: 0.3 + i * 0.04 });
+        effect({ kind: 'stab', x: e.x, y: e.y, r: radius(e), life: 0.25 });
+        kitHit(e, pct, { color: '#fda4af', label: '⚡', quiet: i >= near.length });
+        px = e.x + rand(-K(14), K(14)); py = e.y + rand(-K(14), K(14));
+      });
+      shake(0.12 + 0.18 * f); sfx('crit');
+    }
+  }
+
+  // For the UI: what M2 does right now (cooldown, or how much is charged)
   function specialInfo() {
     const sk = skill();
     if (!sk) return null;
-    if (sk.type === 'pulse') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
-    if (sk.type === 'souls') return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
+    if (sk.style === 'special') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
+    if (sk.type === 'souls')    return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
+    if (sk.type === 'crawlers') return { kind: 'count', n: s.kit.crawlN, max: Math.round(sk.cap), color: '#c084fc' };
+    if (sk.type === 'platinum') return { kind: 'count', n: s.kit.punches, max: Math.round(sk.cap), color: '#f472b6' };
     return null;
   }
 
@@ -344,27 +507,31 @@ export function createKitRuntime(api) {
       const pts = e.tier === 'elite' ? 3 : e.tier === 'boss' ? 2 : 1;
       s.ult.charge = Math.min(1, s.ult.charge + pts / u.killsNeeded);
     }
-    if (!sk) return;
-    if (sk.type === 'souls') {
-      const add = e.tier === 'elite' ? 3 : 1;
-      s.kit.souls = Math.min(Math.round(sk.cap), s.kit.souls + add);
-    } else if (sk.type === 'transfig' && e.tier !== 'boss') {
+    const pv = passive();
+    if (!pv) return;
+    if (pv.type === 'spirits') {
+      const add = e.tier === 'elite' ? 3 : Math.random() < pv.chance ? 1 : 0;
+      if (add) { s.kit.souls = Math.min(Math.round(sk?.type === 'souls' ? sk.cap : 10), s.kit.souls + add); floater(`+${add} 👻`, e.x, e.y - K(30), '#e879f9'); }
+    } else if (pv.type === 'transfig' && e.tier !== 'boss') {
       const big = e.tier === 'elite';
-      const every = Math.max(2, Math.round(sk.every));
-      if ((big || s.kit.kills % every === 0) && s.allies.filter(a => a.kind === 'crawler').length < MAX_CRAWLERS) {
+      if ((big || Math.random() < pv.chance) && s.allies.filter(a => a.kind === 'crawler').length < MAX_CRAWLERS) {
         s.allies.push({ id: nextId(), kind: 'crawler', x: e.x, y: e.y, img: e.img, size: e.size * (big ? 0.85 : 0.65), big,
-          pct: sk.pct * (big ? 2 : 1), r: K(sk.radius) * (big ? 1.4 : 1), life: 6, target: null });
+          pct: pv.pct * (big ? 2 : 1), r: K(pv.radius) * (big ? 1.4 : 1), life: 6, target: null });
         floater('TRANSFIGURED', e.x, e.y - K(30), '#c084fc');
       }
-    } else if (sk.type === 'lava') {
-      addLava(e.x, e.y, K(sk.radius), sk.dur, sk.dps);
+    } else if (pv.type === 'lavaKill' && Math.random() < pv.chance) {
+      addLava(e.x, e.y, K(pv.radius), pv.dur, pv.dps);
+    } else if (pv.type === 'shadows' && Math.random() < pv.chance) {
+      summonShiki(Math.random() < 0.5 && !s.allies.some(a => a.kind === 'toad') ? 2 : 3, pv);
+    } else if (pv.type === 'killHeal') {
+      api.heal(pv.heal * s.player.maxHp);
     }
   }
-  function onCombo(m) {
-    const sk = skill();
-    if (sk?.type !== 'shadows') return;
+  function onCombo() { /* (Ten Shadows used to summon at combo milestones; now it's a chance on kills) */ }
+  // m: index into SHIKI (2 = toad, 3 = nue)
+  function summonShiki(m, sk) {
     const P = s.player.pos ?? center();
-    const kind = SHIKI[m];
+    const kind = ['dog', 'dog', 'toad', 'nue'][m];
     const shiki = s.allies.filter(a => SHIKI.includes(a.kind));
     if (shiki.length >= MAX_SHIKI) s.allies = s.allies.filter(a => a !== shiki[0]);
     const base = { id: nextId(), kind, x: P.x, y: P.y, pct: sk.pct };
@@ -475,17 +642,19 @@ export function createKitRuntime(api) {
     const sk = skill(), P = s.player.pos, kit = s.kit;
     const live = fighting();
 
-    // Room 16: switch the copied skill every so often
-    if (s.stats.skill?.type === 'copy') {
+    // Room 16: copy another agent's passive, and switch every so often
+    const own = s.stats.skill?.passive;
+    if (own?.type === 'copy') {
       kit.copyT -= dt;
       if (!kit.copied || kit.copyT <= 0) {
-        const pool = COPY_POOL.filter(id => id !== kit.copied?.effect);
+        const pool = COPY_POOL.filter(id => id !== kit.copied?.effect && SKILLS[id].passive && SKILLS[id].passive.type !== 'spirits');   // (spirits only help Ivy)
         const id = pick(pool);
-        kit.copied = { ...scaleKit(weakKit(SKILLS[id]), 0), name: SKILL_NAMES[id] ?? id, effect: id };
-        kit.copyT = Math.round(s.stats.skill.every);
+        kit.copied = { ...scaleKit(SKILLS[id].passive, 0), name: SKILL_NAMES[id] ?? id, effect: id };
+        kit.copyT = Math.round(own.every);
         if (P && s.time > 1) floater(`⧉ ${kit.copied.name}`, P.x, P.y - K(50), '#f472b6', true);
       }
     }
+    const pv = passive();
 
     // Nanami's bar + what's under your cursor
     if (sk?.type === 'ratio' || s.ult.active?.type === 'overtime') {
@@ -496,13 +665,12 @@ export function createKitRuntime(api) {
     } else s.hoverId = null;
 
     // Astrec: remember where the cursor has been
-    if (sk?.type === 'phantom' && P) {
+    if (pv?.type === 'phantom' && P) {
       kit.posHist.push({ t: s.time, x: P.x, y: P.y });
       while (kit.posHist.length && kit.posHist[0].t < s.time - 2) kit.posHist.shift();
     }
 
     // Infinity refills when it hasn't blocked anything for a second
-    if (sk?.type === 'infinity' && s.time - kit.infUsed > 1) kit.inf = Math.min(100, kit.inf + 30 * dt);
 
     // Doro: hold M1 and drag → cut everything the cursor passes through, leave fire behind
     if (sk?.type === 'firetrail' && P && live && s.player.held && !s.mahoraga) {
@@ -525,6 +693,27 @@ export function createKitRuntime(api) {
         kit.trailPt = { x: P.x, y: P.y };
       }
     } else if (sk?.type === 'firetrail') kit.trailPt = null;
+
+    // Room 16: the punch barrage lands over a moment
+    if (kit.barrage) {
+      const b = kit.barrage;
+      const t = s.enemies.find(e => e.id === b.target && !(e.down > 0)) ?? (live ? nearest((P ?? center()).x, (P ?? center()).y) : null);
+      if (!t || !live) kit.barrage = null;
+      else {
+        b.target = t.id;
+        b.acc += dt * 24;
+        while (b.acc >= 1 && b.left > 0) {
+          b.acc -= 1; b.left--;
+          kitHit(t, b.pct, { color: '#f9a8d4', label: 'ORA ', quiet: b.left % 3 !== 0 });
+          effect({ kind: 'fist', x: t.x + rand(-K(24), K(24)), y: t.y + rand(-K(24), K(24)), life: 0.25 });
+          if (b.left % 2 === 0) sfx('hit');
+          if (t.hp <= 0 || !s.enemies.includes(t)) break;
+        }
+        if (b.left <= 0) { shake(Math.min(0.35, 0.05 + b.n * 0.02)); kit.barrage = null; }
+      }
+    }
+
+    chargeWhileHeld(dt);
 
     // Bio: the implosion pulls enemies in, then bursts
     if (kit.implode) {
@@ -567,17 +756,20 @@ export function createKitRuntime(api) {
         for (const f of s.fire) if (distToSegment(e.x, e.y, f.x1, f.y1, f.x2, f.y2) <= K(14) + radius(e) * 0.7) fire = Math.max(fire, f.dps);
         if (fire) kitHit(e, fire * ZONE_TICK, { color: '#fdba74', label: '🔥', quiet });
       }
-      if (sk?.type === 'souls' && kit.souls > 0 && P && !s.mahoraga) {
-        const R = K(75) + K(26);
-        foes().filter(e => dist(e.x, e.y, P.x, P.y) <= R + radius(e) * 0.8)
-          .forEach(e => kitHit(e, kit.souls * sk.perSoul * ZONE_TICK, { color: '#e879f9', label: '👻', quiet }));
+      // set on fire (Doro's passive)
+      for (const e of foes()) {
+        if (!e.burn) continue;
+        e.burn.t -= ZONE_TICK;
+        kitHit(e, e.burn.dps * ZONE_TICK, { color: '#fb923c', label: '🔥', quiet });
+        if (e.burn && e.burn.t <= 0) e.burn = null;
       }
     }
 
     // Astrec: rapid auto-attacks on the nearest enemy (much faster during Sorcerer Killer)
-    if (sk?.type === 'phantom' && live && !s.mahoraga) {
-      const act = s.ult.active?.type === 'sorcerer' ? s.ult.active : null;
-      const rate = sk.autoRate * (act ? act.speed : 1);
+    const sorc = s.ult.active?.type === 'sorcerer' ? s.ult.active : null;
+    if (sorc && live && !s.mahoraga) {
+      const act = sorc;
+      const rate = 2 * act.speed;
       kit.phantomT -= dt;
       let guard = 0;
       while (kit.phantomT <= 0 && guard++ < 20) {
@@ -585,7 +777,7 @@ export function createKitRuntime(api) {
         const from = P ?? center();
         const e = nearest(from.x, from.y);
         if (!e) { kit.phantomT = 0; break; }
-        kitHit(e, sk.autoPct * (act ? act.mult : 1), { color: '#fda4af', label: '🗡', charge: BAL.AUTO_CHARGE_WEIGHT, quiet: !!act && guard > 1 });
+        kitHit(e, 0.2 * act.mult, { color: '#fda4af', label: '🗡', charge: BAL.AUTO_CHARGE_WEIGHT, quiet: guard > 1 });
         effect({ kind: 'stab', x: e.x, y: e.y, r: radius(e), life: 0.2 });
         if (act && e.hp > 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group && e.hp / e.maxHp < act.threshold) {
           floater('EXECUTE', e.x, e.y - K(30), '#fb7185', true);
@@ -788,12 +980,13 @@ export function createKitRuntime(api) {
     s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.implode = null;
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
-    if (why === 'defeat') s.kit.souls = 0;
+    s.kit.barrage = null; s.kit.emberPt = null;
+    if (why === 'defeat') { s.kit.souls = 0; s.kit.crawlN = 0; s.kit.punches = 0; }
   }
 
   return {
-    skill, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, fire, specialInfo,
-    clickMods, afterClick, onPointerDown, onKill, onCombo,
+    skill, passive, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
+    clickMods, afterClick, onCritClick, onMiss, onPointerDown, onKill, onCombo,
     ultBlocked, activateUlt, endUlt, choose, hitMahoraga,
     update, reset, origin, slide,
   };

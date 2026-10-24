@@ -3,9 +3,10 @@
 // Each skill has a `style`: how you use it with the mouse (see STYLES below).
 //   click   – spam M1; the skill makes every click stronger
 //   special – M2 (right-click / Q / the SPECIAL button) fires it, then a cooldown
-//   charge  – spam M2 to charge it up, M1 fires what you've charged
+//   charge  – tap M2 to stock up one charge; hold M2 for 1s to keep charging, let go of M2 to release
+//   hold    – hold M1 to charge, let go to fire
 //   drag    – hold M1 and drag across enemies
-// Skills without a style are the older always-on upgrades to clicking.
+// Every skill also has a smaller always-on `passive` (with its own lv1 / si numbers).
 //
 // From LV1 you get a weaker
 // version (the `lv1` numbers); at LV20 the skill reaches full strength.
@@ -20,81 +21,139 @@ export const SKILL_UNLOCK = 20;   // full-strength skill
 export const ULT_UNLOCK   = 50;
 
 export const SKILLS = {
-  rock_shard:    { type: 'splash',    radius: 110, pct: 0.5,
-                   lv1: { radius: 85, pct: 0.25 },
-                   si: { radius: 18, pct: 0.12 },
-                   desc: 'Every click also sends rock shards into enemies near the target for {pct} click DMG ({radius} range).' },
+  // ── CLICK: spam M1 ─────────────────────────────────────────────────────
+  swag_strike:   { type: 'gun',       style: 'click', pct: 0.45, shots: 1,
+                   lv1: { pct: 0.25 },
+                   si: { pct: 0.1, shots: 0.5 },
+                   desc: 'Every click also fires {shots} homing shot(s) at the nearest enemies for {pct} click DMG each, hit or miss. Spam it.',
+                   passive: { type: 'extraShot', chance: 0.1, shots: 2, pct: 0.4,
+                              lv1: { chance: 0.06 }, si: { chance: 0.02 },
+                              desc: 'Clicks have a {chance} chance to fire {shots} extra shots for {pct} click DMG each.' } },
+  reality_slice: { type: 'crit',      style: 'click', rate: 0.15, dmg: 1.0, cut: 0.25,
+                   lv1: { rate: 0.07, dmg: 0.5, cut: 0.1 },
+                   si: { rate: 0.04, dmg: 0.2, cut: 0.06 },
+                   desc: '+{rate} crit rate and +{dmg} crit DMG. Every crit click also slices reality: a line through the target that hits every enemy on it for {cut} click DMG.',
+                   passive: { type: 'critCharge', bonus: 0.5,
+                              lv1: { bonus: 0.25 }, si: { bonus: 0.1 },
+                              desc: 'Crits charge your ult {bonus} faster.' } },
+  devour:        { type: 'devour',    style: 'click', pct: 0.04, healPctHp: 0.003,
+                   lv1: { pct: 0.02, healPctHp: 0.0015 },
+                   si: { pct: 0.01, healPctHp: 0.001 },
+                   desc: "Clicks also bite off {pct} of the target's current HP and heal you for {healPctHp} max HP.",
+                   passive: { type: 'killHeal', heal: 0.01,
+                              lv1: { heal: 0.005 }, si: { heal: 0.002 },
+                              desc: 'Kills heal you {heal} max HP.' } },
+  ratio:         { type: 'ratio',     style: 'click', period: 1.0, window: 0.12, bonus: 1.5, critRateMod: -0.10,
+                   lv1: { window: 0.09, bonus: 0.8 },
+                   si: { window: 0.01, bonus: 0.25 },
+                   desc: 'A 7:3 bar sits on the enemy under your cursor. Click when the red line crosses the mark ({window} window) for a guaranteed crit with +{bonus} crit DMG. Normal crit rate is 10% lower.',
+                   passive: { type: 'ratioHeal', heal: 0.004,
+                              lv1: { heal: 0.002 }, si: { heal: 0.001 },
+                              desc: 'Ratio hits heal you {heal} max HP.' } },
+
+  // ── SPECIAL: M2, then a cooldown ───────────────────────────────────────
+  rock_shard:    { type: 'spike',     style: 'special', cooldown: 8, radius: 135, pct: 4, stun: 0.6,
+                   lv1: { cooldown: 10, radius: 110, pct: 2 },
+                   si: { cooldown: -0.5, radius: 12, pct: 0.8 },
+                   desc: 'M2: rock spikes erupt under your cursor: {pct} click DMG in a {radius} radius and a {stun}s stun. {cooldown}s cooldown.',
+                   passive: { type: 'shardProc', chance: 0.12, pct: 0.6, radius: 90,
+                              lv1: { chance: 0.07, pct: 0.4 }, si: { chance: 0.02, pct: 0.1 },
+                              desc: 'Clicks have a {chance} chance to burst into rock shards that hit enemies near the target for {pct} click DMG ({radius} range).' } },
   quantum_burst: { type: 'pulse',     style: 'special', cooldown: 5, radius: 155, pct: 6,
                    lv1: { cooldown: 7, radius: 125, pct: 3 },
                    si: { cooldown: -0.5, radius: 15, pct: 1 },
-                   desc: 'M2: a quantum implosion at your cursor sucks enemies in ({radius} range), then bursts for {pct} click DMG. {cooldown}s cooldown.' },
-  swag_strike:   { type: 'gun',       style: 'click', pct: 0.55, shots: 1,
-                   lv1: { pct: 0.3 },
-                   si: { pct: 0.12, shots: 0.5 },
-                   desc: 'Every click also fires {shots} homing shot(s) at the nearest enemies for {pct} click DMG each, hit or miss. Spam it.' },
-  frost_bolt:    { type: 'frost',     chance: 0.2, dur: 2, bonus: 0.4,
-                   lv1: { chance: 0.07, dur: 1.2, bonus: 0.15 },
-                   si: { chance: 0.04, dur: 0.4, bonus: 0.08 },
-                   desc: 'Clicks have a {chance} chance to freeze an enemy for {dur}s. Frozen enemies take +{bonus} DMG.' },
-  healing_tide:  { type: 'lifesteal', pctHp: 0.003, pct: 0.02, maxPctHp: 0.012,
-                   lv1: { pct: 0.01, maxPctHp: 0.006 },
-                   si: { pct: 0.008, maxPctHp: 0.004 },
-                   desc: 'Clicks heal you for 0.3% max HP + {pct} of the damage dealt (up to {maxPctHp} max HP per click).' },
-  reality_slice: { type: 'crit',      rate: 0.15, dmg: 1.0,
-                   lv1: { rate: 0.07, dmg: 0.5 },
-                   si: { rate: 0.04, dmg: 0.2 },
-                   desc: '+{rate} crit rate and +{dmg} crit DMG.' },
-  devour:        { type: 'devour',    pct: 0.04, healPctHp: 0.003,
-                   lv1: { pct: 0.02, healPctHp: 0.0015 },
-                   si: { pct: 0.01, healPctHp: 0.001 },
-                   desc: "Clicks also bite off {pct} of the target's current HP and heal you for {healPctHp} max HP." },
+                   desc: 'M2: a quantum implosion at your cursor sucks enemies in ({radius} range), then bursts for {pct} click DMG. {cooldown}s cooldown.',
+                   passive: { type: 'pulseProc', chance: 0.08, pct: 0.8, radius: 90,
+                              lv1: { chance: 0.05, pct: 0.5 }, si: { chance: 0.015, pct: 0.15 },
+                              desc: 'Clicks have a {chance} chance to set off a small quantum pulse at your cursor: {pct} click DMG ({radius} range).' } },
+  infinity:      { type: 'repel',     style: 'special', cooldown: 7, radius: 160, crush: 3,
+                   lv1: { cooldown: 10, radius: 120, crush: 1.8 },
+                   si: { cooldown: -0.5, radius: 10, crush: 0.4 },
+                   desc: 'M2: Infinity repels everything within {radius} of your cursor. Slam them into a wall to CRUSH them for {crush} click DMG, or into another enemy to hurt both. Bosses are too heavy to move and take half. {cooldown}s cooldown.',
+                   passive: { type: 'infinity', chance: 0.15,
+                              lv1: { chance: 0.08 }, si: { chance: 0.03 },
+                              desc: 'Infinity: a {chance} chance to stop an enemy shot, dash or bite before it touches you.' } },
+  lava:          { type: 'eruption',  style: 'special', cooldown: 9, radius: 115, pct: 2.5, dps: 0.6, dur: 5,
+                   lv1: { cooldown: 11, radius: 95, pct: 1.4, dps: 0.35, dur: 4 },
+                   si: { cooldown: -0.5, pct: 0.4, dps: 0.1, dur: 0.5 },
+                   desc: 'M2: an eruption under your cursor hits for {pct} click DMG ({radius} range) and leaves a lava pool for {dur}s that burns for {dps} click DMG per second. {cooldown}s cooldown.',
+                   passive: { type: 'lavaKill', chance: 0.15, radius: 50, dur: 3, dps: 0.25,
+                              lv1: { chance: 0.08 }, si: { chance: 0.03, dps: 0.05 },
+                              desc: 'Kills have a {chance} chance to leave a lava puddle ({radius} range, {dur}s) that burns for {dps} click DMG per second.' } },
+  shadows:       { type: 'dogs',      style: 'special', cooldown: 12, pct: 0.9, dur: 10,
+                   lv1: { cooldown: 15, pct: 0.45, dur: 8 },
+                   si: { cooldown: -0.5, pct: 0.1, dur: 1 },
+                   desc: 'M2: summons two Divine Dogs for {dur}s that hunt enemies for {pct} click DMG a bite. {cooldown}s cooldown.',
+                   passive: { type: 'shadows', chance: 0.06, pct: 0.6,
+                              lv1: { chance: 0.03, pct: 0.3 }, si: { chance: 0.01, pct: 0.08 },
+                              desc: 'Kills have a {chance} chance to summon a shikigami: a Toad that eats the next hit on you, or Nue (hits for {pct} click DMG).' } },
 
-  // ── Anemic Kaisen ──────────────────────────────────────────────────────
-  // (how each one works in battle: combat/kitRuntime.js)
-  ratio:     { type: 'ratio',     period: 1.0, window: 0.12, bonus: 1.5, critRateMod: -0.10,
-               lv1: { window: 0.09, bonus: 0.8 },
-               si: { window: 0.01, bonus: 0.25 },
-               desc: 'A 7:3 bar sits on the enemy under your cursor. Click when the red line crosses the mark ({window} window) for a guaranteed crit with +{bonus} crit DMG. Normal crit rate is 10% lower.' },
-  transfig:  { type: 'transfig',  every: 6, pct: 1.5, radius: 70,
-               lv1: { every: 9, pct: 0.9 },
-               si: { every: -0.5, pct: 0.25 },
-               desc: 'Every {every}th kill becomes a transfigured crawler that runs at an enemy and explodes for {pct} click DMG ({radius} range). Killed elites always turn, for double.' },
-  lava:      { type: 'lava',      dps: 0.3, radius: 60, dur: 4,
-               lv1: { dps: 0.15, radius: 48, dur: 3 },
-               si: { dps: 0.06, dur: 0.5 },
-               desc: 'Kills erupt into lava ({radius} range, {dur}s) that burns enemies for {dps} click DMG per second. Every 6th hit leaves a small puddle too.' },
-  firetrail: { type: 'firetrail', style: 'drag', slash: 0.5, pct: 0.5, dur: 1.6,
-               lv1: { slash: 0.3, pct: 0.25, dur: 1.0 },
-               si: { slash: 0.12, pct: 0.1, dur: 0.2 },
-               desc: 'Hold M1 and drag: Dismantle cuts every enemy your cursor passes through for {slash} click DMG and leaves a fire wall for {dur}s that burns for {pct} click DMG per second and stops enemy shots.' },
-  souls:     { type: 'souls',     style: 'charge', cap: 20, perSoul: 0.07, throwPct: 1.0,
-               lv1: { cap: 12, perSoul: 0.035, throwPct: 0.6 },
-               si: { cap: 2.5, perSoul: 0.01, throwPct: 0.18 },
-               desc: 'Spam M2 to summon cursed spirits (up to {cap}; kills add one, elites 3). They orbit your cursor for {perSoul} click DMG per second each. M1 hurls them all where you click: {throwPct} click DMG per spirit to everything in the blast, +50% to what you clicked. Getting hit loses one.' },
-  infinity:  { type: 'infinity',  radius: 90, every: 4, crush: 2,
-               lv1: { radius: 65, every: 5, crush: 1.2 },
-               si: { radius: 10, every: -0.25, crush: 0.4 },
-               desc: 'Infinity: a {radius} bubble around your cursor stops enemy shots, dashes and the worm\'s bite (blocking drains it; it refills when idle). Every {every}th hit repels the enemy away from your cursor: slam it into a wall to CRUSH it for {crush} click DMG, or into another enemy to hurt both. Bosses are too heavy to move and take half.' },
-  phantom:   { type: 'phantom',   lag: 0.5, autoRate: 4, autoPct: 0.25,
-               lv1: { lag: 0.3, autoRate: 2, autoPct: 0.2 },
-               si: { lag: 0.05, autoPct: 0.05 },
-               desc: 'No cursed energy: enemies aim where your cursor was {lag}s ago, so keep moving. Strongest auto-attack in the game: {autoRate} hits a second on the nearest enemy for {autoPct} click DMG each.' },
-  copy:      { type: 'copy',      every: 20,
-               lv1: { every: 30 },
-               si: { every: -2 },
-               desc: 'Copies a random 5★ skill (its weaker version) and switches to another every {every}s.' },
-  shadows:   { type: 'shadows',   pct: 0.9,
-               lv1: { pct: 0.35 },
-               si: { pct: 0.1 },
-               desc: 'Combo 10 summons a Divine Dog, combo 25 a Toad that eats the next hit on you, combo 50 Nue. Shikigami hit for {pct} click DMG.' },
+  // ── CHARGE: spam M2 to charge, M1 fires ────────────────────────────────
+  souls:         { type: 'souls',     style: 'charge', cap: 20, throwPct: 1.2,
+                   lv1: { cap: 12, throwPct: 0.75 },
+                   si: { cap: 2.5, throwPct: 0.2 },
+                   rate: 14,
+                   desc: 'Tap M2 to summon a cursed spirit (up to {cap}). Hold M2 for 1s to keep summoning, then let go to hurl them all at your cursor: {throwPct} click DMG per spirit to everything in the blast, +50% to the enemy you aim at.',
+                   passive: { type: 'spirits', chance: 0.3,
+                              lv1: { chance: 0.18 }, si: { chance: 0.05 },
+                              desc: 'Kills have a {chance} chance to add a cursed spirit to your stock (elites always add 3).' } },
+  transfig:      { type: 'crawlers',  style: 'charge', cap: 8, pct: 2.0, radius: 65,
+                   lv1: { cap: 5, pct: 1.2 },
+                   si: { cap: 0.5, pct: 0.3 },
+                   rate: 6,
+                   desc: 'Tap M2 to transfigure a crawler (up to {cap}). Hold M2 for 1s to keep transfiguring, then let go to set them all loose at the enemies around your cursor: each explodes for {pct} click DMG ({radius} range).',
+                   passive: { type: 'transfig', chance: 0.08, pct: 1.0, radius: 60,
+                              lv1: { chance: 0.05, pct: 0.6 }, si: { chance: 0.015, pct: 0.15 },
+                              desc: 'Kills have a {chance} chance to turn into a crawler that runs at an enemy and explodes for {pct} click DMG. Killed elites always turn.' } },
+  copy:          { type: 'platinum',  style: 'charge', cap: 12, pct: 1.8,
+                   lv1: { cap: 8, pct: 1.1 },
+                   si: { cap: 1, pct: 0.28 },
+                   rate: 10,
+                   desc: 'Tap M2 to wind up a punch (up to {cap}). Hold M2 for 1s to keep winding up, then let go to unleash them all on the enemy nearest your cursor: {pct} click DMG per punch. ORA!',
+                   passive: { type: 'copy', every: 20,
+                              lv1: { every: 30 }, si: { every: -2 },
+                              desc: "Copies another 5★ agent's passive and switches to a new one every {every}s." } },
+
+  // ── HOLD: hold M1, release to fire ─────────────────────────────────────
+  frost_bolt:    { type: 'lance',     style: 'hold', full: 1.2, minPct: 2.5, pct: 9, width: 60, freeze: 1.5,
+                   lv1: { minPct: 1.4, pct: 5, freeze: 1 },
+                   si: { pct: 1.5, freeze: 0.25, width: 6 },
+                   desc: 'Hold M1 to charge (full in {full}s), release: an ice lance from you through your cursor hits everything on its line for up to {pct} click DMG and freezes it for {freeze}s.',
+                   passive: { type: 'frost', chance: 0.06, dur: 1, bonus: 0.2,
+                              lv1: { chance: 0.03, bonus: 0.1 }, si: { chance: 0.015, bonus: 0.04 },
+                              desc: 'Clicks have a {chance} chance to freeze an enemy for {dur}s. Frozen enemies take +{bonus} DMG.' } },
+  healing_tide:  { type: 'wave',      style: 'hold', full: 1.2, minPct: 1.5, radius: 220, pct: 6, heal: 0.03, maxHeal: 0.15,
+                   lv1: { minPct: 0.8, radius: 170, pct: 3.2, heal: 0.02, maxHeal: 0.1 },
+                   si: { radius: 12, pct: 1, heal: 0.004, maxHeal: 0.02 },
+                   desc: 'Hold M1 to gather a tide at your cursor (full in {full}s), release: the wave hits everything within up to {radius} for up to {pct} click DMG and heals you {heal} max HP per enemy hit (up to {maxHeal}).',
+                   passive: { type: 'lifesteal', pctHp: 0.001, pct: 0.008, maxPctHp: 0.004,
+                              lv1: { pct: 0.004, maxPctHp: 0.002 }, si: { pct: 0.003, maxPctHp: 0.0015 },
+                              desc: 'Clicks heal you a little: 0.1% max HP + {pct} of the damage dealt (up to {maxPctHp} max HP per click).' } },
+  phantom:       { type: 'flashstep', style: 'hold', full: 1.0, targets: 5, minPct: 0.6, pct: 1.7, range: 320,
+                   lv1: { targets: 3, minPct: 0.35, pct: 1.0 },
+                   si: { targets: 0.5, pct: 0.28 },
+                   desc: 'Hold M1 to charge (full in {full}s), release: {targets} flash-step strikes on the nearest enemies around your cursor ({range} range), up to {pct} click DMG each. Fewer enemies = more strikes on each.',
+                   passive: { type: 'phantom', lag: 0.3,
+                              lv1: { lag: 0.2 }, si: { lag: 0.03 },
+                              desc: 'No cursed energy: enemies aim where your cursor was {lag}s ago.' } },
+
+  // ── DRAG: hold M1 and drag ─────────────────────────────────────────────
+  firetrail:     { type: 'firetrail', style: 'drag', slash: 0.5, pct: 0.5, dur: 1.6,
+                   lv1: { slash: 0.3, pct: 0.25, dur: 1.0 },
+                   si: { slash: 0.12, pct: 0.1, dur: 0.2 },
+                   desc: 'Hold M1 and drag: Dismantle cuts every enemy your cursor passes through for {slash} click DMG and leaves a fire wall for {dur}s that burns for {pct} click DMG per second and stops enemy shots.',
+                   passive: { type: 'ignite', chance: 0.1, dps: 0.4, dur: 3,
+                              lv1: { chance: 0.06, dps: 0.25 }, si: { chance: 0.02, dps: 0.08 },
+                              desc: 'Clicks have a {chance} chance to set the target on fire: {dps} click DMG per second for {dur}s.' } },
 };
 
 // How each style is used, for the UI (main screen, Deck, Records)
 export const STYLES = {
   click:   { name: 'CLICK',  how: 'Spam M1',                         phone: 'Spam taps',                         color: '#facc15' },
   special: { name: 'SPECIAL', how: 'M2 (right-click) or Q',          phone: 'The SPECIAL button',                color: '#a78bfa' },
-  charge:  { name: 'CHARGE', how: 'Spam M2 to charge, M1 to fire',   phone: 'Tap SPECIAL to charge, tap to fire', color: '#e879f9' },
-  drag:    { name: 'HOLD',   how: 'Hold M1 and drag',                phone: 'Hold and drag',                     color: '#fb923c' },
+  charge:  { name: 'CHARGE', how: 'Tap M2 to stock up · hold M2 1s to charge, let go to release', phone: 'Tap SPECIAL to stock up · hold it to charge, let go to release', color: '#e879f9' },
+  hold:    { name: 'HOLD',   how: 'Hold M1, release to fire',        phone: 'Hold, let go to fire',              color: '#67e8f9' },
+  drag:    { name: 'DRAG',   how: 'Hold M1 and drag',                phone: 'Hold and drag',                     color: '#fb923c' },
 };
 
 export const ULTS = {
@@ -141,7 +200,7 @@ export const ULTS = {
                      desc: 'Hollow Purple: a beam from you through your cursor, {mult} click DMG to everything in its path ({width} wide). Deletes enemy shots it touches.' },
   sorcerer_killer: { type: 'sorcerer',   dur: 8, speed: 5, mult: 1.5, threshold: 0.2, killsNeeded: 20, chargeOn: 'kills',
                      si: { dur: 1, threshold: 0.03 },
-                     desc: 'Charges from kills ({killsNeeded} — elites count 3), not damage. For {dur}s your auto-attacks hit {speed}× as fast for {mult} DMG and execute non-bosses under {threshold} HP.' },
+                     desc: 'Charges from kills ({killsNeeded} — elites count 3), not damage. For {dur}s you strike the nearest enemy 10 times a second for 30% click DMG each and execute non-bosses under {threshold} HP.' },
   ora:             { type: 'ora',        dur: 45, punches: 10, pct: 0.3, charge: 1.3,
                      si: { punches: 1, pct: 0.03 },
                      desc: 'Pick 1 of 3 skills to use at full strength for {dur}s, with a punch barrage: {punches} punches a second for {pct} click DMG each.' },
@@ -154,19 +213,20 @@ export const ULTS = {
 export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
-const PCT_KEYS = new Set(['slash', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
+const PCT_KEYS = new Set(['slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['throwPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+const MULT_KEYS = new Set(['throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
-  if (key === 'shots' || key === 'every' || key === 'cap') return String(Math.round(v));
+  if (key === 'shots' || key === 'targets') return String(Math.floor(v));
+  if (key === 'every' || key === 'cap') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
 }
 
 // Skill before LV20: the weaker `lv1` numbers replace the base ones
-export const weakKit = (kit) => (kit?.lv1 ? { ...kit, ...kit.lv1, weak: true } : kit);
+export const weakKit = (kit) => (kit?.lv1 ? { ...kit, ...kit.lv1, weak: true } : kit?.passive ? { ...kit, weak: true } : kit);
 
 // The kit at a given superimposition (si = 0 for S1 … 4 for S5)
 export function scaleKit(kit, si = 0) {
@@ -176,6 +236,9 @@ export function scaleKit(kit, si = 0) {
   // weak (pre-LV20) skills still get their superimposition steps, at half size
   Object.entries(kit.si ?? {}).forEach(([k, step]) => { out[k] = kit[k] + step * n * (kit.weak ? 0.5 : 1); });
   if (out.shots) out.shots = Math.floor(out.shots);
+  if (out.targets) out.targets = Math.floor(out.targets);
+  // the passive scales the same way (and is weaker too before LV20)
+  if (kit.passive) out.passive = scaleKit(kit.weak && kit.passive.lv1 ? { ...kit.passive, ...kit.passive.lv1, weak: true } : kit.passive, n);
   return out;
 }
 
@@ -188,12 +251,20 @@ export function describeKit(kit, si = 0) {
     .replace(/\b(\d+)th\b/g, (_, n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'));
 }
 
+// A skill's passive, with this superimposition's numbers (`weak` = before LV20)
+export function describePassive(kit, si = 0, weak = false) {
+  if (!kit?.passive) return '';
+  const p = weak && kit.passive.lv1 ? { ...kit.passive, ...kit.passive.lv1, weak: true } : kit.passive;
+  return describeKit(p, si);
+}
+
 // What a card's skill or ult does, with the real numbers (the `description` text in
 // characters.js is older and can be out of date, so it's only the fallback)
 export function abilityText(ability, si = 0) {
   if (!ability) return '';
   const kit = SKILLS[ability.effect] ?? ULTS[ability.effect];
-  return kit ? describeKit(kit, si) : (ability.description ?? '');
+  if (!kit) return ability.description ?? '';
+  return describeKit(kit, si) + (kit.passive ? `\nPassive: ${describePassive(kit, si)}` : '');
 }
 
 // One line saying what the next superimposition improves, e.g. "range 110 → 128, DMG 50% → 62%"
@@ -201,7 +272,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', slash: 'cut', throwPct: 'throw', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);
