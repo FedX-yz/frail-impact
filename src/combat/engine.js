@@ -782,7 +782,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (crit && !auto) rt.onCritClick(e);
     // main move (click style)
     if (sk?.type === 'devour' && e.hp > 0) {
-      damageEnemy(e, e.hp * sk.pct, { color: '#ff3355', label: '👁' });
+      damageEnemy(e, Math.min(e.hp * sk.pct, s.stats.clickDmg * (sk.maxBite ?? Infinity)), { color: '#ff3355', label: '👁' });   // (capped: bosses have a lot of HP)
       if (!auto) heal(sk.healPctHp * s.player.maxHp);
     }
     // passives that ride on clicks (small chances)

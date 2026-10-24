@@ -34,7 +34,7 @@ export function describeEffect(f, level) {
     case 'atk':    return `${pct(v)} ATK`;
     case 'hp':     return `${pct(v)} max HP`;
     case 'dmgRed': return `−${Math.round(v * 100)}% damage taken`;
-    case 'crit':   return `${pct(v)} crit rate, ${pct(v * 5)} crit DMG`;
+    case 'crit':   return `${pct(v)} crit rate, ${pct(v * 2)} crit DMG`;
     case 'ult':    return `${pct(v)} ult charge`;
     case 'pay':    return `${pct(v)} coins and XP`;
     default:       return '';
@@ -51,7 +51,7 @@ export function hqBonuses(hq = {}) {
     hpMult:    1 + eff('infirmary'),
     dmgRed:    eff('security'),
     critRate:  eff('analytics'),
-    critDmg:   eff('analytics') * 5,
+    critDmg:   eff('analytics') * 2,
     ultCharge: eff('ops'),
     payPct:    eff('payroll'),
   };

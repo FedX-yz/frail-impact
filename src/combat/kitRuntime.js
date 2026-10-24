@@ -402,9 +402,10 @@ export function createKitRuntime(api) {
         sfx('shield');
         return true;
       }
-      case 'souls':    return addCharge('souls', sk, x, y, 0.11, '#e879f9');
-      case 'crawlers': return addCharge('crawlN', sk, x, y, 0.12, '#c084fc');
-      case 'platinum': return addCharge('punches', sk, x, y, 0.09, '#f472b6');
+      // a tap stocks one (at most ~4 a second — holding is the fast way to charge)
+      case 'souls':    return addCharge('souls', sk, x, y, 0.22, '#e879f9');
+      case 'crawlers': return addCharge('crawlN', sk, x, y, 0.22, '#c084fc');
+      case 'platinum': return addCharge('punches', sk, x, y, 0.22, '#f472b6');
       default: return false;
     }
   }
@@ -442,11 +443,11 @@ export function createKitRuntime(api) {
     if (sk.type === 'souls' && s.kit.souls > 0) {
       const t = aim();
       if (!t) { floater('no target', x, y - K(30), '#e879f9'); return; }
-      const n = s.kit.souls, R = K(150);
+      const n = s.kit.souls, R = K(120);
       s.kit.souls = 0;
-      kitHit(t, sk.throwPct * n * 1.5, { color: '#f0abfc', label: `👻×${n} ` });
+      kitHit(t, sk.throwPct * n, { color: '#f0abfc', label: `👻×${n} ` });
       list.filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6)
-        .forEach((e, i) => kitHit(e, sk.throwPct * n, { color: '#e879f9', label: '👻', quiet: i >= 3 }));
+        .forEach((e, i) => kitHit(e, sk.throwPct * n * 0.35, { color: '#e879f9', label: '👻', quiet: i >= 3 }));
       effect({ kind: 'spiral', x: t.x, y: t.y, r: R * 1.3, life: 0.5 });
       effect({ kind: 'burst', x: t.x, y: t.y, r: R, color: '#d946ef' });
       shake(Math.min(0.4, 0.06 + n * 0.015)); sfx(n >= 8 ? 'boom' : 'crit');
@@ -486,16 +487,19 @@ export function createKitRuntime(api) {
       const L = Math.hypot(s.W, s.H) * 1.3, x2 = o.x + dx * L, y2 = o.y + dy * L;
       const w = K(sk.width) * (0.6 + 0.4 * f);
       let n = 0;
-      list.filter(e => distToSegment(e.x, e.y, o.x, o.y, x2, y2) <= w / 2 + radius(e) * 0.7).forEach(e => {
-        kitHit(e, pct, { color: '#67e8f9', label: '❄', quiet: n++ >= 4 });
+      // nearest first; each enemy it goes through weakens it (−35% a time, down to 30%)
+      list.filter(e => distToSegment(e.x, e.y, o.x, o.y, x2, y2) <= w / 2 + radius(e) * 0.7)
+        .sort((a, b) => dist(o.x, o.y, a.x, a.y) - dist(o.x, o.y, b.x, b.y)).forEach(e => {
+        kitHit(e, pct * Math.max(0.3, 1 - 0.35 * n), { color: '#67e8f9', label: '❄', quiet: n++ >= 4 });
         if (e.hp > 0) e.frozen = Math.max(e.frozen ?? 0, sk.freeze * (0.5 + 0.5 * f));
       });
       effect({ kind: 'beam', x1: o.x, y1: o.y, x2, y2, w, life: 0.5, color: 'ice' });
       shake(0.15 + 0.25 * f); sfx(f >= 1 ? 'boom' : 'crit');
     } else if (sk.type === 'wave') {   // refabiba: a tide that hits and heals
       const R = K(sk.radius) * (0.4 + 0.6 * f);
-      const hit = list.filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5);
-      hit.forEach((e, i) => kitHit(e, pct, { color: '#60a5fa', label: '🌊', quiet: i >= 4 }));
+      const hit = list.filter(e => dist(e.x, e.y, x, y) <= R + radius(e) * 0.5)
+        .sort((a, b) => dist(x, y, a.x, a.y) - dist(x, y, b.x, b.y));
+      hit.forEach((e, i) => kitHit(e, i === 0 ? pct : pct * 0.4, { color: '#60a5fa', label: '🌊', quiet: i >= 4 }));   // full on the nearest, 40% on the rest
       const healAmt = Math.min(sk.maxHeal, sk.heal * hit.length) * s.player.maxHp;
       if (healAmt > 0) { api.heal(healAmt); floater(`+${Math.round(healAmt)} HP`, x, y - K(40), '#4ade80', true); }
       effect({ kind: 'ring', x, y, r: R, color: '#60a5fa', life: 0.5 });
@@ -628,7 +632,7 @@ export function createKitRuntime(api) {
         api.announce('HOLLOW PURPLE', '#a855f7');
         return true;
       case 'sorcerer':
-        s.ult.active = { type: 'sorcerer', t: u.dur, dur: u.dur, speed: u.speed, mult: u.mult ?? 1, threshold: u.threshold };
+        s.ult.active = { type: 'sorcerer', t: u.dur, dur: u.dur, speed: u.speed, pct: u.pct ?? 0.3, threshold: u.threshold };
         api.announce('SORCERER KILLER', '#fb7185');
         return true;
       case 'ora': {
@@ -795,7 +799,7 @@ export function createKitRuntime(api) {
         const from = P ?? center();
         const e = nearest(from.x, from.y);
         if (!e) { kit.phantomT = 0; break; }
-        kitHit(e, 0.2 * act.mult, { color: '#fda4af', label: '🗡', charge: BAL.AUTO_CHARGE_WEIGHT, quiet: guard > 1 });
+        kitHit(e, act.pct, { color: '#fda4af', label: '🗡', charge: 0, quiet: guard > 1 });
         effect({ kind: 'stab', x: e.x, y: e.y, r: radius(e), life: 0.2 });
         if (act && e.hp > 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group && e.hp / e.maxHp < act.threshold) {
           floater('EXECUTE', e.x, e.y - K(30), '#fb7185', true);
