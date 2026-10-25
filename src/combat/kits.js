@@ -17,6 +17,8 @@
 // Superimposition (S2–S5) makes each kit stronger — see `si` on each entry:
 // every S level adds the `si` values once (S5 = base + 4× si).
 
+import { wheelOn } from '../utils/secrets';
+
 export const SKILL_UNLOCK = 20;   // full-strength skill
 export const ULT_UNLOCK   = 50;
 
@@ -81,7 +83,15 @@ export const SKILLS = {
                    passive: { type: 'lavaKill', chance: 0.15, radius: 50, dur: 3, dps: 0.25,
                               lv1: { chance: 0.08 }, si: { chance: 0.03, dps: 0.05 },
                               desc: 'Kills have a {chance} chance to leave a lava puddle ({radius} range, {dur}s) that burns for {dps} click DMG per second.' } },
-  shadows:       { type: 'tenshadows', style: 'special', barCost: 30, maxBars: 4,
+  shadows:       { type: 'dogs',      style: 'special', cooldown: 12, pct: 0.7, dur: 10,
+                   lv1: { cooldown: 15, pct: 0.35, dur: 8 },
+                   si: { cooldown: -0.5, pct: 0.1, dur: 1 },
+                   desc: 'M2: summons two Divine Dogs for {dur}s that hunt enemies for {pct} click DMG a bite. {cooldown}s cooldown.',
+                   passive: { type: 'shadows', chance: 0.06, pct: 0.6,
+                              lv1: { chance: 0.03, pct: 0.3 }, si: { chance: 0.01, pct: 0.08 },
+                              desc: 'Kills have a {chance} chance to summon a shikigami: a Toad that eats the next hit on you, or Nue (hits for {pct} click DMG).' } },
+  // Bio's other kit, for devices that unlocked it (utils/secrets.js): it replaces `shadows` there
+  tenshadows:    { type: 'tenshadows', style: 'special', barCost: 30, maxBars: 4,
                    dogPct: 0.5, dogDur: 8, toadPct: 4, bind: 3,                    // 1 bar
                    nuePct: 2.2, nueDur: 8, oxPct: 8, deerHeal: 0.25, wardDur: 5,   // 2 bars
                    serpentPct: 40, devour: 0.35, tigerPct: 10,                       // 3 bars
@@ -89,13 +99,13 @@ export const SKILLS = {
                    gardenNeed: 4, domainDur: 10,                                    // Chimera Shadow Garden
                    lv1: { dogPct: 0.3, toadPct: 2.4, nuePct: 1.3, oxPct: 4.8, deerHeal: 0.15, serpentPct: 24, tigerPct: 6, elephantPct: 13.5, domainDur: 7 },
                    si: { dogPct: 0.07, toadPct: 0.5, nuePct: 0.3, oxPct: 1, deerHeal: 0.02, serpentPct: 5, tigerPct: 1.2, elephantPct: 3, domainDur: 0.5 },
-                   desc: 'THE TEN SHADOWS. Your own hits fill a SHADOW meter ({maxBars} bars). Tap M2 (or Q) to summon the shadow your full bars buy: 1 Divine Dogs, 2 Nue, 3 Great Serpent, 4 Max Elephant. Hold M2 to make a hand sign instead: the world slows, a wheel of all eight shadows opens around your cursor, flick toward one and let go. '
-                     + '1 bar · DIVINE DOGS: a white and a black wolf hunt what you point at ({dogPct} click DMG a bite); summon them again while they are out and they fuse into TOTALITY, whose bite tears into everything next to its prey. '
-                     + '1 bar · TOAD: its tongue grabs the enemy you summon it on (or the pest farthest away) for {toadPct}, reels it in and BINDS it for {bind}s (bound enemies take +30% DMG); then it sits by your cursor and swallows one hit meant for you. '
-                     + '2 bars · NUE: lightning on what you point at ({nuePct}, chains). PIERCING OX: charges across the whole screen through your summon, {oxPct} to everything in its path and harder the farther it runs, throwing them into walls. ROUND DEER: heals {deerHeal} of your HP, clears debuffs, and for {wardDur}s a ward around your cursor erases enemy shots. '
+                   desc: 'THE TEN SHADOWS. Your own hits fill a SHADOW meter ({maxBars} bars) and every kill your shikigami make tops it up. Tap M2 (or Q) to summon the shadow your full bars buy: 1 Divine Dogs, 2 Nue, 3 Great Serpent, 4 Max Elephant. Hold M2 to make a hand sign instead: the world slows, a wheel of all eight shadows opens around your cursor, flick toward one and let go. '
+                     + '1 bar · DIVINE DOGS: a white and a black wolf hunt what you point at ({dogPct} click DMG a bite); summon them again while they are out and they fuse into TOTALITY, whose bite tears into everything next to its prey. TOAD: its tongue grabs the enemy you summon it on (or the pest farthest away) for {toadPct}, reels it in and BINDS it for {bind}s (bound enemies take +30% DMG); then it sits by your cursor and swallows one hit meant for you. '
+                     + '2 bars · NUE: lightning on what you point at ({nuePct}, chains), and a dive onto its last target when it leaves. PIERCING OX: charges across the whole screen through your summon, {oxPct} to everything in its path and harder the farther it runs, throwing them into walls. ROUND DEER: heals {deerHeal} of your HP, clears debuffs, and for {wardDur}s a ward around your cursor erases enemy shots and stops one hit that would have killed you. '
                      + '3 bars · GREAT SERPENT: rises under its prey ({serpentPct}) and swallows it whole under {devour} HP, or at any HP if it is bound. TIGER FUNERAL: pounces on the strongest enemy near your cursor and mauls it 4 times ({tigerPct}, up to double on hurt prey, +25% on bound or stunned prey); the weak do not get up. '
-                     + '4 bars · MAX ELEPHANT: drops out of the sky, {elephantPct} to everything around it, {stun}s stun, and leaves a flood: Nue lightning that lands in the water runs through all of it (THUNDER FLOOD), and an Ox that runs through it becomes a wave. '
-                     + 'Call {gardenNeed} different shadows to ready DOMAIN EXPANSION: CHIMERA SHADOW GARDEN (hold M2, let go in the middle): {domainDur}s of shadow floor, enemies slowed and taking +15% DMG, the meter fills twice as fast, every shadow costs a bar less, and your clicks pull shadow hands up out of the floor.',
+                     + '4 bars · MAX ELEPHANT: drops out of the sky, {elephantPct} to everything around it, {stun}s stun, and leaves a flood that slows them. '
+                     + 'COMBOS: Totality · Thunder Flood (Nue lightning in the flood) · Bound Prey (the Serpent eats what the Toad holds) · Tidal Charge (Ox through the flood) · Pack Hunt (Tiger while the dogs are out) · Leviathan (Serpent out of the water) · Holy Water (Deer into the flood) · Lightning Rod (Nue and bound prey) · Stampede (Ox with Totality) · and a few more to find. '
+                     + 'Call {gardenNeed} different shadows to ready DOMAIN EXPANSION: CHIMERA SHADOW GARDEN (hold M2, let go in the middle): {domainDur}s of shadow floor, enemies slowed and taking +15% DMG, the meter fills twice as fast, every shadow costs a bar less, rabbits come three times as often, and your clicks pull shadow hands up out of the floor. Call all eight before you open it for a PERFECT GARDEN.',
                    passive: { type: 'rabbits', chance: 0.15,
                               lv1: { chance: 0.08 }, si: { chance: 0.02 },
                               desc: 'Rabbit Escape: when a hit would land on you, a {chance} chance a burst of shadow rabbits takes it instead (and whatever was on top of you loses you).' } },
@@ -216,10 +226,19 @@ export const ULTS = {
   ora:             { type: 'ora',        dur: 45, punches: 10, pct: 0.6, charge: 1.3,
                      si: { punches: 1, pct: 0.05 },
                      desc: 'Pick 1 of 3 skills to use at full strength for {dur}s, with a punch barrage: {punches} punches a second for {pct} click DMG each.' },
-  mahoraga:        { type: 'mahoraga',   hp: 2.5, mult: 10, dur: 25, berserkAt: 4, gunPct: 0.6, finale: 15, charge: 1.4,
+  mahoraga:        { type: 'mahoraga',   hp: 2.5, mult: 10, charge: 1.4,
+                     si: { hp: 0.4, mult: 1.3 },
+                     desc: 'Summons Mahoraga ({hp}× your max HP, slams for {mult} click DMG). You are suspended and can only watch. It adapts to every attack that hits it, and its wheel turns every 6s, making it stronger. It must clear the field (boss included). If it dies, you die.' },
+  // Bio's other kit's ult (see tenshadows)
+  mahoraga2:       { type: 'mahoraga2',  hp: 2.5, mult: 10, dur: 25, berserkAt: 4, gunPct: 0.6, finale: 15, charge: 1.4,
                      si: { hp: 0.4, mult: 1.3, gunPct: 0.08, finale: 2 },
-                     desc: 'With this treasure I summon… Eight-Handled Sword Divergent Sila Divine General MAHORAGA for {dur}s ({hp}× your max HP, slams for {mult} click DMG, the shockwave hits the rest for less). Enemies attack it instead of you. Click an enemy and it LEAPS onto it and slams down. It adapts to every kind of attack that hits it (the third time, that kind can no longer hurt it); its wheel turns for every new kind and every 4s, each turn making it stronger. After {berserkAt} turns it goes BERSERK: twin pistols on whatever you point at ({gunPct} click DMG a shot, 6 a second) and a bullet storm with every leap. Summon it with a full SHADOW meter for the full ritual: it takes the whole meter and arrives with its wheel already turned twice. When its time is up it leaves with a WORLD-CUTTING SLASH ({finale} click DMG along the line, a third of that to everything else). If it falls, so do you.' },
+                     desc: 'With this treasure I summon… Eight-Handled Sword Divergent Sila Divine General MAHORAGA for {dur}s ({hp}× your max HP, slams for {mult} click DMG, the shockwave hits the rest for less). Enemies attack it instead of you. Click an enemy and it LEAPS onto it and slams down. It adapts to every kind of attack that hits it (the third time, that kind can no longer hurt it); its wheel turns for every new kind and every 4s, each turn making it stronger. After {berserkAt} turns it goes BERSERK: twin pistols on whatever you point at ({gunPct} click DMG a shot, 6 a second) and a bullet storm with every leap. Summon it with a full SHADOW meter for the full ritual: it takes the whole meter and arrives with its wheel already turned twice. Summon it inside the Chimera Shadow Garden and the garden stays open as long as it stands. When its time is up it leaves with a WORLD-CUTTING SLASH ({finale} click DMG along the line, a third of that to everything else). If it falls, so do you.' },
 };
+
+// The kit a card's effect gives on this device: Bio's other kit replaces his usual one where it's unlocked
+const ALT_SKILL = { shadows: 'tenshadows' }, ALT_ULT = { mahoraga: 'mahoraga2' };
+export const skillKitFor = (effect) => SKILLS[(wheelOn() && ALT_SKILL[effect]) || effect];
+export const ultKitFor = (effect) => ULTS[(wheelOn() && ALT_ULT[effect]) || effect];
 
 // Each S level after S1 also cuts the ult cooldown by this much (S5 = −32%)
 export const ULT_CD_PER_SI = 0.08;
@@ -274,7 +293,7 @@ export function describePassive(kit, si = 0, weak = false) {
 // characters.js is older and can be out of date, so it's only the fallback)
 export function abilityText(ability, si = 0) {
   if (!ability) return '';
-  const kit = SKILLS[ability.effect] ?? ULTS[ability.effect];
+  const kit = skillKitFor(ability.effect) ?? ultKitFor(ability.effect);
   if (!kit) return ability.description ?? '';
   return describeKit(kit, si) + (kit.passive ? `\nPassive: ${describePassive(kit, si)}` : '');
 }

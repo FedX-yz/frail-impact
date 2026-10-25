@@ -14,7 +14,12 @@
 //   e.boundT        a Toad-bound enemy: takes +30% DMG; the Serpent eats it at any HP
 //   e.slow / e.vuln set here every frame (floods, the domain, bound) and read by the engine
 //   s.mahoraga      the ult: enemies attack it instead of you; click to send it leaping
+//   s.kit.dives     Nue diving onto its last target as it leaves
+//   s.kit.twins     PERFECT GARDEN: every summon's shadow twin, a moment later
+//   s.kit.found     a combo found for the first time on this device (the toast)
+//   s.kit.byShiki   true while a shikigami's hit lands: its kills top up the meter
 // ─────────────────────────────────────────────────────────────────────────────
+import { foundCombo, combosFound } from '../utils/secrets';
 
 // The hand-sign wheel, clockwise from the top. icon = a silhouette in data/gameIcons.js
 export const SHADOWS = [
@@ -30,7 +35,27 @@ export const SHADOWS = [
 export const SHADOW_BY_ID = Object.fromEntries(SHADOWS.map(x => [x.id, x]));
 export const TAP_SUMMON = [null, 'dogs', 'nue', 'serpent', 'elephant'];   // a tap with that many bars
 // effect kinds TenShadowsFx draws
-export const TS_EFFECTS = new Set(['puddle', 'rabbits', 'bolt', 'hand', 'claws']);
+export const TS_EFFECTS = new Set(['puddle', 'rabbits', 'bolt', 'hand', 'claws', 'wisp', 'saved']);
+// The combos. Each one is announced the first time it goes off on this device (utils/secrets.js
+// remembers which); icons: silhouettes from data/gameIcons.js ('wheel' = Mahoraga's wheel)
+export const COMBOS = [
+  { id: 'totality',     name: 'TOTALITY',              icons: ['dog', 'dog'] },
+  { id: 'thunderflood', name: 'THUNDER FLOOD',         icons: ['nue', 'elephant'] },
+  { id: 'boundprey',    name: 'BOUND PREY',            icons: ['toad', 'serpent'] },
+  { id: 'tidal',        name: 'TIDAL CHARGE',          icons: ['ox', 'elephant'] },
+  { id: 'packhunt',     name: 'PACK HUNT',             icons: ['tiger', 'dog'] },
+  { id: 'leviathan',    name: 'LEVIATHAN',             icons: ['serpent', 'elephant'] },
+  { id: 'holywater',    name: 'HOLY WATER',            icons: ['deer', 'elephant'] },
+  { id: 'lightningrod', name: 'LIGHTNING ROD',         icons: ['nue', 'toad'] },
+  { id: 'stampede',     name: 'STAMPEDE',              icons: ['ox', 'dog'] },
+  { id: 'ritual',       name: 'THE FULL RITUAL',       icons: ['wheel'] },
+  { id: 'general',      name: 'GENERAL OF THE GARDEN', icons: ['wheel', 'grasp'] },
+  { id: 'perfect',      name: 'PERFECT GARDEN',        icons: ['dog', 'toad', 'nue', 'ox', 'deer', 'serpent', 'tiger', 'elephant'] },
+];
+// the ones this device has found (read once; foundCombo writes them back)
+let known = null;
+const knownSet = () => { if (!known) known = new Set(combosFound()); return known; };
+export const combosKnown = () => COMBOS.filter(c => knownSet().has(c.id)).length;
 export const SIGN_HOLD = 0.22;   // held longer than this → the wheel opens
 const SIGN_MAX = 0.9;            // game seconds the wheel stays open (3s of real time): then the sign breaks
 const SLOW = 0.3;                // how fast the world runs while the wheel is open
@@ -61,11 +86,31 @@ export function createTenShadows(c) {
   // bound / frozen / downed prey
   const helpless = e => e.boundT > 0 || e.frozen > 0;
   const floodAt = (x, y) => (s.kit.floods ?? []).find(f => dist(x, y, f.x, f.y) <= f.r) ?? null;
+  // a shikigami's hit (or kill): what it kills tops up your meter (onKill)
+  function sHit(e, mult, opts) { s.kit.byShiki = true; try { return kitHit(e, mult, opts); } finally { s.kit.byShiki = false; } }
+  function sKill(e) { s.kit.byShiki = true; try { api.killEnemy(e); } finally { s.kit.byShiki = false; } }
+  // a combo went off: the first time on this device it's announced as found
+  function combo(id) {
+    const set = knownSet();
+    if (set.has(id)) return;
+    const c = COMBOS.find(x => x.id === id);
+    if (!c) return;
+    set.add(id); foundCombo(id);
+    s.kit.found = { id, name: c.name, icons: c.icons, n: combosKnown(), of: COMBOS.length, t: 0 };
+    sfx('discover');
+  }
 
   // ── The meter ────────────────────────────────────────────────────────────
   function onDamage(sk, dmg) {
     if (!s.direct || dmg <= 0) return;
     s.kit.shadow = Math.min(cap(sk), (s.kit.shadow ?? 0) + dmg / Math.max(1, s.stats.clickDmg) * (domainOn() ? 2 : 1));
+  }
+  // A kill one of your shikigami made: a wisp of shadow comes back to you
+  function onKill(sk, e) {
+    if (!s.kit.byShiki || e.tier === 'treasure' || e.tier === 'boss') return;
+    s.kit.shadow = Math.min(cap(sk), (s.kit.shadow ?? 0) + (e.tier === 'elite' ? 6 : 2) * (domainOn() ? 2 : 1));
+    const P = s.player.pos;
+    if (P && s.time - (s.kit.wispT ?? -9) > 0.06) { s.kit.wispT = s.time; effect({ kind: 'wisp', x: e.x, y: e.y, x1: P.x, y1: P.y, life: 0.5 }); }
   }
   // For the UI (the SPECIAL circle): full bars, and the whole meter as a fraction
   function info(sk) {
@@ -115,12 +160,15 @@ export function createTenShadows(c) {
     floater(sh.name, x, y - K(64), '#c7d2fe', true);
     SUMMON[id](sk, x, y);
     sfx('summon');
-    // Chimera Shadow Garden: call enough different shadows and the domain is ready
+    // PERFECT GARDEN: every shadow comes with its twin
+    if (s.kit.domain?.perfect) arr('twins').push({ id: nextId(), shadow: id, x, y, t: 0.35, sk });
+    // Chimera Shadow Garden: call enough different shadows and the domain is ready (all eight: it'll be perfect)
     if (!domainOn()) {
       const g = arr('garden');
       if (!g.includes(id)) {
         g.push(id);
         if (g.length === Math.round(sk.gardenNeed)) { api.announce('CHIMERA SHADOW GARDEN · READY', '#a5b4fc'); sfx('sign'); }
+        if (g.length === SHADOWS.length) { api.announce('ALL EIGHT · THE GARDEN WILL BE PERFECT', '#fef3c7'); sfx('sign'); }
       }
     }
     return true;
@@ -136,7 +184,7 @@ export function createTenShadows(c) {
   const SUMMON = {
     // 1 · two dogs, white and black; again while they're out → they fuse into Totality
     dogs(sk, x, y) {
-      const dogs = s.allies.filter(a => a.kind === 'dog');
+      const dogs = s.allies.filter(a => a.kind === 'dog' && a.ts);
       const tot = dogs.find(d => d.totality);
       if (tot) {   // Totality is already out: it howls (shoving the small ones back) and stays longer
         tot.life += sk.dogDur * 0.5; tot.howl = 0.6;
@@ -148,85 +196,136 @@ export function createTenShadows(c) {
       }
       if (dogs.length) {   // the two dogs become one
         const life = Math.max(...dogs.map(d => d.life)) + 4;
-        s.allies = s.allies.filter(a => a.kind !== 'dog');
-        s.allies.push({ id: nextId(), kind: 'dog', summoned: true, totality: true, x, y, pct: sk.dogPct * 2.4, life, biteT: 0, target: null, howl: 0.8 });
+        s.allies = s.allies.filter(a => !(a.kind === 'dog' && a.ts));
+        s.allies.push({ id: nextId(), kind: 'dog', ts: true, summoned: true, totality: true, x, y, pct: sk.dogPct * 2.4, life, biteT: 0, target: null, howl: 0.8 });
         api.announce('DIVINE DOG: TOTALITY', '#e2e8f0');
+        combo('totality');
         effect({ kind: 'ring', x, y, r: K(110), color: '#e2e8f0', life: 0.5 });
         shake(0.3); sfx('howl');
         return;
       }
-      for (let i = 0; i < 2; i++) s.allies.push({ id: nextId(), kind: 'dog', summoned: true, white: i === 0, x: x + (i ? K(30) : -K(30)), y, pct: sk.dogPct, life: sk.dogDur, biteT: i * 0.2, target: null });
+      for (let i = 0; i < 2; i++) s.allies.push({ id: nextId(), kind: 'dog', ts: true, summoned: true, white: i === 0, x: x + (i ? K(30) : -K(30)), y, pct: sk.dogPct, life: sk.dogDur, biteT: i * 0.2, target: null });
       sfx('bark');
     },
     // 1 · the tongue grabs the enemy you summoned it on (or the pest farthest away), binds it and
     //     reels it in; then the toad sits by your cursor and swallows one hit meant for you
-    toad(sk, x, y) {
-      const near = nearest(x, y);
-      let t = near && dist(x, y, near.x, near.y) <= K(220) + radius(near) ? near : null;
+    toad(sk, x, y, twin) {
+      const taken = new Set((s.kit.tongues ?? []).map(tg => tg.target));   // a tongue's already on its way there
+      const free = foes().filter(e => !taken.has(e.id));
+      const near = nearest(x, y, free);
+      let t = near && dist(x, y, near.x, near.y) <= K(twin ? 320 : 220) + radius(near) ? near : null;
       if (!t) {
-        const kiters = foes().filter(e => e.move === 'kite');
+        const kiters = free.filter(e => e.move === 'kite');
         t = kiters.length ? kiters.reduce((b, e) => (dist(x, y, e.x, e.y) > dist(x, y, b.x, b.y) ? e : b)) : near;
       }
-      s.allies = s.allies.filter(a => a.kind !== 'toad');
-      const tx = clamp(x, K(40), s.W - K(40)), ty = clamp(y + K(20), K(50), s.H - K(30));
-      const toad = { id: nextId(), kind: 'toad', ts: true, x: tx, y: ty, life: 14, sit: t ? 0.6 : 0 };
+      if (!twin) s.allies = s.allies.filter(a => a.kind !== 'toad');
+      const tx = clamp(x + (twin ? K(70) : 0), K(40), s.W - K(40)), ty = clamp(y + K(20), K(50), s.H - K(30));
+      const toad = { id: nextId(), kind: 'toad', ts: true, x: tx, y: ty, life: 14, sit: t ? 0.6 : 0, slot: twin ? 1 : 0 };
       s.allies.push(toad);
       if (t) arr('tongues').push({ id: nextId(), toad: toad.id, x: tx, y: ty - K(12), target: t.id, t: 0, out: 0.16, pull: 0.3, pct: sk.toadPct, bind: sk.bind, hit: false, from: null, tx: t.x, ty: t.y });
       sfx('tongue');
     },
     // 2 · circles above your cursor, lightning on what you point at
-    nue(sk, x, y) {
-      s.allies = s.allies.filter(a => a.kind !== 'nue2');
-      s.allies.push({ id: nextId(), kind: 'nue2', x, y: y - K(60), pct: sk.nuePct, life: sk.nueDur, zapT: 0.3, ang: 0 });
+    nue(sk, x, y, twin) {
+      if (!twin) s.allies = s.allies.filter(a => a.kind !== 'nue2');
+      const other = s.allies.find(a => a.kind === 'nue2');
+      s.allies.push({ id: nextId(), kind: 'nue2', ts: true, x, y: y - K(60), pct: sk.nuePct, life: sk.nueDur, zapT: twin ? 0.6 : 0.3, ang: other ? other.ang + Math.PI : 0, last: null });
       sfx('thunder');
     },
     // 2 · charges across the whole screen through where you summoned it, along the line that
     //     catches the most; harder the farther it has run; throws them (walls crush)
-    ox(sk, x, y) {
-      const a0 = bestAngle(x, y, K(110));
+    ox(sk, x, y, twin) {
+      const prev = twin ? (s.kit.oxen ?? []).at(-1) : null;   // its twin charges across it: an X
+      const a0 = prev ? prev.a + Math.PI / 2 : bestAngle(x, y, K(110));
       const a = Math.cos(a0) >= -0.01 ? a0 : a0 + Math.PI;   // left → right (or top → bottom)
       const L = Math.hypot(s.W, s.H) * 0.75;
+      // STAMPEDE: Totality runs with it (wider, harder, and the dog stays longer)
+      const tot = s.allies.find(d => d.kind === 'dog' && d.ts && d.totality);
       arr('oxen').push({ id: nextId(), a, x0: x - Math.cos(a) * L, y0: y - Math.sin(a) * L, x1: x + Math.cos(a) * L, y1: y + Math.sin(a) * L,
-        x: x - Math.cos(a) * L, y: y - Math.sin(a) * L, t: 0, dur: 0.72, hit: [], pct: sk.oxPct, wet: false });
+        x: x - Math.cos(a) * L, y: y - Math.sin(a) * L, t: 0, dur: 0.72, hit: [], pct: sk.oxPct, wet: false, stampede: !!tot });
+      if (tot && !twin) {
+        tot.life += 3; tot.howl = 0.6;
+        floater('STAMPEDE', x, y - K(96), '#e2e8f0', true);
+        combo('stampede'); sfx('howl');
+      }
       shake(0.2); sfx('ox');
     },
     // 2 · heals you, clears debuffs, and its ward around your cursor erases enemy shots
-    deer(sk, x, y) {
-      s.allies = s.allies.filter(a => a.kind !== 'deer');
-      s.allies.push({ id: nextId(), kind: 'deer', x, y, life: sk.wardDur + 0.4, heal: sk.deerHeal * s.player.maxHp / 1.5, healT: 1.5 });
-      s.kit.ward = { t: 0, dur: sk.wardDur, r: K(150), tick: 0.5 };
+    deer(sk, x, y, twin) {
+      if (!twin) s.allies = s.allies.filter(a => a.kind !== 'deer');
+      s.allies.push({ id: nextId(), kind: 'deer', ts: true, x, y, life: sk.wardDur + 0.4, heal: sk.deerHeal * s.player.maxHp / 1.5 * (twin ? 0.5 : 1), healT: 1.5, slot: twin ? 1 : 0 });
+      const w = s.kit.ward;
+      if (twin && w) { w.dur = w.t + sk.wardDur; w.r = K(190); }   // two deer: a wider ward
+      else s.kit.ward = { t: 0, dur: sk.wardDur, r: K(150), tick: 0.5, saved: false };
       if (Object.keys(s.player.debuffs ?? {}).length) { s.player.debuffs = {}; floater('CLEANSED', x, y - K(90), '#bbf7d0', true); }
+      // HOLY WATER: the deer blesses the flood — it heals you while your cursor is in it, burns them, lasts longer
+      const floods = s.kit.floods ?? [];
+      if (!twin && floods.length) {
+        floods.forEach(f => { if (!f.holy) { f.holy = true; f.burnT = 0; } f.dur += 3; });
+        api.announce('HOLY WATER', '#fef9c3');
+        combo('holywater');
+      }
       sfx('deer');
     },
     // 3 · rises under its prey and swallows it if it's weak (or bound) — bound prey nearby first
-    serpent(sk, x, y) {
-      const bound = foes().filter(e => e.boundT > 0 && dist(x, y, e.x, e.y) <= K(300) + radius(e));
+    serpent(sk, x, y, twin) {
+      const taken = new Set(twin ? (s.kit.serpents ?? []).map(sp => sp.target) : []);
+      const pool = foes().filter(e => !taken.has(e.id));
+      const bound = pool.filter(e => e.boundT > 0 && dist(x, y, e.x, e.y) <= K(300) + radius(e));
       const t = (bound.length ? nearest(x, y, bound) : null)
-        ?? (() => { const e = nearest(x, y); return e && dist(x, y, e.x, e.y) <= K(220) + radius(e) ? e : null; })() ?? focus(170);
-      arr('serpents').push({ id: nextId(), x: t?.x ?? x, y: t?.y ?? y, t: 0, life: 1.5, target: t?.id ?? null, struck: false, sk });
+        ?? (() => { const e = nearest(x, y, pool); return e && dist(x, y, e.x, e.y) <= K(twin ? 360 : 220) + radius(e) ? e : null; })()
+        ?? (twin ? nearest(x, y) : focus(170));
+      const at = { x: t?.x ?? x, y: t?.y ?? y };
+      // LEVIATHAN: out of the flood it comes up bigger, swallows more, and thrashes the whole water
+      const fl = floodAt(at.x, at.y);
+      arr('serpents').push({ id: nextId(), x: at.x, y: at.y, t: 0, life: 1.5, target: t?.id ?? null, struck: false, sk, lev: fl ? { x: fl.x, y: fl.y, r: fl.r } : null });
+      if (fl) { floater('LEVIATHAN', at.x, at.y - K(120), '#7dd3fc', true); combo('leviathan'); sfx('splash'); }
       sfx('hiss');
     },
     // 3 · pounces on the strongest enemy near you and mauls it; the weak don't get up
-    tiger(sk, x, y) {
-      const near = foes().filter(e => dist(x, y, e.x, e.y) <= K(360) + radius(e));
-      const pool = near.length ? near : foes();
+    tiger(sk, x, y, twin) {
+      const taken = new Set(twin ? (s.kit.tigers ?? []).map(tg => tg.target) : []);
+      const all = foes().filter(e => !taken.has(e.id));
+      const near = all.filter(e => dist(x, y, e.x, e.y) <= K(360) + radius(e));
+      const pool = near.length ? near : all.length ? all : foes();
       const score = e => rank(e) + (helpless(e) ? 0.5 : 0);   // the strongest — helpless prey breaks a tie
       const t = pool.reduce((b, e) => (!b || score(e) > score(b) || (score(e) === score(b) && e.hp > b.hp) ? e : b), null);
-      arr('tigers').push({ id: nextId(), x, y, x0: x, y0: y, target: t?.id ?? null, t: 0, leap: 0.3, mauls: 4, mT: 0, pct: sk.tigerPct, phase: t ? 'leap' : 'gone', fade: 0, face: t && t.x < x ? -1 : 1 });
+      const tg = { id: nextId(), x, y, x0: x, y0: y, target: t?.id ?? null, t: 0, leap: 0.3, mauls: 4, mT: 0, pct: sk.tigerPct, phase: t ? 'leap' : 'gone', fade: 0, face: t && t.x < x ? -1 : 1, pack: false };
+      arr('tigers').push(tg);
+      // PACK HUNT: the dogs join in — they go for its prey and bite twice as fast while it mauls
+      const pack = s.allies.filter(a => a.kind === 'dog' && a.ts);
+      if (t && pack.length) {
+        tg.pack = true;
+        if (!twin) {
+          pack.forEach(d => { d.pack = tg.id; d.target = t.id; });
+          floater('PACK HUNT', x, y - K(90), '#fdba74', true);
+          combo('packhunt'); sfx('howl');
+        }
+      }
       sfx('roar');
     },
     // 4 · drops out of the sky, floods everything around it (stun, knock back, water stays)
-    elephant(sk, x, y) {
-      arr('drops').push({ id: nextId(), x, y, t: 0, fall: 0.6, r: K(230), landed: false, sk });
+    elephant(sk, x, y, twin) {
+      let at = { x, y };
+      if (twin) {   // its twin drops on the biggest crowd the first one missed (or right next to it)
+        const R = K(230), first = (s.kit.drops ?? []).at(-1) ?? { x, y };
+        const rest = foes().filter(e => dist(e.x, e.y, first.x, first.y) > R);
+        let best = null, bn = 0;
+        for (const e of rest) { const n = rest.filter(o => dist(o.x, o.y, e.x, e.y) <= K(200)).length + rank(e); if (n > bn) { bn = n; best = e; } }
+        at = best ? { x: best.x, y: best.y } : { x: clamp(x + (x < s.W / 2 ? 1 : -1) * K(260), K(60), s.W - K(60)), y };
+      }
+      arr('drops').push({ id: nextId(), x: at.x, y: at.y, t: 0, fall: 0.6, r: K(230), landed: false, sk });
       sfx('trumpet');
     },
   };
 
   // ── Chimera Shadow Garden ────────────────────────────────────────────────
   function expand(sk, x, y) {
-    s.kit.domain = { t: 0, dur: sk.domainDur, x, y };
+    const perfect = (s.kit.garden?.length ?? 0) >= SHADOWS.length;   // all eight called first: half as long again, and twins
+    s.kit.domain = { t: 0, dur: sk.domainDur * (perfect ? 1.5 : 1), x, y, perfect };
     s.kit.garden = [];
-    s.kit.cutin = { kind: 'domain', t: 0, life: 1.5 };
+    s.kit.cutin = { kind: 'domain', t: 0, life: 1.5, perfect };
+    if (perfect) combo('perfect');
     effect({ kind: 'flash', color: '#000000', life: 0.9 });
     shake(0.6); sfx('domain');
   }
@@ -246,8 +345,9 @@ export function createTenShadows(c) {
   function update(sk, dt, live) {
     const kit = s.kit, P = s.player.pos;
     const scale = timeScale();
-    // cut-ins (Mahoraga, the garden) run on real time, the world crawls under them
+    // cut-ins (Mahoraga, the garden) and the combo toast run on real time, the world crawls under them
     if (kit.cutin) { kit.cutin.t += dt / scale; if (kit.cutin.t >= kit.cutin.life) kit.cutin = null; }
+    if (kit.found) { kit.found.t += dt / scale; if (kit.found.t >= 3) kit.found = null; }
 
     const sign = kit.sign;
     if (sign) {
@@ -263,7 +363,7 @@ export function createTenShadows(c) {
     // the garden
     const dom = kit.domain;
     if (dom) {
-      dom.t += dt;
+      if (!s.mahoraga?.general) dom.t += dt;   // GENERAL OF THE GARDEN: it stays open while Mahoraga stands
       if (dom.t >= dom.dur) {
         kit.domain = null;
         effect({ kind: 'flash', color: '#1e1b4b', life: 0.5 });
@@ -272,8 +372,48 @@ export function createTenShadows(c) {
     }
     // floods (Max Elephant's water)
     if (kit.floods?.length) {
-      kit.floods.forEach(f => { f.t += dt; if (f.zap > 0) f.zap -= dt; });
+      for (const f of kit.floods) {
+        f.t += dt; if (f.zap > 0) f.zap -= dt;
+        if (!f.holy) continue;
+        // HOLY WATER: it heals you while your cursor is in it, and burns everything standing in it
+        if (P && dist(P.x, P.y, f.x, f.y) <= f.r) api.heal(s.player.maxHp * 0.02 * dt);
+        f.burnT -= dt;
+        if (f.burnT <= 0 && live) {
+          f.burnT = 0.5;
+          let n = 0;
+          foes().filter(e => dist(e.x, e.y, f.x, f.y) <= f.r).forEach(e => sHit(e, 0.4, { color: '#fef9c3', quiet: n++ > 1 }));
+        }
+      }
       kit.floods = kit.floods.filter(f => f.t < f.dur);
+    }
+    // PERFECT GARDEN: the shadow twins arrive
+    if (kit.twins?.length) {
+      for (const tw of kit.twins) {
+        tw.t -= dt;
+        if (tw.t > 0) continue;
+        if (!c.fighting()) continue;
+        effect({ kind: 'puddle', x: tw.x, y: tw.y, r: K(70), life: 0.7 });
+        floater('SHADOW TWIN', tw.x, tw.y - K(40), '#fef3c7');
+        SUMMON[tw.shadow](tw.sk, tw.x, tw.y, true);
+      }
+      kit.twins = kit.twins.filter(tw => tw.t > 0);
+    }
+    // Nue diving onto its last target as it leaves
+    if (kit.dives?.length) {
+      for (const dv of kit.dives) {
+        dv.t += dt;
+        const e = s.enemies.find(o => o.id === dv.target && !(o.down > 0));
+        if (e && !dv.hit) { dv.tx = e.x; dv.ty = e.y; }
+        const p = Math.min(1, dv.t / dv.dur), q = p * p;
+        dv.x = dv.x0 + (dv.tx - dv.x0) * q; dv.y = dv.y0 + (dv.ty - dv.y0) * q;
+        if (!dv.hit && p >= 1) {
+          dv.hit = true;
+          if (e && live) lightning(e, dv.pct, dv.tx, dv.ty - K(420), true);
+          effect({ kind: 'ring', x: dv.tx, y: dv.ty, r: K(120), color: '#fde047', life: 0.4 });
+          shake(0.3);
+        }
+      }
+      kit.dives = kit.dives.filter(dv => dv.t < dv.dur + 0.3);
     }
     // Round Deer's ward: positive energy around your cursor
     const w = kit.ward;
@@ -282,7 +422,7 @@ export function createTenShadows(c) {
       if (w.tick <= 0 && P && live) {
         w.tick = 0.5;
         let n = 0;
-        foes().filter(e => dist(e.x, e.y, P.x, P.y) <= w.r + radius(e) * 0.5).forEach(e => kitHit(e, 0.3, { color: '#bbf7d0', quiet: n++ > 0 }));
+        foes().filter(e => dist(e.x, e.y, P.x, P.y) <= w.r + radius(e) * 0.5).forEach(e => sHit(e, 0.3, { color: '#bbf7d0', quiet: n++ > 0 }));
       }
       if (w.t >= w.dur) kit.ward = null;
     }
@@ -313,7 +453,7 @@ export function createTenShadows(c) {
         tg.tx = e.x; tg.ty = e.y;
         if (!tg.hit && tg.t >= tg.out) {
           tg.hit = true;
-          if (live && !(e.down > 0)) kitHit(e, tg.pct, { color: '#86efac', label: 'TONGUE ' });
+          if (live && !(e.down > 0)) sHit(e, tg.pct, { color: '#86efac', label: 'TONGUE ' });
           if (!s.enemies.includes(e)) { tg.done = true; continue; }
           bind(e, tg.bind);
           kit.slowing = true;
@@ -339,15 +479,15 @@ export function createTenShadows(c) {
         const p = Math.min(1, ox.t / ox.dur);
         const px = ox.x, py = ox.y;
         ox.x = ox.x0 + (ox.x1 - ox.x0) * p; ox.y = ox.y0 + (ox.y1 - ox.y0) * p;
-        if (!ox.wet && floodAt(ox.x, ox.y)) { ox.wet = true; floater('TIDAL CHARGE', ox.x, ox.y - K(60), '#7dd3fc', true); sfx('splash'); }
+        if (!ox.wet && floodAt(ox.x, ox.y)) { ox.wet = true; floater('TIDAL CHARGE', ox.x, ox.y - K(60), '#7dd3fc', true); combo('tidal'); sfx('splash'); }
         if (live) {
           const ux = Math.cos(ox.a), uy = Math.sin(ox.a);
           for (const e of foes()) {
             if (ox.hit.includes(e.id)) continue;
-            if (distToSegment(e.x, e.y, px, py, ox.x, ox.y) > K(64) + radius(e) * 0.6) continue;
+            if (distToSegment(e.x, e.y, px, py, ox.x, ox.y) > K(ox.stampede ? 102 : 64) + radius(e) * 0.6) continue;
             ox.hit.push(e.id);
-            // the farther it has run, the harder it hits (and the water makes it a wave)
-            kitHit(e, ox.pct * (1 + 0.5 * (p0 + p) / 2) * (ox.wet ? 1.5 : 1), { color: '#fca5a5', label: 'OX ', quiet: ox.hit.length > 4 });
+            // the farther it has run, the harder it hits (the water makes it a wave, Totality a stampede)
+            sHit(e, ox.pct * (1 + 0.5 * (p0 + p) / 2) * (ox.wet ? 1.5 : 1) * (ox.stampede ? 1.3 : 1), { color: ox.stampede ? '#e2e8f0' : '#fca5a5', label: 'OX ', quiet: ox.hit.length > 4 });
             if (s.enemies.includes(e) && !heavy(e)) {
               // thrown forward and off the line
               const side = (e.x - ox.x) * -uy + (e.y - ox.y) * ux >= 0 ? 1 : -1;
@@ -371,19 +511,27 @@ export function createTenShadows(c) {
         if (!sp.struck && sp.t >= 0.4) {
           sp.struck = true;
           const sk2 = sp.sk;
+          const lev = sp.lev;
           if (t && !(t.down > 0) && live) {
             const bound = t.boundT > 0;
-            kitHit(t, sk2.serpentPct, { color: '#a5b4fc', label: 'SERPENT ' });
-            if (t.hp > 0 && s.enemies.includes(t) && t.tier !== 'boss' && !t.group && (bound || t.hp / t.maxHp <= sk2.devour)) {
+            sHit(t, sk2.serpentPct * (lev ? 1.5 : 1), { color: lev ? '#7dd3fc' : '#a5b4fc', label: lev ? 'LEVIATHAN ' : 'SERPENT ' });
+            if (t.hp > 0 && s.enemies.includes(t) && t.tier !== 'boss' && !t.group && (bound || t.hp / t.maxHp <= (lev ? Math.max(sk2.devour, 0.5) : sk2.devour))) {
               floater(bound ? 'BOUND PREY · SWALLOWED' : 'SWALLOWED', t.x, t.y - K(40), '#c7d2fe', true);
-              api.killEnemy(t);
+              if (bound) combo('boundprey');
+              sKill(t);
             } else if (t.hp > 0 && t.tier !== 'boss') t.frozen = Math.max(t.frozen ?? 0, 1.5);
           }
           let n = 0;
-          foes().filter(e => e !== t && dist(e.x, e.y, sp.x, sp.y) <= K(115) + radius(e) * 0.5)
-            .forEach(e => kitHit(e, sk2.serpentPct * 0.25, { color: '#a5b4fc', quiet: n++ >= 3 }));
+          if (lev) {   // it thrashes: everything in the water
+            foes().filter(e => e !== t && dist(e.x, e.y, lev.x, lev.y) <= lev.r + radius(e) * 0.5)
+              .forEach(e => { sHit(e, sk2.serpentPct * 0.5, { color: '#7dd3fc', quiet: n++ >= 3 }); if (s.enemies.includes(e) && !heavy(e)) launch(e, sp, 0.6); });
+            [0, 0.1].forEach((d, i) => effect({ kind: 'ring', x: sp.x, y: sp.y, r: lev.r * (0.6 + 0.4 * i), color: '#7dd3fc', life: 0.5 + d }));
+            effect({ kind: 'shards', x: sp.x, y: sp.y, r: K(150), color: '#7dd3fc', n: 18 });
+            sfx('splash');
+          } else foes().filter(e => e !== t && dist(e.x, e.y, sp.x, sp.y) <= K(115) + radius(e) * 0.5)
+            .forEach(e => sHit(e, sk2.serpentPct * 0.25, { color: '#a5b4fc', quiet: n++ >= 3 }));
           effect({ kind: 'shards', x: sp.x, y: sp.y, r: K(110), color: '#312e81', n: 14 });
-          shake(0.4); sfx('bigKill');
+          shake(lev ? 0.6 : 0.4); sfx('bigKill');
         }
       }
       kit.serpents = kit.serpents.filter(sp => sp.t < sp.life);
@@ -410,12 +558,12 @@ export function createTenShadows(c) {
           if (tg.mT <= 0 && tg.mauls > 0 && live) {
             tg.mT = 0.22; tg.mauls--;
             const missing = 1 - Math.max(0, e.hp) / e.maxHp;
-            kitHit(e, tg.pct * (1 + missing) * (helpless(e) ? 1.25 : 1), { color: '#fdba74', label: 'TIGER ' });
+            sHit(e, tg.pct * (1 + missing) * (helpless(e) ? 1.25 : 1) * (tg.pack ? 1.2 : 1), { color: '#fdba74', label: 'TIGER ' });
             effect({ kind: 'claws', x: e.x, y: e.y, r: radius(e), a: rand(-0.7, 0.7), life: 0.32 });
             shake(0.12); sfx('crit');
             if (tg.mauls === 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group && e.hp / e.maxHp <= 0.25) {
               floater('FUNERAL', e.x, e.y - K(44), '#fdba74', true);
-              api.killEnemy(e);
+              sKill(e);
             }
           }
           if (tg.mauls === 0 && tg.mT <= 0) tg.phase = 'gone';
@@ -436,7 +584,7 @@ export function createTenShadows(c) {
           const sk2 = dp.sk;
           let n = 0;
           if (live) foes().filter(e => dist(e.x, e.y, dp.x, dp.y) <= dp.r + radius(e) * 0.5).forEach(e => {
-            kitHit(e, sk2.elephantPct, { color: '#93c5fd', label: 'FLOOD ', quiet: n++ >= 4 });
+            sHit(e, sk2.elephantPct, { color: '#93c5fd', label: 'FLOOD ', quiet: n++ >= 4 });
             if (e.hp > 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group) {
               e.frozen = Math.max(e.frozen ?? 0, sk2.stun);
               launch(e, { x: dp.x, y: dp.y }, 0.55);
@@ -453,6 +601,38 @@ export function createTenShadows(c) {
     }
   }
 
+  // Nue's lightning on t: it chains to the two closest — or, on bound prey, to everything around it
+  // (LIGHTNING ROD) — and runs through the whole flood if it lands in the water (THUNDER FLOOD)
+  function lightning(t, pct, x0, y0, big) {
+    const rod = t.boundT > 0, tx = t.x, ty = t.y;
+    effect({ kind: 'bolt', x: tx, y: ty, x0, y0, life: big ? 0.45 : 0.3, big });
+    sHit(t, pct, { color: '#fde047', label: big ? 'DIVE ⚡' : '⚡' });
+    const chain = foes().filter(e => e !== t && dist(e.x, e.y, tx, ty) <= K(rod ? 220 : 170));
+    (rod ? chain : chain.sort((p, q) => dist(tx, ty, p.x, p.y) - dist(tx, ty, q.x, q.y)).slice(0, 2))
+      .forEach((e, i) => { if (i < 8) effect({ kind: 'zap', x1: tx, y1: ty, x2: e.x, y2: e.y, life: 0.25 }); sHit(e, pct * (rod ? 0.6 : 0.5), { color: '#fde047', quiet: true }); });
+    if (rod) {
+      combo('lightningrod');
+      if (s.time - (s.kit.rodT ?? -9) > 1.5) { s.kit.rodT = s.time; floater('LIGHTNING ROD', tx, ty - K(70), '#fde047', true); }
+    }
+    const fl = floodAt(tx, ty);
+    if (fl) {
+      const wet = foes().filter(e => e !== t && dist(e.x, e.y, fl.x, fl.y) <= fl.r);
+      wet.forEach((e, i) => { sHit(e, pct * 0.6, { color: '#fde047', quiet: i > 2 }); if (i < 6) effect({ kind: 'zap', x1: tx, y1: ty, x2: e.x, y2: e.y, life: 0.25 }); });
+      fl.zap = 0.3;
+      if (!fl.thunder) { fl.thunder = true; api.announce('THUNDER FLOOD', '#fde047'); combo('thunderflood'); }
+    }
+    sfx('thunder');
+  }
+  // Nue leaves by diving onto the last thing it struck (2.5× a bolt)
+  function dive(a, live) {
+    if (a.dived) return;
+    a.dived = true;
+    const t = (live && (s.enemies.find(e => e.id === a.last && !(e.down > 0) && e.tier !== 'treasure') ?? focus(300))) || null;
+    if (!t) { effect({ kind: 'puddle', x: a.x, y: a.y + K(70), r: K(40), life: 0.6 }); return; }
+    arr('dives').push({ id: nextId(), x0: a.x, y0: a.y, x: a.x, y: a.y, tx: t.x, ty: t.y, target: t.id, t: 0, dur: 0.3, pct: a.pct * 2.5, hit: false });
+    sfx('dive');
+  }
+
   // The summoned allies (called by kitRuntime's ally loop). true = handled here.
   function updateAlly(a, dt, live, P) {
     if (a.kind === 'dog') {
@@ -461,20 +641,24 @@ export function createTenShadows(c) {
       a.lookT = (a.lookT ?? 0) - dt;
       let t = s.enemies.find(e => e.id === a.target);
       if (a.lookT <= 0) { a.lookT = 0.4; const f = focus(320); if (f) { t = f; a.target = f.id; } }
+      // PACK HUNT: while the Tiger mauls, the pack goes for its prey
+      const hunt = a.pack ? (s.kit.tigers ?? []).find(g => g.id === a.pack && g.phase !== 'gone') : null;
+      if (a.pack && !hunt) a.pack = null;
+      if (hunt) { const pe = s.enemies.find(e => e.id === hunt.target && !(e.down > 0)); if (pe) { t = pe; a.target = pe.id; } }
       if (!t || t.tier === 'treasure' || t.down > 0) { t = nearest(a.x, a.y); a.target = t?.id ?? null; }
       if (t) {
         const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const reach = radius(t) + K(14);
-        if (d > reach) { a.x += dx / d * Math.min(d - reach, K(a.totality ? 380 : 330) * dt); a.y += dy / d * Math.min(d - reach, K(a.totality ? 380 : 330) * dt); }
+        const reach = radius(t) + K(14), spd = K(a.totality ? 380 : 330) * (hunt ? 1.3 : 1) * dt;
+        if (d > reach) { a.x += dx / d * Math.min(d - reach, spd); a.y += dy / d * Math.min(d - reach, spd); }
         a.biteT -= dt;
         if (d <= reach + K(4) && a.biteT <= 0 && live) {
-          a.biteT = a.totality ? 0.4 : 0.45;
-          kitHit(t, a.pct, { color: a.totality ? '#e2e8f0' : '#a5b4fc', label: '🐺' });
+          a.biteT = (a.totality ? 0.4 : 0.45) * (hunt ? 0.5 : 1);
+          sHit(t, a.pct, { color: a.totality ? '#e2e8f0' : hunt ? '#fdba74' : '#a5b4fc', label: '🐺' });
           effect({ kind: 'stab', x: t.x, y: t.y, r: radius(t), life: 0.2 });
           if (a.totality) {   // Totality's jaws are big enough to catch what's next to it too
             const R = radius(t) + K(60);
             let n = 0;
-            foes().filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.5).forEach(e => kitHit(e, a.pct * 0.35, { color: '#e2e8f0', quiet: n++ >= 2 }));
+            foes().filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.5).forEach(e => sHit(e, a.pct * 0.35, { color: '#e2e8f0', quiet: n++ >= 2 }));
             effect({ kind: 'ring', x: t.x, y: t.y, r: R, color: '#e2e8f0', life: 0.25 });
           }
         }
@@ -490,36 +674,25 @@ export function createTenShadows(c) {
       a.zapT -= dt;
       if (a.zapT <= 0 && live) {
         a.zapT = 0.6;
-        const t = focus(260) ?? (() => { const e = nearest(P.x, P.y); return e && dist(P.x, P.y, e.x, e.y) <= K(420) ? e : null; })();
-        if (t) {
-          effect({ kind: 'bolt', x: t.x, y: t.y, x0: a.x, y0: a.y, life: 0.3 });
-          kitHit(t, a.pct, { color: '#fde047', label: '⚡' });
-          foes().filter(e => e !== t && dist(e.x, e.y, t.x, t.y) <= K(170)).sort((p, q) => dist(t.x, t.y, p.x, p.y) - dist(t.x, t.y, q.x, q.y)).slice(0, 2)
-            .forEach(e => { effect({ kind: 'zap', x1: t.x, y1: t.y, x2: e.x, y2: e.y, life: 0.25 }); kitHit(e, a.pct * 0.5, { color: '#fde047', quiet: true }); });
-          // THUNDER FLOOD: lightning that lands in Max Elephant's water runs through all of it
-          const fl = floodAt(t.x, t.y);
-          if (fl) {
-            const wet = foes().filter(e => e !== t && dist(e.x, e.y, fl.x, fl.y) <= fl.r);
-            wet.forEach((e, i) => { kitHit(e, a.pct * 0.6, { color: '#fde047', quiet: i > 2 }); if (i < 6) effect({ kind: 'zap', x1: t.x, y1: t.y, x2: e.x, y2: e.y, life: 0.25 }); });
-            fl.zap = 0.3;
-            if (!fl.thunder) { fl.thunder = true; api.announce('THUNDER FLOOD', '#fde047'); }
-          }
-          sfx('thunder');
-        }
+        // bound prey draws it (LIGHTNING ROD), then whatever you point at, then the closest
+        const bound = foes().filter(e => e.boundT > 0 && dist(P.x, P.y, e.x, e.y) <= K(420) + radius(e));
+        const t = (bound.length ? nearest(P.x, P.y, bound) : null) ?? focus(260)
+          ?? (() => { const e = nearest(P.x, P.y); return e && dist(P.x, P.y, e.x, e.y) <= K(420) ? e : null; })();
+        if (t) { a.last = t.id; lightning(t, a.pct, a.x, a.y, false); }
       }
-      if (a.life <= 0) effect({ kind: 'puddle', x: a.x, y: a.y + K(70), r: K(40), life: 0.6 });
+      if (a.life <= 0) dive(a, live);
       return true;
     }
     if (a.kind === 'toad') {
       // sits where it was summoned while its tongue works, then hops along by your cursor
       if (a.sit > 0) { a.sit -= dt; return true; }
-      const tx = P.x - K(46), ty = P.y + K(30);
+      const tx = P.x - K(46 + 42 * (a.slot ?? 0)), ty = P.y + K(30 + 26 * (a.slot ?? 0));
       a.x += (tx - a.x) * Math.min(1, dt * 8); a.y += (ty - a.y) * Math.min(1, dt * 8);
       return true;
     }
     if (a.kind === 'deer') {
       if (a.healT > 0) { const d = Math.min(dt, a.healT); api.heal(a.heal * d); a.healT -= d; }
-      const tx = P.x + K(58), ty = P.y + K(26);
+      const tx = P.x + K(a.slot ? 40 : 58), ty = P.y + K(a.slot ? -66 : 26);
       a.x += (tx - a.x) * Math.min(1, dt * 6); a.y += (ty - a.y) * Math.min(1, dt * 6);
       return true;
     }
@@ -529,11 +702,24 @@ export function createTenShadows(c) {
   // Rabbit Escape: a burst of shadow rabbits takes the hit
   function absorb(pv, kind) {
     const P = s.player.pos;
-    if (pv?.type !== 'rabbits' || !P || kind === 'poison' || Math.random() >= pv.chance) return false;
+    if (pv?.type !== 'rabbits' || !P || kind === 'poison' || Math.random() >= Math.min(0.6, pv.chance * (domainOn() ? 3 : 1))) return false;
     effect({ kind: 'rabbits', x: P.x, y: P.y, life: 0.9 });
     floater('RABBIT ESCAPE', P.x, P.y - K(40), '#e2e8f0', true);
     // they scatter: whatever was right on top of you loses you for a moment
     foes().filter(e => !heavy(e) && dist(e.x, e.y, P.x, P.y) <= K(120)).forEach(e => { e.target = null; });
+    return true;
+  }
+  // Round Deer: while its ward is up, the first hit that would have killed you doesn't
+  function cheatDeath() {
+    const w = s.kit.ward, P = s.player.pos ?? center();
+    if (!w || w.saved) return false;
+    w.saved = true;
+    s.player.invuln = Math.max(s.player.invuln, 1.2);
+    api.heal(s.player.maxHp * 0.1);
+    effect({ kind: 'saved', x: P.x, y: P.y, life: 1.1 });
+    effect({ kind: 'flash', color: '#bbf7d0', life: 0.5 });
+    api.announce('ROUND DEER · NOT TODAY', '#bbf7d0');
+    shake(0.3); sfx('saved');
     return true;
   }
   // Round Deer's ward erases enemy shots that fly into it
@@ -549,7 +735,7 @@ export function createTenShadows(c) {
     const hp = s.player.maxHp * u.hp;
     s.mahoraga = { x: P.x, y: P.y, hp, maxHp: hp, mult: u.mult, slamT: 1.6, target: null, adapt: {}, wheel: 0, turns: 0, turnT: 4, invuln: 1.6, t: 0,
       timeout: u.dur ?? 25, berserkAt: u.berserkAt ?? 4, gunPct: u.gunPct ?? 0.6, finaleMult: u.finale ?? 15, berserk: false, gunT: 0, gunSide: 1, rush: 0,
-      leap: null, leapCd: 0, storm: 0, stormT: 0, finale: null, turnFx: 0 };
+      leap: null, leapCd: 0, storm: 0, stormT: 0, finale: null, turnFx: 0, v2: true };
     s.ult.active = { type: 'mahoraga', t: 1e9, dur: 1e9 };
     s.combo.n = 0;
     s.kit.sign = null;
@@ -559,6 +745,13 @@ export function createTenShadows(c) {
       s.kit.shadow = 0;
       s.mahoraga.wheel = 2; s.mahoraga.turns = 2;
       api.announce('THE RITUAL IS COMPLETE ☸☸', '#fde047');
+      combo('ritual');
+    }
+    // GENERAL OF THE GARDEN: summoned inside the domain, it holds the garden open
+    if (domainOn()) {
+      s.mahoraga.general = true;
+      api.announce('GENERAL OF THE GARDEN', '#e0e7ff');
+      combo('general');
     }
     s.kit.cutin = { kind: 'summon', t: 0, life: 1.6 };   // Bio's card art slams in
     effect({ kind: 'flash', color: '#fde047', life: 0.6 });
@@ -590,8 +783,10 @@ export function createTenShadows(c) {
   }
   function slam(m, t, mult, R, color) {
     const adapts = Object.values(m.adapt).reduce((a, n) => a + Math.min(n, 3), 0) + m.turns;
-    foes().filter(e => !(e.down > 0) && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6)
-      .forEach(e => ultHit(e, m.mult * mult * (1 + 0.12 * adapts) * (m.berserk ? 1.25 : 1) * (e === t ? 1 : 0.3), color, '☸'));   // the shockwave catches the rest for less
+    const hit = foes().filter(e => !(e.down > 0) && dist(e.x, e.y, t.x, t.y) <= R + radius(e) * 0.6);
+    // in its garden, shadow hands hold them up for the blow
+    if (m.general && s.kit.domain) hit.slice(0, 4).forEach(e => effect({ kind: 'hand', x: e.x, y: e.y + radius(e) * 0.55, r: radius(e), life: 0.5 }));
+    hit.forEach(e => ultHit(e, m.mult * mult * (1 + 0.12 * adapts) * (m.berserk ? 1.25 : 1) * (e === t ? 1 : 0.3), color, '☸'));   // the shockwave catches the rest for less
     effect({ kind: 'burst', x: t.x, y: t.y, r: R, color: '#fde047' });
     effect({ kind: 'shards', x: t.x, y: t.y, r: R * 0.8, color: '#fde047', n: 8 });
   }
@@ -743,17 +938,23 @@ export function createTenShadows(c) {
 
   // Stage cleared / lost / (re)loaded: everything goes back into the shadows
   function reset() {
-    Object.assign(s.kit, { serpents: [], drops: [], oxen: [], tigers: [], tongues: [], floods: [], ward: null, cutin: null, sign: null, domain: null, slowing: false });
+    Object.assign(s.kit, { serpents: [], drops: [], oxen: [], tigers: [], tongues: [], floods: [], dives: [], twins: [], ward: null, cutin: null, sign: null, domain: null, slowing: false, byShiki: false });
     s.enemies.forEach(e => { e.slow = undefined; e.vuln = undefined; e.boundT = 0; });
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
   }
 
   // while your hands make the sign, clicks don't hit anything
   const busy = () => !!s.kit.sign?.open;
+  // anything of this kit still on the field (it keeps going after a card switch)
+  const active = () => {
+    const k = s.kit;
+    return !!(k.cutin || k.found || k.sign || k.ward || k.domain || k.slowing || k.oxen?.length || k.serpents?.length || k.tigers?.length || k.drops?.length
+      || k.tongues?.length || k.floods?.length || k.dives?.length || k.twins?.length);
+  };
 
   return {
-    onDamage, info, tapPick, cost, bars, gardenReady, busy,
-    press, release, signAim, signSel, timeScale, update, updateAlly, afterClick, absorb, shotBlocked,
+    onDamage, onKill, info, tapPick, cost, bars, gardenReady, busy, active,
+    press, release, signAim, signSel, timeScale, update, updateAlly, afterClick, absorb, cheatDeath, shotBlocked,
     summonMahoraga, commandMahoraga, updateMahoraga, hitMahoraga, endMahoraga, reset,
   };
 }

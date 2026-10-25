@@ -212,6 +212,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function updateSpawns(dt) {
+    if (s.mahoraga && !s.mahoraga.v2) return;   // nothing new shows up while (the usual) Mahoraga is out
     const st = s.stage, T = s.timers;
     if (s.phase === 'fight' || s.phase === 'boss') {
       T.basic -= dt;
@@ -527,6 +528,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return false;
     if (rt.absorbHit(kind, src)) { pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction)));
+    if (dmg >= pl.hp && rt.cheatDeath()) { pl.invuln = Math.max(pl.invuln, BAL.HIT_INVULN); return false; }   // Bio's Round Deer
     pl.hp = Math.max(0, pl.hp - dmg);
     pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; shake(0.3);
     const p = pl.pos ?? { x: s.W / 2, y: s.H / 2 };
@@ -1187,7 +1189,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!W || !H) return;
     if (s.W) {
       const fx = W / s.W, fy = H / s.H;
-      s.enemies.forEach(e => { e.x *= fx; e.y *= fy; e.target = null; if (e.hx != null) { e.hx *= fx; e.hy *= fy; } });
+      s.enemies.forEach(e => { e.x *= fx; e.y *= fy; e.target = null; if (e.hx != null) { e.hx *= fx; e.hy *= fy; } if (e.entering) e.entering = { x: e.entering.x * fx, y: e.entering.y * fy }; });   // (walking in: to the same spot)
       if (s.player.pos) s.player.pos = { x: s.player.pos.x * fx, y: s.player.pos.y * fy };
     }
     const first = !s.W;

@@ -3,8 +3,8 @@
 // engine.js calls the hooks below (onKill, onCombo, absorbHit, …).
 //
 // Shared systems:
-//   s.allies  – things on your side: Tyran's crawlers, Bio's shikigami (tenShadows.js),
-//               Doro's fire arrow, Ivy's spirits (drawn from s.kit.souls)
+//   s.allies  – things on your side: Tyran's crawlers, Bio's shikigami (bioClassic.js /
+//               tenShadows.js), Doro's fire arrow, Ivy's spirits (drawn from s.kit.souls)
 //   s.zones   – ground that burns enemies: Ice's lava
 //   s.fire    – Doro's fire-trail segments (also stop enemy shots)
 //   s.mahoraga – Bio's ult: enemies attack it instead of you
@@ -15,6 +15,7 @@ import { playSFX } from '../utils/sfx';
 const BASE = import.meta.env.BASE_URL;
 import { SKILLS, scaleKit } from './kits';
 import { createTenShadows } from './tenShadows';
+import { createBioClassic } from './bioClassic';
 import { CHARACTERS } from '../data/characters';
 
 // Every skill has a main move (its `style`: click / special / charge / hold / drag) and a
@@ -342,7 +343,8 @@ export function createKitRuntime(api) {
   }
   // true = swallow the click (you're suspended while Mahoraga fights)
   function onPointerDown(x, y) {
-    if (s.mahoraga) return ts.commandMahoraga(x, y);   // you don't fight while it's out — you command it
+    // Mahoraga out: you don't fight — you watch (the usual kit) or command it (the other one)
+    if (s.mahoraga) return s.mahoraga.v2 ? ts.commandMahoraga(x, y) : true;
     if (ts.busy()) return true;                          // Bio's hands are busy with a hand sign
     const act = s.ult.active;
     if (act?.type === 'distortion') {
@@ -460,7 +462,8 @@ export function createKitRuntime(api) {
         shake(0.35); sfx('boom');
         return true;
       }
-      case 'tenshadows': return ts.press(sk, x, y);   // Bio: a hand sign (tap = summon, hold = the wheel)
+      case 'dogs': return bio.special(sk, x, y);       // Bio: two Divine Dogs
+      case 'tenshadows': return ts.press(sk, x, y);   // Bio's other kit: a hand sign (tap = summon, hold = the wheel)
       case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
         if (!startCooldown(sk, x, y)) return false;
         s.kit.maws = s.kit.maws ?? [];
@@ -607,6 +610,7 @@ export function createKitRuntime(api) {
     if (e.tier === 'treasure') return;
     const sk = skill();
     s.kit.kills++;
+    if (sk?.type === 'tenshadows') ts.onKill(sk, e);   // Bio: what his shikigami kill tops up the meter
     // Sorcerer Killer charges from kills, not damage
     const u = s.stats.ult;
     if (u?.chargeOn === 'kills' && !s.ult.active) {
@@ -627,6 +631,8 @@ export function createKitRuntime(api) {
       }
     } else if (pv.type === 'lavaKill' && Math.random() < pv.chance) {
       addLava(e.x, e.y, K(pv.radius), pv.dur, pv.dps);
+    } else if (pv.type === 'shadows') {
+      bio.onKill(pv);   // Bio: a kill sometimes calls a Toad or Nue
     } else if (pv.type === 'killHeal') {
       api.heal(pv.heal * s.player.maxHp);
     }
@@ -710,7 +716,10 @@ export function createKitRuntime(api) {
         s.choosing = { options: opts };        // the game waits for your pick
         return true;
       }
-      case 'mahoraga':   // Bio: Eight-Handled Sword Divergent Sila Divine General Mahoraga (tenShadows.js)
+      case 'mahoraga':    // Bio: Mahoraga fights while you watch (bioClassic.js)
+        bio.summonMahoraga(u, P);
+        return true;
+      case 'mahoraga2':   // Bio's other kit: Mahoraga you command (tenShadows.js)
         ts.summonMahoraga(u, P);
         return true;
       default: return false;
@@ -736,7 +745,8 @@ export function createKitRuntime(api) {
   }
   const strongest = () => foes().reduce((b, e) => (!b || (e.tier === 'boss') > (b.tier === 'boss') || ((e.tier === 'boss') === (b.tier === 'boss') && e.hp > b.hp) ? e : b), null);
 
-  // Bio's Ten Shadows + Mahoraga live in tenShadows.js
+  // Bio: his usual kit in bioClassic.js, the other one (Ten Shadows + Mahoraga you command) in tenShadows.js
+  const bio = createBioClassic({ s, api, K, pick, dist, floater, effect, shake, sfx, nextId, kitHit, ultHit, foes, focus, nearest, radius, center, startCooldown });
   const ts = createTenShadows({ s, api, K, rand, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId,
     skill, kitHit, ultHit, foes, fighting, radius, center, focus, nearest, bestAngle, lineThrough, launch, heavy });
 
@@ -918,7 +928,7 @@ export function createKitRuntime(api) {
     }
 
     // Bio: the Ten Shadows (hand sign, shikigami, floods, the garden) — and its cut-ins
-    if (sk?.type === 'tenshadows' || kit.cutin || kit.oxen?.length || kit.serpents?.length || kit.tigers?.length || kit.drops?.length || kit.tongues?.length || kit.floods?.length || kit.ward || kit.domain || kit.slowing || kit.sign) ts.update(sk, dt, live);
+    if (sk?.type === 'tenshadows' || ts.active()) ts.update(sk, dt, live);
 
     // Doro's fire arrows land
     if (kit.arrows?.length) {
@@ -1122,7 +1132,7 @@ export function createKitRuntime(api) {
     }
 
     updateAllies(dt, live);
-    if (s.mahoraga) ts.updateMahoraga(dt);
+    if (s.mahoraga) (s.mahoraga.v2 ? ts : bio).updateMahoraga(dt);
     s.ult.blocked = ultBlocked();
   }
 
@@ -1145,8 +1155,8 @@ export function createKitRuntime(api) {
           effect({ kind: 'burst', x: a.x, y: a.y, r: a.r, color: '#a855f7' });
           sfx('kill'); if (a.big) shake(0.2);
         }
-      } else if (ts.updateAlly(a, dt, live, P)) {
-        // Bio's shikigami (dogs, Nue, the Toad, Round Deer)
+      } else if ((a.ts || a.kind === 'nue2' || a.kind === 'deer') ? ts.updateAlly(a, dt, live, P) : bio.updateAlly(a, dt, live, P)) {
+        // Bio's shikigami (dogs, Toad, Nue — and the other kit's Round Deer)
       } else if (a.kind === 'arrow') {
         let t = s.enemies.find(e => e.id === a.targetId);
         if (!t || t.down > 0) { t = strongest(); a.targetId = t?.id ?? null; }
@@ -1185,9 +1195,10 @@ export function createKitRuntime(api) {
     skill, passive, onDamage, switchCard, focus, aimPoint, target, absorbHit, onPlayerHit, shotSpeed, shotBlocked, special, specialRelease, release, specialInfo,
     clickMods, afterClick, onCritClick, onMiss, onPointerDown, onKill, onCombo,
     ultBlocked, activateUlt, endUlt, choose,
-    hitMahoraga: (raw, kind) => ts.hitMahoraga(raw, kind),
+    hitMahoraga: (raw, kind) => (s.mahoraga?.v2 ? ts : bio).hitMahoraga(raw, kind),
     // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
     signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale(),
+    cheatDeath: () => ts.cheatDeath(),   // Round Deer: the hit that would have killed you
     update, reset, origin, slide,
   };
 }

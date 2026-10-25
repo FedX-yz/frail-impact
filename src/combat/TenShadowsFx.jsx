@@ -4,7 +4,7 @@
 // painted in shadow ink with a rim of light, until real sprites exist.
 // ─────────────────────────────────────────────────────────────────────────────
 import { GAME_ICONS } from '../data/gameIcons';
-import { SHADOWS, SHADOW_BY_ID, costFor, tapFor } from './tenShadows';
+import { SHADOWS, SHADOW_BY_ID, COMBOS, costFor, tapFor, combosKnown } from './tenShadows';
 
 const BASE = import.meta.env.BASE_URL;
 export const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
@@ -45,12 +45,13 @@ const wedgePath = (cx, cy, r0, r1, a0, a1) => {
 // ── The summoned (DOM, above the enemies) ─────────────────────────────────
 export function TsAllies({ s, k }) {
   return s.allies.map(a => {
+    if (!a.ts) return null;   // the usual kit's shikigami are drawn by BattleArena
     const op = a.life < 1 ? Math.max(0, a.life) : 1;
     const base = { position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', opacity: op };
     if (a.kind === 'dog') {
       const tg = s.enemies.find(e => e.id === a.target), flip = !!tg && tg.x < a.x;
       if (a.totality) return (
-        <div key={a.id} className="shiki summoned dog totality" style={{ ...base, filter: 'drop-shadow(0 0 12px #e0e7ff) drop-shadow(0 0 3px #ef4444)' }}>
+        <div key={a.id} className="shiki summoned dog totality" style={{ ...base, filter: a.pack ? 'drop-shadow(0 0 12px #f97316) drop-shadow(0 0 3px #ef4444)' : 'drop-shadow(0 0 12px #e0e7ff) drop-shadow(0 0 3px #ef4444)' }}>
           <ShikiArt name="dog" size={100 * k} fill="#05040f" rim="#f1f5f9" flip={flip}>
             <ellipse cx={300} cy={166} rx={26} ry={11} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
           </ShikiArt>
@@ -58,7 +59,7 @@ export function TsAllies({ s, k }) {
         </div>
       );
       return (
-        <div key={a.id} className="shiki summoned dog" style={{ ...base, filter: a.white ? 'drop-shadow(0 0 7px #6366f1) drop-shadow(0 2px 3px #000)' : 'drop-shadow(0 0 7px #e0e7ff) drop-shadow(0 2px 3px #000)' }}>
+        <div key={a.id} className="shiki summoned dog" style={{ ...base, filter: a.pack ? 'drop-shadow(0 0 9px #f97316) drop-shadow(0 2px 3px #000)' : a.white ? 'drop-shadow(0 0 7px #6366f1) drop-shadow(0 2px 3px #000)' : 'drop-shadow(0 0 7px #e0e7ff) drop-shadow(0 2px 3px #000)' }}>
           <ShikiArt name="dog" size={52 * k} fill={a.white ? '#f8fafc' : INK} rim={a.white ? '#1e1b4b' : '#c7d2fe'} flip={flip} />
         </div>
       );
@@ -93,13 +94,19 @@ export function TsGround({ s, k, P, time }) {
         return <ellipse key={`sink${e.id}`} cx={e.x} cy={e.y + r * 0.72} rx={r * 1.05} ry={r * 0.3} fill="#020108" opacity={0.78} />;
       })}
       {(kit.floods ?? []).map(f => {
-        const o = clamp(Math.min(f.t / 0.3, (f.dur - f.t) / 0.8), 0, 1), zap = f.zap > 0;
+        const o = clamp(Math.min(f.t / 0.3, (f.dur - f.t) / 0.8), 0, 1), zap = f.zap > 0, holy = f.holy;
         return (
           <g key={f.id} opacity={o}>
-            <circle cx={f.x} cy={f.y} r={f.r} fill={zap ? 'rgba(253,224,71,0.24)' : 'rgba(37,99,235,0.2)'} stroke={zap ? '#fde047' : '#93c5fd'} strokeWidth={2.5 * k} strokeOpacity={0.65} />
+            <circle cx={f.x} cy={f.y} r={f.r} fill={zap ? 'rgba(253,224,71,0.24)' : holy ? 'rgba(254,249,195,0.16)' : 'rgba(37,99,235,0.2)'}
+              stroke={zap ? '#fde047' : holy ? '#fef9c3' : '#93c5fd'} strokeWidth={(holy ? 3.5 : 2.5) * k} strokeOpacity={holy ? 0.85 : 0.65} />
             {[0, 1, 2].map(i => {
               const ph = (time * 0.55 + i / 3) % 1;
-              return <circle key={i} cx={f.x} cy={f.y} r={f.r * ph} fill="none" stroke={zap ? '#fef08a' : '#bfdbfe'} strokeWidth={2 * k} opacity={0.4 * (1 - ph)} />;
+              return <circle key={i} cx={f.x} cy={f.y} r={f.r * ph} fill="none" stroke={zap ? '#fef08a' : holy ? '#fefce8' : '#bfdbfe'} strokeWidth={2 * k} opacity={0.4 * (1 - ph)} />;
+            })}
+            {/* HOLY WATER: light rising off it */}
+            {holy && Array.from({ length: 9 }, (_, i) => {
+              const ph = (time * 0.6 + i / 9) % 1, a = i * 2.4 + f.id, rr = f.r * (0.15 + 0.75 * ((i * 37) % 10) / 10);
+              return <circle key={`m${i}`} cx={f.x + Math.cos(a) * rr} cy={f.y + Math.sin(a) * rr * 0.5 - ph * 46 * k} r={(2 + (i % 3)) * k} fill="#fefce8" opacity={(1 - ph) * 0.9} />;
             })}
           </g>
         );
@@ -130,6 +137,7 @@ export function TsOver({ s, k, time }) {
       {(kit.tigers ?? []).map(tg => <Tiger key={tg.id} tg={tg} k={k} time={time} />)}
       {(kit.oxen ?? []).map(ox => <Ox key={ox.id} ox={ox} k={k} />)}
       {(kit.drops ?? []).map(dp => <Elephant key={dp.id} dp={dp} k={k} H={s.H} />)}
+      {(kit.dives ?? []).map(dv => <NueDive key={dv.id} dv={dv} k={k} />)}
     </g>
   );
 }
@@ -157,7 +165,7 @@ function Tongue({ tg, k }) {
 }
 // The Great Serpent: rises out of a shadow pool next to its prey, lunges down on it, sinks back
 function Serpent({ sp, k }) {
-  const S = 250 * k, ease = q => 1 - (1 - q) ** 3;
+  const lev = !!sp.lev, S = (lev ? 340 : 250) * k, ease = q => 1 - (1 - q) ** 3;
   const rise = ease(Math.min(1, sp.t / 0.35)), strike = clamp((sp.t - 0.36) / 0.1, 0, 1), sink = clamp((sp.t - 0.8) / 0.6, 0, 1);
   const gx = sp.x - S * 0.26, gy = sp.y + S * 0.28;   // the pool: its head ends up right over the target
   const lunge = strike * (1 - sink) * S * 0.36, up = S * (0.8 * rise - sink * 0.9);
@@ -165,12 +173,17 @@ function Serpent({ sp, k }) {
   return (
     <g>
       <defs><clipPath id={id}><rect x={gx - S} y={gy - S * 2} width={S * 2} height={S * 2} /></clipPath></defs>
-      <ellipse cx={gx} cy={gy} rx={S * 0.42 * Math.min(1, sp.t * 6) * (1 - sink * 0.6)} ry={S * 0.13 * Math.min(1, sp.t * 6) * (1 - sink * 0.6)} fill="#04030c" stroke="#4f46e5" strokeWidth={2.5 * k} opacity={0.95} />
+      <ellipse cx={gx} cy={gy} rx={S * 0.42 * Math.min(1, sp.t * 6) * (1 - sink * 0.6)} ry={S * 0.13 * Math.min(1, sp.t * 6) * (1 - sink * 0.6)} fill={lev ? '#031427' : '#04030c'} stroke={lev ? '#38bdf8' : '#4f46e5'} strokeWidth={2.5 * k} opacity={0.95} />
       <g clipPath={`url(#${id})`}>
-        <g transform={`translate(${gx - S * 0.5} ${gy - up + lunge})`} style={{ filter: 'drop-shadow(0 0 10px #4338ca)' }}>
-          <path d={GAME_ICONS.serpent[2]} transform={`scale(${S / 512})`} fill={INK} stroke="#a5b4fc" strokeWidth={14} strokeLinejoin="round" paintOrder="stroke" />
+        <g transform={`translate(${gx - S * 0.5} ${gy - up + lunge})`} style={{ filter: `drop-shadow(0 0 ${lev ? 14 : 10}px ${lev ? '#0284c7' : '#4338ca'})` }}>
+          <path d={GAME_ICONS.serpent[2]} transform={`scale(${S / 512})`} fill={lev ? '#03101f' : INK} stroke={lev ? '#7dd3fc' : '#a5b4fc'} strokeWidth={14} strokeLinejoin="round" paintOrder="stroke" />
         </g>
       </g>
+      {/* LEVIATHAN: the water sprays up around it */}
+      {lev && rise > 0.3 && sink < 1 && [0, 1, 2, 3, 4].map(i => {
+        const a = -Math.PI / 2 + (i - 2) * 0.42, d = S * (0.2 + 0.25 * rise) * (1 - sink), jy = Math.sin(sp.t * 14 + i) * 4 * k;
+        return <circle key={i} cx={gx + Math.cos(a) * d * 1.4} cy={gy + Math.sin(a) * d * 0.5 + jy} r={(5 + (i % 2) * 3) * k} fill="#bae6fd" opacity={0.75 * (1 - sink)} />;
+      })}
       {strike > 0 && strike < 1 && <circle cx={sp.x} cy={sp.y} r={(30 + 50 * strike) * k} fill="none" stroke="#e0e7ff" strokeWidth={5 * k * (1 - strike)} />}
     </g>
   );
@@ -204,7 +217,7 @@ function Elephant({ dp, k, H }) {
 }
 // Piercing Ox: a charging bull with a dust trail, tilted along its run
 function Ox({ ox, k }) {
-  const S = 170 * k, ux = Math.cos(ox.a), uy = Math.sin(ox.a), left = ux < 0;
+  const S = (ox.stampede ? 215 : 170) * k, ux = Math.cos(ox.a), uy = Math.sin(ox.a), left = ux < 0;
   const tilt = (left ? ox.a - Math.PI : ox.a) * 180 / Math.PI * 0.6;
   const rim = ox.wet ? '#7dd3fc' : '#fca5a5', glow = ox.wet ? '#0ea5e9' : '#b91c1c';
   return (
@@ -217,7 +230,21 @@ function Ox({ ox, k }) {
         <line key={`l${i}`} x1={ox.x - ux * S * 0.55 + -uy * i * S * 0.18} y1={ox.y - uy * S * 0.55 + ux * i * S * 0.18}
           x2={ox.x - ux * S * 1.3 + -uy * i * S * 0.18} y2={ox.y - uy * S * 1.3 + ux * i * S * 0.18} stroke={rim} strokeWidth={3 * k} opacity={0.5} strokeLinecap="round" />
       ))}
-      <Sil name="ox" x={ox.x} y={ox.y} size={S} fill={ox.wet ? '#06122b' : INK} rim={rim} sw={14} flip={left} rot={tilt} filter={`drop-shadow(0 0 12px ${glow})`} />
+      {/* STAMPEDE: Totality runs beside it */}
+      {ox.stampede && <Sil name="dog" x={ox.x - uy * S * 0.74 * (left ? -1 : 1) - ux * S * 0.3} y={ox.y + ux * S * 0.74 * (left ? -1 : 1) - uy * S * 0.3 - S * 0.06} size={S * 0.58} fill="#05040f" rim="#f1f5f9" sw={18} flip={left} rot={tilt}
+        filter="drop-shadow(0 0 10px #e0e7ff)" />}
+      <Sil name="ox" x={ox.x} y={ox.y} size={S} fill={ox.wet ? '#06122b' : INK} rim={ox.stampede && !ox.wet ? '#f1f5f9' : rim} sw={14} flip={left} rot={tilt} filter={`drop-shadow(0 0 12px ${glow})`} />
+    </g>
+  );
+}
+// Nue's dive: it folds its wings and drops onto its prey
+function NueDive({ dv, k }) {
+  if (dv.hit) return null;
+  const S = 84 * k, p = Math.min(1, dv.t / dv.dur), left = dv.tx < dv.x0;
+  return (
+    <g>
+      <line x1={dv.x0} y1={dv.y0} x2={dv.x} y2={dv.y} stroke="#fde047" strokeWidth={4 * k * (0.4 + p)} strokeLinecap="round" opacity={0.55} style={{ filter: 'drop-shadow(0 0 6px #facc15)' }} />
+      <Sil name="nue" x={dv.x} y={dv.y} size={S * (1 - 0.25 * p)} fill={INK} rim="#fde047" sw={20} flip={left} rot={(left ? -1 : 1) * 35 * p} sy={1 - 0.35 * p} filter="drop-shadow(0 0 10px #facc15)" />
     </g>
   );
 }
@@ -255,17 +282,41 @@ export function TsEffect({ f, k }) {
       })}
     </g>
   );
-  // Nue's lightning: a jagged bolt from the bird down to the target
+  // Nue's lightning: a jagged bolt from the bird down to the target (its dive: a big one from the sky)
   if (f.kind === 'bolt') {
+    const b = f.big ? 2 : 1;
     const pts = [0, 0.2, 0.4, 0.6, 0.8, 1].map((t, i) => {
-      const j = i === 0 || i === 5 ? 0 : (((f.id * 13 + i * 7) % 11) - 5) * 3.2 * k;
+      const j = i === 0 || i === 5 ? 0 : (((f.id * 13 + i * 7) % 11) - 5) * 3.2 * k * b;
       return `${f.x0 + (f.x - f.x0) * t + j},${f.y0 + (f.y - f.y0) * t}`;
     }).join(' ');
     return (
       <g opacity={1 - p} style={{ filter: 'drop-shadow(0 0 8px #facc15)' }}>
-        <polyline points={pts} fill="none" stroke="#fde047" strokeWidth={6 * k} strokeLinejoin="bevel" />
-        <polyline points={pts} fill="none" stroke="#fffbeb" strokeWidth={2 * k} strokeLinejoin="bevel" />
-        <circle cx={f.x} cy={f.y} r={(14 + 18 * p) * k} fill="none" stroke="#fde047" strokeWidth={3 * k} />
+        <polyline points={pts} fill="none" stroke="#fde047" strokeWidth={6 * k * b} strokeLinejoin="bevel" />
+        <polyline points={pts} fill="none" stroke="#fffbeb" strokeWidth={2 * k * b} strokeLinejoin="bevel" />
+        <circle cx={f.x} cy={f.y} r={(14 + 18 * p) * k * b} fill="none" stroke="#fde047" strokeWidth={3 * k} />
+      </g>
+    );
+  }
+  // a wisp of shadow flying from a shikigami's kill back to your cursor (the meter)
+  if (f.kind === 'wisp') {
+    const at = q => { const e = 1 - (1 - q) ** 2; return [f.x + (f.x1 - f.x) * e, f.y + (f.y1 - f.y) * e - Math.sin(q * Math.PI) * 50 * k]; };
+    const [x, y] = at(p);
+    return (
+      <g opacity={p < 0.85 ? 1 : (1 - p) / 0.15}>
+        {[0.16, 0.1, 0.05].map((d, i) => { const [tx, ty] = at(Math.max(0, p - d)); return <circle key={i} cx={tx} cy={ty} r={(3 + i * 1.3) * k} fill="#6366f1" opacity={0.25 + i * 0.15} />; })}
+        <circle cx={x} cy={y} r={6.5 * k} fill="#a5b4fc" opacity={0.55} />
+        <circle cx={x} cy={y} r={3.2 * k} fill="#eef2ff" />
+      </g>
+    );
+  }
+  // Round Deer takes the blow that would have killed you: it leaps over you in a ring of light
+  if (f.kind === 'saved') {
+    const S = 120 * k, q = 1 - (1 - Math.min(1, p * 1.6)) ** 2;
+    return (
+      <g opacity={p < 0.6 ? 1 : (1 - p) / 0.4}>
+        <circle cx={f.x} cy={f.y} r={(40 + 160 * q) * k} fill="none" stroke="#bbf7d0" strokeWidth={6 * k * (1 - p)} style={{ filter: 'drop-shadow(0 0 10px #4ade80)' }} />
+        <circle cx={f.x} cy={f.y} r={(20 + 90 * q) * k} fill="rgba(187,247,208,0.18)" />
+        <Sil name="deer" x={f.x - S * 0.7 + S * 1.4 * q} y={f.y - S * 0.35 - Math.sin(q * Math.PI) * S * 0.6} size={S} fill={INK} rim="#bbf7d0" sw={18} filter="drop-shadow(0 0 12px #4ade80)" />
       </g>
     );
   }
@@ -347,7 +398,7 @@ export function HandSignWheel({ s, sk, W, H, mobile }) {
   const sign = s.kit.sign;
   if (!sign?.open || !sk) return null;
   const R = clamp(Math.min(W, H) * 0.25, 74, 118), outer = R * 1.46, inner = R * 0.56;
-  const cx = clamp(sign.x, outer + 6, W - outer - 6), cy = clamp(sign.y, outer + 6, H - outer - 6);
+  const cx = clamp(sign.x, outer + 6, W - outer - 6), cy = clamp(sign.y, outer + 6, H - outer - 22);
   const dom = !!s.kit.domain;
   const bars = Math.min(Math.round(sk.maxBars), Math.floor((s.kit.shadow ?? 0) / sk.barCost));
   const garden = s.kit.garden ?? [], need = Math.round(sk.gardenNeed), ready = !dom && garden.length >= need;
@@ -393,14 +444,22 @@ export function HandSignWheel({ s, sk, W, H, mobile }) {
         <text key={i} x={cx} y={cy + (i - 1) * fs * 1.25 + fs * 0.35} textAnchor="middle" fontSize={i === 2 ? fs * 0.82 : fs * 1.1} fontWeight={900}
           fill={i === 2 ? (pick && bars < pickCost ? '#f87171' : '#818cf8') : ready && !pick ? '#e0e7ff' : '#c7d2fe'} style={{ letterSpacing: 1 }}>{t}</text>
       ))}
-      {!dom && (
-        <g>
-          {Array.from({ length: need }, (_, i) => (
-            <path key={i} d={`M${cx + (i - (need - 1) / 2) * fs * 0.9},${cy + inner * 0.62} l${fs * 0.3},${fs * 0.3} l${-fs * 0.3},${fs * 0.3} l${-fs * 0.3},${-fs * 0.3} Z`}
-              fill={i < garden.length ? '#a5b4fc' : 'none'} stroke="#6366f1" strokeWidth={1.2} />
-          ))}
-        </g>
-      )}
+      {!dom && (() => {
+        // the garden: the shadows called toward it (once it's ready, the slots for a PERFECT one)
+        const slots = garden.length >= need ? SHADOWS.length : need, step = fs * (slots > need ? 0.7 : 0.9), d = fs * (slots > need ? 0.24 : 0.3);
+        return (
+          <g>
+            {Array.from({ length: slots }, (_, i) => {
+              const extra = i >= need;
+              return <path key={i} d={`M${cx + (i - (slots - 1) / 2) * step},${cy + inner * 0.62} l${d},${d} l${-d},${d} l${-d},${-d} Z`}
+                fill={i < garden.length ? (extra ? '#fde68a' : '#a5b4fc') : 'none'} stroke={extra ? '#d97706' : '#6366f1'} strokeWidth={1.2} />;
+            })}
+          </g>
+        );
+      })()}
+      <text x={cx} y={cy + outer + fs + 6} textAnchor="middle" fontSize={fs * 0.85} fontWeight={800} fill="#818cf8" style={{ letterSpacing: 2, paintOrder: 'stroke', stroke: '#05040f', strokeWidth: 3 }}>
+        COMBOS FOUND {combosKnown()}/{COMBOS.length}
+      </text>
       <text x={cx} y={cy - outer - 12} textAnchor="middle" fontSize={fs} fontWeight={800} fill="#a5b4fc" style={{ letterSpacing: 2, paintOrder: 'stroke', stroke: '#05040f', strokeWidth: 3 }}>
         {dom ? 'SHADOW GARDEN · EVERYTHING COSTS A BAR LESS' : mobile ? 'HAND SIGN · SLIDE, THEN LET GO' : 'HAND SIGN · FLICK, THEN LET GO'}
       </text>
@@ -419,11 +478,12 @@ const LURKERS = [
 ];
 const EYES = Array.from({ length: 9 }, (_, i) => ({ x: ((i * 37) % 100) / 100, y: 0.62 + ((i * 53) % 34) / 100, ph: i * 1.7 }));
 export function ChimeraGarden({ dom, W, H, k, time }) {
+  const perfect = !!dom.perfect;
   const open = Math.min(1, dom.t / 0.9), ending = clamp((dom.dur - dom.t) / 0.6, 0, 1);
   const R = Math.hypot(W, H) * (0.05 + 1.1 * (1 - (1 - open) ** 3));
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none', opacity: ending, clipPath: open < 1 ? `circle(${R}px at ${dom.x}px ${dom.y}px)` : undefined, overflow: 'hidden' }}>
-      <div className="garden-floor" />
+      <div className={`garden-floor${perfect ? ' perfect' : ''}`} />
       <div className="garden-ripples" />
       {/* shikigami gliding under the surface: each its own layer, only its position changes */}
       {LURKERS.map((L, i) => {
@@ -459,7 +519,7 @@ export function CutIn({ c }) {
   const shake = berserk && t < 0.5 ? Math.sin(t * 90) * 6 * (0.5 - t) : 0;
   const textO = Math.min(1, Math.max(0, (t - 0.15) / 0.15)) * (1 - outP);
   if (kind === 'domain') return (
-    <div className="cutin domain" style={{ opacity: 1 - outP * 0.6 }}>
+    <div className={`cutin domain${c.perfect ? ' perfect' : ''}`} style={{ opacity: 1 - outP * 0.6 }}>
       <div className="cutin-bg" style={{ opacity: Math.min(1, t / 0.08) * (1 - outP) }} />
       <div className="cutin-lines" style={{ opacity: 1 - outP }} />
       <svg viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet" style={{ position: 'absolute', left: 0, right: 0, top: '14%', width: '100%', height: '52%', overflow: 'visible' }}>
@@ -468,12 +528,12 @@ export function CutIn({ c }) {
         {SHADOWS.map((sh, i) => {
           const rise = clamp((t - 0.1 - i * 0.06) / 0.35, 0, 1), q = 1 - (1 - rise) ** 3;
           const S = sh.id === 'elephant' || sh.id === 'serpent' ? 150 : 112;
-          return <Sil key={sh.id} name={sh.icon} x={60 + i * 97} y={232 - S * 0.48 * q + (1 - q) * 40} size={S} fill={sh.id === 'dogs' ? '#f8fafc' : '#000'} rim="#a5b4fc" sw={14}
-            opacity={q} filter="drop-shadow(0 0 8px #4f46e5)" />;
+          return <Sil key={sh.id} name={sh.icon} x={60 + i * 97} y={232 - S * 0.48 * q + (1 - q) * 40} size={S} fill={sh.id === 'dogs' ? '#f8fafc' : '#000'} rim={c.perfect ? '#fde68a' : '#a5b4fc'} sw={14}
+            opacity={q} filter={c.perfect ? 'drop-shadow(0 0 8px #d97706)' : 'drop-shadow(0 0 8px #4f46e5)'} />;
         })}
       </svg>
       <div className="cutin-text" style={{ opacity: textO }}>
-        <div className="small">DOMAIN EXPANSION</div>
+        <div className="small">{c.perfect ? 'DOMAIN EXPANSION · ALL EIGHT · PERFECT' : 'DOMAIN EXPANSION'}</div>
         <div className="big">CHIMERA SHADOW GARDEN</div>
       </div>
     </div>
@@ -540,7 +600,7 @@ export function MahoragaLayer({ s, k }) {
         </svg>
       )}
       <div className={`suspended-text${m.berserk ? ' berserk' : ''}`}>
-        {f ? 'WORLD-CUTTING SLASH' : `${m.berserk ? 'MAHORAGA HAS ADAPTED' : 'COMMAND MAHORAGA'} · click an enemy · ${Math.max(0, Math.ceil(m.timeout - m.t))}s`}
+        {f ? 'WORLD-CUTTING SLASH' : `${m.berserk ? 'MAHORAGA HAS ADAPTED' : m.general ? 'GENERAL OF THE GARDEN' : 'COMMAND MAHORAGA'} · click an enemy · ${Math.max(0, Math.ceil(m.timeout - m.t))}s`}
       </div>
       {/* its shadow stays on the ground when it leaps */}
       <div style={{ position: 'absolute', left: m.x - w * 0.36 * (1 - lift * 0.35), top: m.y + w * 0.42 - w * 0.07, width: w * 0.72 * (1 - lift * 0.35), height: w * 0.14,
@@ -565,6 +625,25 @@ export function MahoragaLayer({ s, k }) {
   );
 }
 
+// ── A combo found for the first time ─────────────────────────────────────
+export function ComboToast({ f }) {
+  const t = f.t, inP = Math.min(1, t / 0.22), out = clamp((t - 2.5) / 0.5, 0, 1);
+  const many = f.icons.length > 3, size = many ? 22 : 36;
+  return (
+    <div className="combo-toast" style={{ opacity: inP * (1 - out), transform: `translateX(-50%) translateY(${(1 - inP) * -18}px) scale(${0.92 + 0.08 * inP})` }}>
+      <div className="ct-icons" style={many ? { flexWrap: 'wrap', width: size * 4 + 6, gap: 2 } : undefined}>
+        {f.icons.map((ic, i) => ic === 'wheel'
+          ? <DharmaWheel key={i} size={size} turns={Math.floor(t * 3)} color="#fde047" flash={false} />
+          : <ShikiArt key={i} name={ic} size={size} fill={ic === 'dog' && i === 0 && !many ? '#f8fafc' : INK} rim={ic === 'grasp' ? '#818cf8' : '#c7d2fe'} sw={26} />)}
+      </div>
+      <div>
+        <div className="ct-small">NEW COMBO · {f.n}/{f.of}</div>
+        <div className="ct-big">{f.name}</div>
+      </div>
+    </div>
+  );
+}
+
 // ── The status chips ──────────────────────────────────────────────────────
 export function TsChips({ s, sk, mobile }) {
   const dom = s.kit.domain;
@@ -582,7 +661,7 @@ export function TsChips({ s, sk, mobile }) {
         <b>{tap ? (mobile ? tapName : `tap: ${tapName}`) : tapName}</b>
         <span className="hint">· hold: wheel</span>
       </div>
-      {dom ? <div className="ts-chip garden on">CHIMERA SHADOW GARDEN · {Math.max(0, Math.ceil(dom.dur - dom.t))}s</div>
+      {dom ? <div className={`ts-chip garden on${dom.perfect ? ' perfect' : ''}`}>{dom.perfect ? 'PERFECT GARDEN' : 'CHIMERA SHADOW GARDEN'} · {s.mahoraga?.general ? 'HELD' : `${Math.max(0, Math.ceil(dom.dur - dom.t))}s`}</div>
         : garden >= need ? <div className="ts-chip garden ready">{mobile ? 'GARDEN READY · hold SPEC, let go without sliding' : 'GARDEN READY · hold M2, let go in the middle'}</div>
           : garden > 0 ? (
             <div className="ts-chip garden">
@@ -611,6 +690,19 @@ export const TS_CSS = `
   @keyframes gaugeFull { from { transform: scale(1); } to { transform: scale(1.12); } }
   .ts-chip.garden.ready { border-color:#e0e7ff; color:#e0e7ff; box-shadow:0 0 12px rgba(165,180,252,0.6); animation: blinkSlow 1.2s ease-in-out infinite; }
   .ts-chip.garden.on { border-color:#a5b4fc; background:rgba(30,27,75,0.85); color:#fff; }
+  .ts-chip.garden.on.perfect { border-color:#fde68a; color:#fef3c7; box-shadow:0 0 10px rgba(253,230,138,0.45); }
+  .combo-toast { position:absolute; left:50%; top:78px; z-index:17; pointer-events:none; display:flex; align-items:center; gap:12px; max-width:92%;
+    background:linear-gradient(100deg, rgba(7,6,26,0.95), rgba(30,27,75,0.95)); border:1px solid #a5b4fc; border-radius:10px; padding:7px 16px 7px 12px;
+    box-shadow:0 0 22px rgba(129,140,248,0.55), 0 0 0 2px #05040f; overflow:hidden; font-family: var(--font-dramatic); }
+  .combo-toast::after { content:''; position:absolute; top:0; bottom:0; width:40%; left:-50%; background:linear-gradient(100deg, transparent, rgba(224,231,255,0.35), transparent);
+    animation: toastShine 1.1s ease-out 0.15s 1 forwards; }
+  @keyframes toastShine { to { left:120%; } }
+  .ct-icons { display:flex; align-items:center; gap:4px; flex-shrink:0; filter: drop-shadow(0 0 6px #6366f1); }
+  .ct-small { font-size:10.5px; letter-spacing:3px; color:#a5b4fc; font-weight:800; white-space:nowrap; }
+  .ct-big { font-size:clamp(15px, 4.2vw, 22px); letter-spacing:2px; color:#eef2ff; font-weight:900; line-height:1.1; text-shadow:0 0 12px #6366f1, 2px 2px 0 #000; white-space:nowrap; }
+  .garden-floor.perfect::before { background: linear-gradient(90deg, transparent, #d97706, #fef3c7, #d97706, transparent); }
+  .cutin.domain.perfect .cutin-text .small { color:#fde68a; }
+  .cutin.domain.perfect .cutin-text .big { text-shadow: 0 0 26px #d97706, 0 0 10px #6366f1, 3px 3px 0 #000, -2px -2px 0 #000; }
   .maho-berserk { animation: mahoRage 0.35s ease-in-out infinite alternate; border-radius: 50%; }
   @keyframes mahoRage { from { transform: scale(0.97) rotate(-1.5deg); } to { transform: scale(1.04) rotate(1.5deg); } }
   .suspended-text.berserk { color: #fecaca; text-shadow: 0 0 12px #dc2626; }

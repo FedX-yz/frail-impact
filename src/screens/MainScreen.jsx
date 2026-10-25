@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { playSFX, playPress } from '../utils/sfx';
 import { fmt } from '../combat/engine';
 import { cardBattleStats } from '../combat/stats';
-import { SKILL_UNLOCK, ULT_UNLOCK, abilityText, SKILLS, STYLES } from '../combat/kits';
+import { SKILL_UNLOCK, ULT_UNLOCK, abilityText, skillKitFor, STYLES } from '../combat/kits';
 import { BAL } from '../combat/balance';
 import { FACILITIES, facilityCost, maxed } from '../combat/hq';
 import { formatSub } from '../combat/sets';
@@ -101,7 +101,7 @@ export default function MainScreen({
     </button>
   );
 
-  const skillStyle = STYLES[SKILLS[mainCard?.skill?.effect]?.style];
+  const skillStyle = STYLES[skillKitFor(mainCard?.skill?.effect)?.style];
   const kitInfo = mainCard && (
     <div style={{ fontSize: 11, color: '#778', lineHeight: 1.45, minWidth: 0, whiteSpace: mobile && portrait ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
       {mainCard.skill && (

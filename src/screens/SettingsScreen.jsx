@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { playClose, sfx, playPress } from '../utils/sfx';
 import { getSettings, setSetting } from '../utils/settings';
 import JobApplication from '../story/JobApplication';
 import TermTitle from '../components/TermTitle';
 import useIsMobile from '../hooks/useIsMobile';
+import { runCommand } from '../utils/secrets';
 
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
@@ -18,9 +19,15 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
   // Hidden switch: tap the SETTINGS title 5 times to turn developer mode on/off
   const [taps, setTaps] = useState(0);
   const tapTitle = () => {
+    if (held.current) { held.current = false; return; }   // that was the end of a long press
     const n = taps + 1;
     if (n >= 5) { toggleDev?.(); setTaps(0); } else setTaps(n);
   };
+  // …and press and hold it for a command line
+  const [prompt, setPrompt] = useState(false);
+  const holdT = useRef(null), held = useRef(false);
+  const titleDown = () => { held.current = false; clearTimeout(holdT.current); holdT.current = setTimeout(() => { held.current = true; setPrompt(true); }, 1000); };
+  const titleUp = () => clearTimeout(holdT.current);
 
   const handleReset = () => {
     if (!confirmReset) { setConfirmReset(true); return; }
@@ -115,7 +122,10 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           [&nbsp;back&nbsp;]
         </button>
 
-        <TermTitle path="SETTINGS" onClick={tapTitle} small={mobile} />
+        <span onPointerDown={titleDown} onPointerUp={titleUp} onPointerLeave={titleUp} onPointerCancel={titleUp} onContextMenu={e => e.preventDefault()}
+          style={{ WebkitTouchCallout: 'none', userSelect: 'none', touchAction: 'manipulation' }}>
+          <TermTitle path="SETTINGS" onClick={tapTitle} small={mobile} />
+        </span>
 
         {/* REAL BACK BUTTON (Top Right) */}
         <button 
@@ -125,6 +135,8 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
           [&nbsp;back&nbsp;]
         </button>
       </div>
+
+      {prompt && <CommandLine onClose={() => setPrompt(false)} />}
 
       <div style={{ flex:1, overflowY:'auto', padding:24 }}>
         <div style={{ maxWidth:480, display:'flex', flexDirection:'column', gap:14 }}>
@@ -200,6 +212,35 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
         </div>
       </div>
     </div>
+  );
+}
+
+// The command line behind the title. Almost nothing here is a command.
+function CommandLine({ onClose }) {
+  const [line, setLine] = useState('');
+  const [out, setOut] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    const cmd = line.trim();
+    if (!cmd) return;
+    setLine('');
+    const r = await runCommand(cmd).catch(() => null);
+    if (r) {
+      setOut(r === 'on' ? '☸ THE WHEEL TURNS.' : '…the shadows sleep.');
+      setTimeout(() => window.location.reload(), 1400);
+    } else setOut(`'${cmd.slice(0, 32)}' is not recognized as an internal or external command, operable program or batch file.`);
+  };
+  return (
+    <form onSubmit={submit} style={{ background:'#0a0603', borderBottom:'1px solid #ff8c00', padding:'8px 14px', fontFamily:'var(--font-ui)', color:'var(--amber)', fontSize:14, flexShrink:0 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        <span style={{ color:'var(--amber-dim)', whiteSpace:'nowrap' }}>C:\FRAIL\&gt;</span>
+        <input autoFocus value={line} onChange={e => setLine(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
+          spellCheck={false} autoComplete="off" autoCapitalize="off" aria-label="command"
+          style={{ flex:1, minWidth:0, background:'transparent', border:'none', outline:'none', color:'var(--amber)', fontFamily:'inherit', fontSize:16, caretColor:'#ff8c00' }} />
+        <button type="button" onClick={onClose} style={{ background:'none', border:'none', color:'var(--amber-dim)', cursor:'pointer', fontFamily:'inherit', fontSize:13 }}>[x]</button>
+      </div>
+      {out && <div style={{ marginTop:6, color: out.startsWith("'") ? '#a8a29e' : '#fde047', fontSize:13, whiteSpace:'pre-wrap' }}>{out}</div>}
+    </form>
   );
 }
 

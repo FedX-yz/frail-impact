@@ -427,12 +427,12 @@ export const CHARACTERS = [
     stats: { hp: 1400, atk: 155, def: 85 },
     skill: {
       name: 'Ten Shadows',
-      description: 'Your hits fill a shadow meter. Tap M2 to summon, hold M2 for a hand-sign wheel of all eight shadows; call four different ones to unlock Chimera Shadow Garden.',
+      description: 'Combo 10 / 25 / 50 summon a Divine Dog / Toad / Nue.',
       effect: 'shadows',
     },
     ult: {
       name: 'Eight-Handled Sword Divergent Sila Divine General Mahoraga',
-      description: 'Summons Mahoraga: click an enemy and it leaps on it. It adapts, goes berserk with twin pistols, and leaves with a World-Cutting Slash.',
+      description: 'Mahoraga fights for you while you watch. It must clear the field, boss included. If it dies, you die.',
       effect: 'mahoraga',
       cooldown: 60,
     },

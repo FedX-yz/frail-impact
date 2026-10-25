@@ -10,7 +10,7 @@ import TapButton from '../components/TapButton';
 import { Icon, SvgIcon } from '../components/Icon';
 import { withIcons } from '../utils/withIcons';
 import { TS_EFFECTS } from './tenShadows';
-import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, MahoragaLayer, TsChips, TS_CSS,
+import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, ComboToast, MahoragaLayer, TsChips, TS_CSS,
   MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK } from './TenShadowsFx';
 
 const BASE = import.meta.env.BASE_URL;
@@ -34,6 +34,8 @@ const PARALLAX = [
   { src: `${BASE}backgrounds/city_far.png`,  loop: `${BASE}backgrounds/city_far_loop.png`,  depth: 14, speed: 22 },
   { src: `${BASE}backgrounds/city_near.png`, loop: `${BASE}backgrounds/city_near_loop.png`, depth: 28, speed: 55 },
 ];
+const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
+const SHIKI_ICON = { dog: '🐺', toad: '🐸', nue: '🦅' };   // Bio's usual kit's shikigami (drawn as icons)
 
 // Load attack-pose pictures up front so the first wind-up doesn't show a blank
 Object.values(ENEMY_TYPES).forEach(t => {
@@ -67,7 +69,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   useEffect(() => { Object.values(ENEMY_TYPES).forEach(t => { if (t.imgBroken) new Image().src = t.imgBroken; }); }, []);
   // the same for Mahoraga's cut-ins and berserk form, but only when it's the equipped ult
   const ultType = engine.state.stats.ult?.type;
-  useEffect(() => { if (ultType === 'mahoraga') [MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK].forEach(src => { new Image().src = src; }); }, [ultType]);
+  useEffect(() => { if (ultType === 'mahoraga2') [MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK].forEach(src => { new Image().src = src; }); }, [ultType]);
 
   // Arena size → engine
   useEffect(() => {
@@ -172,7 +174,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const OVER = new Set(['bolt', 'rabbits', 'hand', 'claws', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
+  const OVER = new Set(['bolt', 'rabbits', 'hand', 'claws', 'wisp', 'saved', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
 
   // Move every enemy by setting its transform directly (no React re-render
@@ -356,9 +358,14 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 </div>
               );
             }
+            // Bio's usual kit: Divine Dogs, the Toad, Nue
+            if (!a.ts && SHIKI_ICON[a.kind]) return (
+              <div key={a.id} className={`shiki classic ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', fontSize: (a.kind === 'nue' ? 40 : 44) * k,
+                opacity: a.life < 1 ? a.life : 1, color: '#c7d2fe' }}><Icon name={a.kind} /></div>
+            );
             return null;
           })}
-          {/* Bio's shikigami: Divine Dogs / Totality, Nue, the Toad, Round Deer */}
+          {/* Bio's other kit: Divine Dogs / Totality, Nue, the Toad, Round Deer */}
           <TsAllies s={s} k={k} />
 
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
@@ -557,14 +564,15 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           <div key={f.id} style={{ position: 'absolute', inset: 0, background: f.color, opacity: 0.45 * Math.max(0, 1 - f.t / (f.life ?? 0.5)), pointerEvents: 'none', zIndex: 12 }} />
         ))}
 
-        {/* Mahoraga: everything else goes grey; you command it */}
-        <MahoragaLayer s={s} k={k} />
+        {/* Mahoraga: everything else goes grey; you watch it (the usual kit) or command it (the other one) */}
+        {s.mahoraga && (s.mahoraga.v2 ? <MahoragaLayer s={s} k={k} /> : <MahoragaClassic m={s.mahoraga} k={k} />)}
         <WorldCuts effects={s.effects} k={k} />
         {/* Bio: M2 held — the hand-sign wheel */}
         <HandSignWheel s={s} sk={curSkill} W={s.W} H={s.H} mobile={mobile} />
 
         {/* Mahoraga's summon / berserk, the garden: cut-ins */}
         {s.kit.cutin && <CutIn c={s.kit.cutin} />}
+        {s.kit.found && <ComboToast f={s.kit.found} />}
 
         <StageBarView {...stageBarProps(s, bossParts)} />
 
@@ -578,7 +586,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           {pl.debuffs?.weak > 0 && <Chip color="#c084fc">WEAKENED −30% DMG {pl.debuffs.weak.toFixed(0)}s</Chip>}
           {s.timeStop > 0 && <Chip color="#67e8f9">TIME STOP {s.timeStop.toFixed(1)}s</Chip>}
           {s.ult.active && (s.ult.active.type === 'mahoraga'
-            ? <Chip color={s.mahoraga?.berserk ? '#f87171' : '#fde047'}>☸ {!s.mahoraga ? 'MAHORAGA' : s.mahoraga.berserk ? 'BERSERK' : `WHEEL ${Math.min(s.mahoraga.wheel, s.mahoraga.berserkAt)}/${s.mahoraga.berserkAt}`} · {s.mahoraga ? Object.keys(s.mahoraga.adapt).length : 0} adapted</Chip>
+            ? (!s.mahoraga?.v2
+              ? <Chip color="#fde047">☸ MAHORAGA · {s.mahoraga ? Object.values(s.mahoraga.adapt).reduce((a, n) => a + Math.min(n, 3), 0) : 0} adapted</Chip>
+              : <Chip color={s.mahoraga.berserk ? '#f87171' : '#fde047'}>☸ {s.mahoraga.berserk ? 'BERSERK' : `WHEEL ${Math.min(s.mahoraga.wheel, s.mahoraga.berserkAt)}/${s.mahoraga.berserkAt}`} · {Object.keys(s.mahoraga.adapt).length} adapted</Chip>)
             : <Chip color="#c084fc">{(ult?.name ?? 'ULT').length > 24 ? ult.name.split(' ').slice(-2).join(' ') : ult?.name ?? 'ULT'} {s.ult.active.t.toFixed(1)}s</Chip>)}
         </div>
 
@@ -625,6 +635,26 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       </div>
 
       <style>{ARENA_CSS}</style>
+    </>
+  );
+}
+
+// Bio's usual Mahoraga: everything else goes grey, you can only watch
+function MahoragaClassic({ m, k }) {
+  const w = 150 * k;
+  return (
+    <>
+      <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', backdropFilter: 'grayscale(1) brightness(0.7)', WebkitBackdropFilter: 'grayscale(1) brightness(0.7)' }} />
+      <div className="suspended-text">SUSPENDED · WATCH AND PRAY</div>
+      <div style={{ position: 'absolute', left: m.x - w / 2, top: m.y - w * 0.3, width: w, zIndex: 13, pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 4 * k, display: 'flex', alignItems: 'center', gap: 4 * k }}>
+          <span className="maho-wheel" style={{ transform: `rotate(${m.wheel * 45}deg)`, fontSize: 20 * k, color: '#fde047', lineHeight: 0 }}><Icon name="wheel" /></span>
+          <div style={{ width: w * 0.8, height: 7 * k, background: 'rgba(0,0,0,0.7)', borderRadius: 4, border: '1px solid #fde047' }}>
+            <div style={{ width: `${Math.max(0, m.hp / m.maxHp) * 100}%`, height: '100%', background: '#fde047', borderRadius: 4 }} />
+          </div>
+        </div>
+        <img src={MAHORAGA_IMG} alt="Mahoraga" draggable={false} style={{ width: '100%', display: 'block', filter: m.invuln > 0.15 ? 'brightness(1.8)' : 'drop-shadow(0 0 12px #fde047)' }} />
+      </div>
     </>
   );
 }
@@ -1324,6 +1354,9 @@ ${TS_CSS}
   @keyframes flickB { 0% { opacity:0 } 50% { opacity:1 } }
   .crawler { animation: crawl 0.35s ease-in-out infinite alternate; }
   @keyframes crawl { from { transform: skewX(-8deg) scaleY(0.92); } to { transform: skewX(8deg) scaleY(1.05); } }
+  .shiki.classic.dog { animation: shikiHop 0.3s ease-in-out infinite alternate; }
+  .shiki.classic.nue { animation: shikiHop 0.5s ease-in-out infinite alternate; }
+  .maho-wheel { display:inline-block; color:#fde047; text-shadow:0 0 8px #000; transition: transform 0.35s cubic-bezier(.3,1.6,.5,1); line-height:1; }
   .suspended-text { position:absolute; top:34px; left:50%; transform:translateX(-50%); z-index:13; pointer-events:none; max-width:92%; width:max-content; text-align:center;
                     color:#fde047; font-weight:900; letter-spacing:2px; font-size:clamp(11px, 2.4vw, 14px); text-shadow:0 0 12px #000, 0 0 4px #000; animation: blinkSlow 1.4s ease-in-out infinite; }
   @keyframes blinkSlow { 50% { opacity: 0.45; } }

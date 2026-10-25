@@ -9,7 +9,7 @@ import { playClose, playPress, playStamp } from '../utils/sfx';
 import { thumb } from '../utils/assets';
 import { upgradeSubs, formatSub, setOfCard } from '../combat/sets';
 import { siMult, SI_MULT, SI_MULT_HIGH } from '../combat/stats';
-import { SKILLS, ULTS, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
+import { skillKitFor, ultKitFor, describeSiStep, ULT_CD_PER_SI } from '../combat/kits';
 import useIsMobile from '../hooks/useIsMobile';
 import TermTitle from '../components/TermTitle';
 
@@ -206,8 +206,8 @@ export default function CardShop({ navigate, coins, setCoins, collection, setCol
               const canFuse = !maxed && count >= need;
               const mult = siMult(si, card.rarity);
               const nextMult = !maxed ? siMult(si + 1, card.rarity) : null;
-              const skillKit = SKILLS[card.skill?.effect];
-              const ultKit = ULTS[card.ult?.effect];
+              const skillKit = skillKitFor(card.skill?.effect);
+              const ultKit = ultKitFor(card.ult?.effect);
               return (
                 <div key={card.id} className={`rq-prow${canFuse ? ' ready' : ''}`}>
                   <span className="rq-pthumb" style={{ borderColor: RC[card.rarity] }}>

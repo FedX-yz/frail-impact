@@ -11,7 +11,7 @@ import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
 import { setOfCard, formatSub, CARD_SETS } from '../combat/sets';
-import { SKILLS, ULTS, STYLES, describeKit, describePassive, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK, abilityText } from '../combat/kits';
+import { skillKitFor, ultKitFor, STYLES, describeKit, describePassive, describeSiStep, ULT_CD_PER_SI, weakKit, SKILL_UNLOCK, abilityText } from '../combat/kits';
 import { cardBattleStats, siMult } from '../combat/stats';
 import useIsMobile from '../hooks/useIsMobile';
 import TermTitle from '../components/TermTitle';
@@ -146,7 +146,7 @@ function CardFile({ card, entry, count, active, counts, onArt, onOpen }) {
   // others from the same banner(s)
   const assoc = [...new Set(BANNERS.filter(b => b.featuredIds?.includes(card.id)).flatMap(b => b.featuredIds))]
     .filter(id => id !== card.id).map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean);
-  const kits = [['SKILL', card.skill, SKILLS[card.skill?.effect]], ['ULT · LV 50', card.ult, ULTS[card.ult?.effect]]].filter(([, a]) => a);
+  const kits = [['SKILL', card.skill, skillKitFor(card.skill?.effect)], ['ULT · LV 50', card.ult, ultKitFor(card.ult?.effect)]].filter(([, a]) => a);
 
   return (
     <div className="rc-folderopen" key={card.id}>
