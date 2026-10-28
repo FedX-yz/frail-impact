@@ -307,6 +307,33 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     e.tilt = (e.tilt ?? 0) + (tilt - (e.tilt ?? 0)) * (1 - Math.exp(-dt * 5));
   }
 
+  // Enemies don't stand inside each other: two that overlap are pushed apart a bit every frame
+  // (the lighter one moves more). Bosses, worm parts, hydra heads, ones that stand still, dash,
+  // are thrown or stunned don't budge, but still push the others out of the way.
+  const pushWeight = e => (e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || e.group || e.move === 'still'
+    || e.dashing || e.kb || e.frozen > 0 ? 0 : e.tier === 'elite' ? 1 / 3 : e.tier === 'treasure' ? 2 : 1);
+  function separateEnemies() {
+    const list = s.enemies.filter(e => !e.entering && !(e.down > 0));
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i], wa = pushWeight(a);
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j], wb = pushWeight(b);
+        if (!wa && !wb) continue;
+        const R = (a.size + b.size) * s.k * 0.36;   // their bodies, not the empty corners of the pictures
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= R * R) continue;
+        let d = Math.sqrt(d2);
+        if (d < 0.01) { const ang = (a.id * 2.399 + b.id) % 6.283; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }   // right on top: pick a side
+        const push = (R - Math.sqrt(d2)) * 0.5, ux = dx / d, uy = dy / d, ta = wa / (wa + wb), tb = wb / (wa + wb);
+        a.x -= ux * push * ta; a.y -= uy * push * ta;
+        b.x += ux * push * tb; b.y += uy * push * tb;
+      }
+    }
+    // (pushed, never out of the arena)
+    for (const e of list) if (pushWeight(e)) { e.x = clamp(e.x, 0, s.W); e.y = clamp(e.y, 0, s.H); }
+  }
+
   function moveEnemy(e, dt) {
     if (e.move === 'worm') { moveWorm(e, dt); return; }
     if (e.role === 'hydra') { moveHydraHead(e, dt); return; }
@@ -1169,6 +1196,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         }
       }
     }
+    separateEnemies();
     updateAttacks(dt);
 
     // Boss weak points

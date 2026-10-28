@@ -4,6 +4,8 @@ import { AFFIXES, ENEMY_TYPES } from './enemies';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
+import { CursorArt } from '../components/GameCursor';
+import { CURSOR_SIZES, trackHp } from '../utils/cursor';
 import FocusImg from '../components/FocusImg';
 import CctvOverlay from './CctvOverlay';
 import TapButton from '../components/TapButton';
@@ -58,6 +60,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const onUlt = useCallback(() => engine.activateUlt(), [engine]);
   const [, setFrame] = useState(0);
   const [touchMode, setTouchMode] = useState(false);
+  // the battle cursor: its element (moved straight from pointer events too, so it never lags),
+  // whether the pointer is over the arena, HP changes for its hit / heal flash, the last click
+  const cursorRef = useRef(null), cursorIn = useRef(false), hpFx = useRef({}), clickT = useRef(-9);
 
   // Debug handle for the browser console (window.__battle): always in dev,
   // and on the live site when you open it with ?debug at the end of the URL
@@ -95,7 +100,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     let reported = false;
     const loop = (now) => {
       // One bad frame must never freeze the whole battle
-      try { engine.update((now - last) / 1000); }
+      try { engine.update((now - last) / 1000); trackHp(hpFx.current, engine.state.player, now / 1000); }
       catch (err) { if (!reported) { console.error('battle update failed:', err); reported = true; } }
       last = now;
       setFrame(f => (f + 1) % 1e9);
@@ -131,8 +136,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   }, [engine]);
 
   const toLocal = (e) => {
-    const r = ref.current.getBoundingClientRect();
-    return [e.clientX - r.left, e.clientY - r.top];
+    const el = ref.current, r = el.getBoundingClientRect();
+    return [e.clientX - r.left - el.clientLeft, e.clientY - r.top - el.clientTop];   // (inside its border, where things are drawn)
   };
   const onPointerDown = (e) => {
     if (e.pointerType === 'touch' !== touchMode) setTouchMode(e.pointerType === 'touch');
@@ -140,11 +145,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     const [x, y] = toLocal(e);
     // keep getting moves / the release even if the cursor leaves the arena while held
     try { ref.current.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    clickT.current = performance.now() / 1000;
     engine.pointerDown(x, y);
   };
-  const onPointerMove = (e) => { const [x, y] = toLocal(e); engine.pointerMove(x, y); };
+  const onPointerMove = (e) => {
+    const [x, y] = toLocal(e);
+    engine.pointerMove(x, y);
+    if (e.pointerType === 'mouse') cursorIn.current = true;
+    if (cursorRef.current) cursorRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  };
   const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
-  const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); engine.special(x, y); } };   // M2: the card's special move
+  const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); clickT.current = performance.now() / 1000; engine.special(x, y); } };   // M2: the card's special move
   const onSpecial = useCallback((down) => (down ? engine.special() : engine.specialUp()), [engine]);
   // phone: sliding the thumb on the SPECIAL button points Bio's hand-sign wheel
   const onSpecialMove = useCallback((dx, dy) => engine.signAim(dx, dy), [engine]);
@@ -174,8 +185,18 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const sp = engine.specialInfo?.();
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const OVER = new Set(['bolt', 'rabbits', 'hand', 'claws', 'wisp', 'saved', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
+  const OVER = new Set(['burst', 'shards', 'crit', 'ripple', 'poof', 'bolt', 'rabbits', 'hand', 'claws', 'wisp', 'saved', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
+  // the battle cursor (Settings → Cursor): its skill ring follows the SPECIAL circle, its ult ring the orb
+  const prefs = getSettings(), gcTheme = prefs.cursor ?? 'cyan';
+  const gcOn = gcTheme !== 'system' && !touchMode, ringsOn = gcOn && prefs.cursorRings !== false;
+  const skillRing = !ringsOn || !sp ? null
+    : sp.kind === 'cd' ? { fill: sp.cdMax ? 1 - sp.cd / sp.cdMax : 1, ready: !(sp.cd > 0) }
+      : { fill: sp.fill ?? sp.n / sp.max, ready: curSkill?.type === 'tenshadows' ? sp.n >= 1 : sp.n >= sp.max, n: sp.n };
+  const act = s.ult.active;
+  const ultRing = !ringsOn || !ult ? null
+    : act ? { fill: act.dur && act.dur < 1e8 ? act.t / act.dur : 1, active: true }
+      : { fill: ultCd ? 0 : charge, ready: !!ultReady, dim: !!ultCd || (charge >= 1 && !!s.ult.blocked) };
 
   // Move every enemy by setting its transform directly (no React re-render
   // needed for movement). Runs after each frame's render, before paint.
@@ -224,6 +245,16 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       if (e.facing != null) el.style.setProperty('--rot', `${Math.round(e.angle * 57.2958 - e.facing)}deg`);
       // hydra heads turn to look at you
       if (e.role === 'hydra') el.style.setProperty('--tilt', `${(e.tilt ?? 0).toFixed(1)}deg`);
+      // the others look at your cursor (or at Mahoraga while it's out): mirrored when you're on the other side
+      if (e.type.looks) {
+        const T = s.mahoraga ?? s.player.pos;
+        if (T && !(e.frozen > 0)) {
+          const side = T.x < e.x - 10 * s.k ? -1 : T.x > e.x + 10 * s.k ? 1 : null;   // (a dead zone, so it doesn't flicker)
+          if (side) e.lookSide = side;
+        }
+        const face = (e.lookSide ?? 1) === (e.type.looks === 'left' ? -1 : 1) ? 1 : -1;
+        if (el.dataset.face !== String(face)) { el.dataset.face = face; el.style.setProperty('--face', face); }
+      }
       // attack poses face the attack: mirrored when aiming the other way, then tilted
       if (e.type.poses && e.aim != null && e.type.poseFacing != null) {
         const deg = e.aim * 57.2958;
@@ -240,9 +271,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     <>
       <div
         ref={ref}
-        className="battle-arena"
+        className={`battle-arena${gcOn ? ' gc-on' : ''}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
+        onPointerLeave={e => { if (e.pointerType === 'mouse') cursorIn.current = false; }}
         onMouseDown={onMouseDown}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -334,7 +366,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <line key={`kb${e.id}`} x1={e.x - ux * len} y1={e.y - uy * len} x2={e.x} y2={e.y} stroke="#bfdbfe"
                 strokeWidth={e.size * k * 0.45} strokeLinecap="round" opacity={0.3} />;
             })}
-            {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} />)}
+            {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} layer="ground" />)}
             {/* something walking in from off-screen: an arrow on that edge (red = a big one) */}
             {s.enemies.map(e => {
               if (!e.entering || (e.x > 0 && e.x < s.W)) return null;
@@ -342,9 +374,6 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <polygon key={`in${e.id}`} points={`${x},${e.y - sz} ${x + d * sz * 1.3},${e.y} ${x},${e.y + sz}`}
                 fill={big ? '#ef4444' : '#fbbf24'} opacity={0.6 + 0.4 * Math.abs(Math.sin(s.time * 8))} style={{ filter: `drop-shadow(0 0 6px ${big ? '#ef4444' : '#fbbf24'})` }} />;
             })}
-            {s.shots.filter(sh => !sh.maho).map(sh => (
-              <circle key={sh.id} cx={sh.x} cy={sh.y} r={8 * k} fill="#e9d5ff" stroke="#a855f7" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
-            ))}
             {s.effects.filter(f => !OVER.has(f.kind)).map(f => <EffectShape key={f.id} f={f} k={k} />)}
           </svg>
 
@@ -377,7 +406,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             return (
               <EnemySprite key={e.id} id={e.id} register={register}
                 img={e.shield && e.shield.hp <= 0 && e.type.imgBroken ? e.type.imgBroken : e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
-                size={e.size * k} k={k} isWormHead={isWormHead}
+                size={e.size * k} k={k} isWormHead={isWormHead} looks={!!e.type.looks}
                 frozen={e.frozen > 0} down={e.down > 0 ? Math.ceil(e.down * 10) / 10 : 0}
                 flashRed={e.flashRed} hurt={e.hurt > 0} dashing={!!e.dashing} paused={s.timeStop > 0}
                 hpPct={Math.max(0, Math.round(e.hp / e.maxHp * 200) / 2)}
@@ -456,7 +485,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             })()}
             {/* Ten Shadows: the Toad's tongue, the Great Serpent, Tiger Funeral, Piercing Ox, Max Elephant */}
             <TsOver s={s} k={k} time={s.time} />
-            {curSkill?.type === 'tenshadows' && !touchMode && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
+            {curSkill?.type === 'tenshadows' && !touchMode && !ringsOn && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
             {/* Hox: the Abyssal Maw opening under the cursor, jaws closing */}
             {(s.kit.maws ?? []).map(m => <Maw key={m.id} m={m} k={k} />)}
             {/* Hox's ult: tentacles bursting from the sides */}
@@ -540,6 +569,11 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <circle cx={m.x + (1 - p) * 160 * k} cy={m.y - (1 - p) * 420 * k} r={(18 + 22 * p) * k} fill="#fdba74" style={{ filter: 'drop-shadow(0 0 16px #f97316)' }} />;
             })()}
             {s.effects.filter(f => OVER.has(f.kind)).map(f => <EffectShape key={f.id} f={f} k={k} />)}
+            {/* projectiles fly above everything on the field (enemy shots, your shots) */}
+            {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} layer="air" />)}
+            {s.shots.filter(sh => !sh.maho).map(sh => (
+              <circle key={sh.id} cx={sh.x} cy={sh.y} r={8 * k} fill={sh.color ? '#fff7ed' : '#e9d5ff'} stroke={sh.color ?? '#a855f7'} strokeWidth={3 * k} style={{ filter: `drop-shadow(0 0 6px ${sh.color ?? '#a855f7'})` }} />
+            ))}
           </svg>
 
           {/* ── Floating numbers (re-rendered only when one is added/removed) ── */}
@@ -632,6 +666,15 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Extra layers from the screen using the arena (story mode: codec popups) */}
         {children}
+
+        {/* The battle cursor, above everything (the system arrow is hidden over the arena) */}
+        {gcOn && P && (
+          <div ref={cursorRef} style={{ position: 'absolute', left: 0, top: 0, zIndex: 40, pointerEvents: 'none', transform: `translate3d(${P.x}px, ${P.y}px, 0)`,
+            visibility: cursorIn.current ? 'visible' : 'hidden' }}>
+            <CursorArt theme={gcTheme} size={CURSOR_SIZES[prefs.cursorSize] ?? CURSOR_SIZES.m} skill={skillRing} ult={ultRing}
+              flash={hpFx.current.flash} click={clickT.current} now={performance.now() / 1000} />
+          </div>
+        )}
       </div>
 
       <style>{ARENA_CSS}</style>
@@ -838,8 +881,11 @@ function ShrineDomain({ dom, W, H, k, time }) {
   );
 }
 
-function AttackShape({ a, k }) {
+// layer: 'ground' = telegraphs and strikes (under the enemies), 'air' = shots in flight (over them)
+function AttackShape({ a, k, layer }) {
   if (a.phase === 'wait' || a.phase === 'done') return null;
+  const flying = a.kind === 'shot' && a.phase !== 'tele';
+  if ((layer === 'air') !== flying) return null;
   const p = a.phase === 'tele' ? Math.min(1, a.t / a.tele) : 0;
   const strikeFade = a.phase === 'strike' ? 1 - a.t / BAL.STRIKE_FLASH : 0;
   // Red telegraph gets more solid as the hit gets closer
@@ -1056,7 +1102,7 @@ function HydraNecks({ heads, k, time }) {
 }
 
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0 }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0, looks = false }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
@@ -1098,7 +1144,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       {badge && <div className="enemy-badge" style={{ color: badge.color, borderColor: badge.color, fontSize: 12 * Math.max(0.85, k) }}>{badge.icon}</div>}
       {ax && <div className="affix-tag" style={{ color: ax.color, fontSize: 10 * Math.max(0.85, k) }}>{ax.name}</div>}
       <div className={`squash${hurt ? ' hit' : ''}${mirror === 'on' ? ' mirrored' : ''}`}>
-      <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})` }}>
+      <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})${looks ? ' scaleX(var(--face, 1))' : ''}`,
+        transition: looks ? 'transform 0.14s ease-out' : undefined }}>
       {shape === 'segment' ? (
         <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
       ) : pose ? (
@@ -1289,6 +1336,7 @@ function holdButton(onDown, onUp, onMove) {
 }
 
 const ARENA_CSS = `
+  .battle-arena.gc-on, .battle-arena.gc-on * { cursor: none !important; }   /* the game draws the cursor */
 ${TS_CSS}
   .mad-aura { position:absolute; inset:-10%; border-radius:50%; pointer-events:none; z-index:-1;
     background: radial-gradient(circle, rgba(126,34,206,0.35), rgba(76,29,149,0.15) 55%, transparent 72%); box-shadow: 0 0 14px rgba(168,85,247,0.6); }

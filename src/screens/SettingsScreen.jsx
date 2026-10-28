@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { playClose, sfx, playPress } from '../utils/sfx';
 import { getSettings, setSetting } from '../utils/settings';
 import JobApplication from '../story/JobApplication';
 import TermTitle from '../components/TermTitle';
 import useIsMobile from '../hooks/useIsMobile';
 import { runCommand } from '../utils/secrets';
+import { CursorArt } from '../components/GameCursor';
+import { CURSOR_SIZES } from '../utils/cursor';
 
 const SAVE_KEY = 'rhg_v3';
 const BASE = import.meta.env.BASE_URL;
@@ -166,6 +168,21 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
             <Toggle label="CCTV battle camera" sub="Watch fights through a security camera: scanlines, REC, timestamp" on={prefs.cctv} onChange={v => change('cctv', v)} />
           </div>
 
+          {/* The battle cursor */}
+          <div style={{ color:'#8a7a63', fontSize:11, letterSpacing:2, fontFamily:'var(--label)' }}>CURSOR</div>
+          <div style={{ background:'var(--panel)', border:'1px solid var(--line)', borderRadius:8, padding:16, display:'flex', gap:16, flexWrap:'wrap' }}>
+            <div style={{ flex:'1 1 240px', display:'flex', flexDirection:'column', gap:14 }}>
+              <Choice label="Battle cursor" sub="Drawn by the game; it flashes when you're hit or healed. Mouse only." value={prefs.cursor}
+                options={[['cyan', 'Cyan'], ['yellow', 'Yellow'], ['system', 'Normal']]} onChange={v => change('cursor', v)} />
+              <Choice label="Size" value={prefs.cursorSize} disabled={prefs.cursor === 'system'}
+                options={[['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']]} onChange={v => change('cursorSize', v)} />
+              <div style={{ opacity: prefs.cursor === 'system' ? 0.4 : 1, pointerEvents: prefs.cursor === 'system' ? 'none' : undefined }}>
+                <Toggle label="Skill + ult rings" sub="Your skill (cyan) and ult (pink) charging next to the cursor" on={prefs.cursorRings} onChange={v => change('cursorRings', v)} />
+              </div>
+            </div>
+            {prefs.cursor !== 'system' && <CursorPreview prefs={prefs} />}
+          </div>
+
           {/* You, the manager */}
           <div style={{ color:'#8a7a63', fontSize:11, letterSpacing:2, fontFamily:'var(--label)' }}>MANAGER</div>
           <div style={{ background:'var(--panel)', border:'1px solid var(--line)', borderRadius:8, padding:16, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
@@ -241,6 +258,42 @@ function CommandLine({ onClose }) {
       </div>
       {out && <div style={{ marginTop:6, color: out.startsWith("'") ? '#a8a29e' : '#fde047', fontSize:13, whiteSpace:'pre-wrap' }}>{out}</div>}
     </form>
+  );
+}
+
+// A row of buttons, one lit
+function Choice({ label, sub, value, options, onChange, disabled }) {
+  return (
+    <div style={{ opacity: disabled ? 0.4 : 1 }}>
+      <div style={{ fontWeight:700 }}>{label}</div>
+      {sub && <div style={{ color:'#778', fontSize:12 }}>{sub}</div>}
+      <div style={{ display:'flex', gap:6, marginTop:6 }}>
+        {options.map(([v, text]) => (
+          <button key={v} disabled={disabled} onClick={() => { playPress(); onChange(v); }} aria-pressed={value === v}
+            style={{ flex:1, minWidth:0, padding:'6px 4px', borderRadius:6, cursor: disabled ? 'default' : 'pointer', fontWeight:700, fontSize:13,
+              background: value === v ? '#ff8c00' : 'var(--panel-deep)', color: value === v ? '#1a0f00' : '#ccb', border:`1px solid ${value === v ? '#ff8c00' : 'var(--line)'}` }}>
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// The cursor as it looks in a fight: a hit and a heal play on a loop, the rings charge
+function CursorPreview({ prefs }) {
+  const [now, setNow] = useState(() => performance.now() / 1000);
+  useEffect(() => { let raf; const f = () => { setNow(performance.now() / 1000); raf = requestAnimationFrame(f); }; raf = requestAnimationFrame(f); return () => cancelAnimationFrame(raf); }, []);
+  const t = now % 4;
+  const flash = t < 1 ? { kind: 'hit', from: 0.8, to: 0.62, t0: 0, last: 0 } : t >= 2 && t < 3 ? { kind: 'heal', from: 0.62, to: 0.8, t0: 2, last: 2 } : null;
+  const skill = { fill: Math.min(1, (now % 5) / 4), ready: now % 5 >= 4 }, ult = { fill: 0.35 + 0.1 * Math.sin(now * 0.7) };
+  const size = CURSOR_SIZES[prefs.cursorSize] ?? CURSOR_SIZES.m;
+  return (
+    <div style={{ flex:'0 0 150px', height:150, position:'relative', background:'#0f1625', border:'1px solid var(--line)', borderRadius:8, overflow:'hidden' }}>
+      <div style={{ position:'absolute', left: 75 - size * 0.8, top: 75 - size * 0.75 }}>
+        <CursorArt theme={prefs.cursor} size={size} skill={prefs.cursorRings ? skill : null} ult={prefs.cursorRings ? ult : null} flash={flash} now={t} />
+      </div>
+    </div>
   );
 }
 
