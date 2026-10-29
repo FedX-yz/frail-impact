@@ -205,7 +205,7 @@ export function createKitRuntime(api) {
 
   // ── Jerry's repel ────────────────────────────────────────────────────────
   // Bosses, worm parts and hydra heads are too heavy to throw
-  const heavy = e => e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || !!e.group;
+  const heavy = e => e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || !!e.group || !!e.type?.core;
   // Throw an enemy away from a point. false = it didn't budge
   function launch(e, from, power = 1) {
     if (heavy(e) || e.down > 0 || !s.enemies.includes(e)) return false;
@@ -743,7 +743,7 @@ export function createKitRuntime(api) {
     s.choosing = null;
     api.announce(`ORA ORA ORA — ${SKILL_NAMES[id] ?? id}`, '#f472b6');
   }
-  const strongest = () => foes().reduce((b, e) => (!b || (e.tier === 'boss') > (b.tier === 'boss') || ((e.tier === 'boss') === (b.tier === 'boss') && e.hp > b.hp) ? e : b), null);
+  const strongest = () => foes().filter((e, _, all) => !e.sealed || all.every(o => o.sealed)).reduce((b, e) => (!b || (e.tier === 'boss') > (b.tier === 'boss') || ((e.tier === 'boss') === (b.tier === 'boss') && e.hp > b.hp) ? e : b), null);
 
   // Bio: his usual kit in bioClassic.js, the other one (Ten Shadows + Mahoraga you command) in tenShadows.js
   const bio = createBioClassic({ s, api, K, pick, dist, floater, effect, shake, sfx, nextId, kitHit, ultHit, foes, focus, nearest, radius, center, startCooldown });

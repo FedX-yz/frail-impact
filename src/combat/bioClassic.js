@@ -107,14 +107,15 @@ export function createBioClassic(c) {
     // the wheel turns on its own too, so a long fight always ends one way or the other
     m.turnT -= dt;
     if (m.turnT <= 0) { m.turnT = 6; m.turns++; m.wheel++; floater('☸', m.x, m.y - K(70), '#fde047', true); }
-    let t = list.find(e => e.id === m.target);
+    let t = list.find(e => e.id === m.target && !e.sealed);
     // point at an enemy (cursor near it) and Mahoraga goes for it
     m.lookT = (m.lookT ?? 0) - dt;
     if (m.lookT <= 0) { m.lookT = 0.5; const f = focus(200, list); if (f) { t = f; m.target = f.id; } }
     if (!t) {
       // bosses first once they're out, otherwise whatever's closest
-      const bosses = list.filter(e => e.tier === 'boss');
-      t = nearest(m.x, m.y, bosses.length ? bosses : list);
+      const bosses = list.filter(e => e.tier === 'boss' && !e.sealed);   // (a sealed Devourer: its weak spots first)
+      const open = list.filter(e => !e.sealed);
+      t = nearest(m.x, m.y, bosses.length ? bosses : open.length ? open : list);
       m.target = t?.id ?? null;
     }
     if (!t) return;

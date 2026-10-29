@@ -366,6 +366,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <line key={`kb${e.id}`} x1={e.x - ux * len} y1={e.y - uy * len} x2={e.x} y2={e.y} stroke="#bfdbfe"
                 strokeWidth={e.size * k * 0.45} strokeLinecap="round" opacity={0.3} />;
             })}
+            {s.enemies.map(c => {
+              if (!c.core) return null;
+              const b = s.enemies.find(o => o.id === c.core);
+              if (!b) return null;
+              return (
+                <g key={`teth${c.id}`} opacity={0.75}>
+                  <line x1={c.x} y1={c.y} x2={b.x} y2={b.y} stroke="#4c0519" strokeWidth={7 * k} strokeLinecap="round" />
+                  <line x1={c.x} y1={c.y} x2={b.x} y2={b.y} stroke="#fb7185" strokeWidth={2.5 * k} strokeDasharray={`${10 * k} ${8 * k}`} strokeDashoffset={-s.time * 60} />
+                </g>
+              );
+            })}
             {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} layer="ground" />)}
             {/* something walking in from off-screen: an arrow on that edge (red = a big one) */}
             {s.enemies.map(e => {
@@ -421,7 +432,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 sway={e.role === 'hydra' ? e.segIndex : null}
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
                 mirror={e.refl && e.refl.state !== 'idle' ? e.refl.state : null} fort={e.fortT > 0} badge={e.type.badge} mad={e.mad ?? 0}
-                weak={e.type.weakPoints ? s.weakPts.filter(w => w.boss === e.id).map(w => `${w.id}:${w.rx}:${w.ry}`).join('|') : ''} />
+                sealed={!!e.sealed} />
             );
           })}
 
@@ -1108,7 +1119,7 @@ function HydraNecks({ heads, k, time }) {
 }
 
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, weak, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0, looks = false }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0, looks = false, sealed = false }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
@@ -1152,7 +1163,10 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       <div className={`squash${hurt ? ' hit' : ''}${mirror === 'on' ? ' mirrored' : ''}`}>
       <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})${looks ? ' scaleX(var(--face, 1))' : ''}`,
         transition: looks ? 'transform 0.14s ease-out' : undefined }}>
-      {shape === 'segment' ? (
+      {shape === 'core' ? (
+        // the Devourer's weak spot: a pulsing eye of flesh
+        <div className={`weak-core${hurt ? ' hit' : ''}`}><i /></div>
+      ) : shape === 'segment' ? (
         <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
       ) : pose ? (
         // attack poses: the warn pictures flicker, the attack picture holds;
@@ -1176,10 +1190,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         </div>
       )}
       {tier === 'treasure' && <div className="lure" />}
-      {weak && weak.split('|').map(w => {
-        const [wid, rx, ry] = w.split(':');
-        return <div key={wid} className="weak-pt" style={{ left: `${50 + rx * 100}%`, top: `${50 + ry * 100}%`, width: 30 * k, height: 30 * k }} />;
-      })}
+      {sealed && <div className="seal-aura" />}
+      {sealed && <div className="seal-tag" style={{ fontSize: 11 * Math.max(0.85, k) }}>SEALED · break its weak spots</div>}
       {showBar && (
         <div style={{ position: 'absolute', left: '10%', right: '10%', top: role === 'hydra' ? `${50 + drawScale * 48}%` : '100%', height: role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
           <div style={{ width: `${hpPct}%`, height: '100%', borderRadius: 3, background: role === 'hydra' ? '#ff4400' : tier === 'elite' ? '#c084fc' : tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
@@ -1433,9 +1445,18 @@ ${TS_CSS}
   .dash-trail { position:absolute; inset:10%; border-radius:50%; box-shadow: 0 0 24px 12px rgba(255,40,40,0.55); }
   .lure { position:absolute; inset:-30%; border-radius:50%; pointer-events:none;
           background: radial-gradient(circle, rgba(255,215,90,0.35) 0%, transparent 65%); animation: lurePulse 1s ease-in-out infinite; }
-  .weak-pt { position:absolute; transform:translate(-50%,-50%); border-radius:50%;
-             background:radial-gradient(circle,#ffff44 30%,#ff8800); border:2px solid #fff;
-             box-shadow:0 0 14px #ffff44; animation: weakPulse 0.45s ease-in-out infinite; }
+  .weak-core { position:absolute; inset:6%; border-radius:50%; animation: corePulse 0.9s ease-in-out infinite;
+    background: radial-gradient(circle at 50% 50%, #fff1f2 0 12%, #e11d48 13% 24%, #4c0519 25% 34%, #fb7185 35% 52%, #9f1239 53% 70%, rgba(76,5,25,0.85) 71%);
+    box-shadow: 0 0 18px #f43f5e, 0 0 4px #fff inset; border:2px solid #fecdd3; }
+  .weak-core i { position:absolute; left:50%; top:50%; width:16%; height:44%; transform:translate(-50%,-50%); border-radius:50%; background:#0a0105; animation: coreLook 2.4s ease-in-out infinite; }
+  .weak-core.hit { filter: brightness(2.2); }
+  @keyframes corePulse { 0%,100% { transform: scale(0.94); } 50% { transform: scale(1.06); } }
+  @keyframes coreLook { 0%,100% { transform: translate(-80%,-50%); } 50% { transform: translate(-20%,-50%); } }
+  .seal-aura { position:absolute; inset:-14%; border-radius:50%; pointer-events:none; border:3px dashed rgba(251,113,133,0.9);
+    box-shadow: 0 0 22px rgba(244,63,94,0.6), inset 0 0 30px rgba(244,63,94,0.35); animation: sealSpin 6s linear infinite; }
+  .seal-tag { position:absolute; left:50%; top:-10%; transform:translateX(-50%); color:#fecdd3; font-weight:900; letter-spacing:1px; pointer-events:none;
+    background:rgba(76,5,25,0.85); border:1px solid #fb7185; border-radius:4px; padding:1px 7px; white-space:nowrap; z-index:2; }
+  @keyframes sealSpin { to { transform: rotate(360deg); } }
   .dmg-float { position:absolute; pointer-events:none; z-index:15; white-space:nowrap;
                transform:translate(-50%,-50%); text-shadow:0 1px 4px rgba(0,0,0,0.9);
                animation: floatUp 1.1s ease-out forwards; }
@@ -1446,7 +1467,6 @@ ${TS_CSS}
   @keyframes flashRed { 0%{filter:brightness(1.4) sepia(1) saturate(8) hue-rotate(-30deg) drop-shadow(0 0 12px red)} 100%{filter:none} }
   @keyframes treasureWiggle { 0%,100%{transform:rotate(-8deg) scale(1)} 50%{transform:rotate(8deg) scale(1.08)} }
   @keyframes lurePulse { 0%,100%{opacity:0.5; transform:scale(0.9)} 50%{opacity:1; transform:scale(1.1)} }
-  @keyframes weakPulse { 0%,100%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.35)} }
   @keyframes floatUp { 0%{opacity:1; transform:translate(-50%,-50%)} 70%{opacity:1} 100%{opacity:0; transform:translate(-50%, calc(-50% - 56px))} }
   @keyframes bannerIn { from{opacity:0; transform:translate(-50%,-50%) scale(0.7)} to{opacity:1; transform:translate(-50%,-50%) scale(1)} }
   @keyframes orbReady { 0%,100%{filter:drop-shadow(0 0 6px #c084fc)} 50%{filter:drop-shadow(0 0 18px #e9d5ff) brightness(1.25)} }

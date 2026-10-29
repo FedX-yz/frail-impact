@@ -189,6 +189,67 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.enemies.filter(e => e.tier === 'basic' && !e.type.horde && e.life == null).slice(keep).forEach(e => { e.life = rand(0.4, 1.8); });
   }
 
+  // ── The Devourer's seal ─────────────────────────────────────────────────
+  // It can't be hurt while SEALED: weak spots open up around the arena, each tied to it by a
+  // tether. Break them all and the seal breaks for a few seconds — hit it then. After that it
+  // seals itself again with one more weak spot (up to 5).
+  const SEAL = { first: 3, max: 5, open: 8, hp: 0.05 };   // weak spots each wave, seconds open, each spot's HP (of the boss's max)
+  function spawnCores(boss, n) {
+    const placed = [];
+    for (let i = 0; i < n; i++) {
+      let p = null;
+      for (let tries = 0; tries < 50 && !p; tries++) {
+        const c = { x: rand(s.W * 0.08, s.W * 0.92), y: rand(s.H * 0.18, s.H * 0.86) };
+        if (!inSpawnArea(c.x, c.y)) continue;
+        if (dist(c.x, c.y, boss.x, boss.y) < boss.size * s.k * 0.5 + K(110)) continue;   // not on the boss
+        if (placed.some(q => dist(q.x, q.y, c.x, c.y) < K(140))) continue;                // spread out
+        if (tries < 35 && s.player.pos && dist(c.x, c.y, s.player.pos.x, s.player.pos.y) < K(90)) continue;
+        p = c;
+      }
+      p = p ?? randomPoint();
+      const c = spawnEnemy('weakspot', { pos: p, affix: null });
+      c.hp = c.maxHp = Math.max(1, Math.round(boss.maxHp * SEAL.hp));
+      c.core = boss.id;
+      placed.push(p);
+      effect({ kind: 'ring', x: p.x, y: p.y, r: K(70), color: '#f43f5e', life: 0.5 });
+    }
+  }
+  function coreBroken(c) {
+    effect({ kind: 'burst', x: c.x, y: c.y, r: K(70), color: '#fb7185' });
+    const boss = s.enemies.find(b => b.id === c.core);
+    const left = s.enemies.filter(x => x.core === c.core).length;
+    floater(left ? `WEAK SPOT BROKEN · ${left} left` : 'WEAK SPOT BROKEN', c.x, c.y - K(40), '#fda4af', true);
+    if (boss) effect({ kind: 'zap', x1: c.x, y1: c.y, x2: boss.x, y2: boss.y, life: 0.35 });
+    shake(0.15);
+  }
+  function updateSeals(dt) {
+    if (s.enemies.some(c => c.core)) s.enemies = s.enemies.filter(c => !c.core || s.enemies.some(b => b.id === c.core));   // boss gone: so are its spots
+    for (const b of s.enemies) {
+      if (!b.type.weakPoints || s.phase === 'clear' || s.phase === 'defeat') continue;
+      const sl = b.seal ?? (b.seal = { wave: 0, open: 0 });
+      if (sl.wave === 0) {
+        sl.wave = 1; b.sealed = true;
+        spawnCores(b, SEAL.first);
+        announce('SEALED · break its weak spots', '#fb7185');
+        continue;
+      }
+      if (b.sealed) {
+        if (!s.enemies.some(c => c.core === b.id)) {
+          b.sealed = false; sl.open = SEAL.open;
+          announce('THE SEAL BREAKS · HIT IT!', '#facc15');
+          effect({ kind: 'flash', color: '#fb7185', life: 0.4 });
+          effect({ kind: 'ring', x: b.x, y: b.y, r: b.size * s.k * 1.1, color: '#facc15', life: 0.6 });
+          shake(0.5); sfx('bigKill');
+        }
+      } else if ((sl.open -= dt) <= 0) {
+        sl.wave++; b.sealed = true;
+        spawnCores(b, Math.min(SEAL.max, SEAL.first + sl.wave - 1));
+        announce('IT SEALS ITSELF AGAIN', '#fb7185');
+        sfx('shield');
+      }
+    }
+  }
+
   function spawnHorde() {
     const st = s.stage;
     // burst in from one side of the arena
@@ -630,6 +691,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false, linked = false } = {}) {
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
+    if (e.sealed) {   // the Devourer behind its seal: break the weak spots first
+      if (s.time - (e.sealHitT ?? -9) > 0.4) { e.sealHitT = s.time; floater('SEALED', e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, '#fda4af', true); sfx('shield'); }
+      return 0;
+    }
     let dmg = rawDmg * M('playerDmg');
     // mirrored: hits you land yourself come back at you, and it takes nothing
     if (e.refl?.state === 'on' && s.direct) { reflectHit(e, dmg); return 0; }
@@ -697,6 +762,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       color: e.affix ? AFFIXES[e.affix].color : e.tier === 'elite' ? '#c084fc' : e.tier === 'treasure' ? '#fbbf24' : e.tier === 'boss' ? '#ff6a3d' : '#ffd84a' });
     sfx(big ? 'bigKill' : 'kill');
     if (e.tier === 'elite') { s.hitStop = Math.max(s.hitStop, 0.05); shake(0.12); }
+    if (t.core) { coreBroken(e); return; }   // a Devourer weak spot (no reward, not a kill)
     const reward = e.affix ? BAL.AFFIX_REWARD : 1;
     const coins = Math.round((t.coin ?? 0) * s.stage.coinScale * s.stats.coinMult * M('coin') * reward);
     const gems  = t.gems ? Math.round(t.gems * s.stage.gemScale * M('gem')) : 0;
@@ -738,7 +804,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
 
     if (e.tier === 'treasure') treasurePowerUp(e);
-    if (e.tier === 'boss') { s.hitStop = 0.28; shake(0.6); stageClear(); return; }
+    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => x.core !== e.id); s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });
@@ -844,19 +910,6 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     pointerHold(true);
     if (s.phase === 'defeat' || s.phase === 'clear') return;
     if (rt.onPointerDown(x, y)) return;   // suspended (Mahoraga) / Tyran's slashes
-    // boss weak points first
-    for (const wp of s.weakPts) {
-      const boss = s.enemies.find(e => e.id === wp.boss);
-      if (!boss) continue;
-      const wx = boss.x + wp.rx * boss.size * s.k, wy = boss.y + wp.ry * boss.size * s.k;
-      if (dist(x, y, wx, wy) <= K(22)) {
-        s.weakPts = s.weakPts.filter(w => w !== wp);
-        const { dmg } = rollClick(wp.mult);
-        effect({ kind: 'ripple', x, y });
-        if (damageEnemy(boss, dmg, { crit: true, color: '#ffff44', label: '⚡WEAK ' }) > 0) { comboHit(); sfx('crit'); shake(0.12); }
-        return;
-      }
-    }
     const e = enemyAt(x, y);
     effect({ kind: 'ripple', x, y, miss: !e });
     const sk = rt.skill();
@@ -1152,7 +1205,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (e.supT <= 0) {
           e.supT = sup.every;
           const R = K(sup.radius);
-          const near = s.enemies.filter(o => o !== e && o.tier !== 'treasure' && !(o.down > 0) && dist(o.x, o.y, e.x, e.y) <= R);
+          const near = s.enemies.filter(o => o !== e && o.tier !== 'treasure' && !o.type.core && !(o.down > 0) && dist(o.x, o.y, e.x, e.y) <= R);
           near.forEach(o => { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * sup.heal); o.fortT = sup.dur; });
           effect({ kind: 'ring', x: e.x, y: e.y, r: R, color: '#4ade80', life: 0.6 });
           if (near.length) floater(`✚ MENDED ×${near.length}`, e.x, e.y - K(44), '#4ade80');
@@ -1199,18 +1252,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     separateEnemies();
     updateAttacks(dt);
 
-    // Boss weak points
-    const bosses = s.enemies.filter(e => e.type.weakPoints);
-    s.weakPts = s.weakPts.filter(w => (w.t -= dt) > 0 && bosses.some(b => b.id === w.boss));
-    s.timers.weak -= dt;
-    if (s.timers.weak <= 0) {
-      s.timers.weak = 0.7;
-      bosses.forEach(b => {
-        if (s.weakPts.filter(w => w.boss === b.id).length < 3 && Math.random() < 0.65) {
-          s.weakPts.push({ id: uid++, boss: b.id, rx: rand(-0.36, 0.36), ry: rand(-0.36, 0.36), t: rand(1.2, 2.1), mult: 3 + Math.floor(Math.random() * 3) });
-        }
-      });
-    }
+    updateSeals(dt);
   }
 
   function resize(W, H) {

@@ -22,8 +22,8 @@ function run(steps, from, prev, signed = false) {
   let i = from;
   for (let guard = 0; i < steps.length && guard < 2000; guard++) {
     const step = steps[i];
-    if (typeof step === 'string') return { ...s, i, line: { who: 'narrator', text: step }, choice: null, wait: 0 };
-    if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? '') }, choice: null, wait: 0 };
+    if (typeof step === 'string') return { ...s, i, line: { who: 'narrator', text: step, at: i }, choice: null, wait: 0 };
+    if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? ''), at: i }, choice: null, wait: 0 };
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
     if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl };   // intro text on black
@@ -85,7 +85,8 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const endCrawl = useCallback(() => setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)), [steps]);
 
   // voiced lines (cast.js → voice): play when the line comes up, cut off by the next one
-  const lineKey = st.line ? `${st.i}:${st.line.who}` : null;
+  // (keyed by the line itself: a choice coming up under it mustn't play it again)
+  const lineKey = st.line ? `${st.line.at}:${st.line.who}` : null;
   useEffect(() => {
     const v = st.line && CAST[st.line.who]?.voice;
     if (v && !skip) playVoice(asset(voiceFile(v.dir, st.line.text)));

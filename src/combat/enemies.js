@@ -113,7 +113,13 @@ export const ENEMY_TYPES = {
     hp: 700, coin: 400, gems: 10, speed: 0,
     bossPatterns: ['slamRing', 'crossSlash', 'barrage', 'rain'],
     cooldown: [2.6, 3.4],
-    weakPoints: true,
+    weakPoints: true,   // SEALED until you break its weak spots around the arena (engine.js → seals)
+  },
+  // The Devourer's weak spots: they open up around the arena while it's sealed. Their HP is set
+  // from the boss's (engine.js → SEAL); they don't attack, move or count as kills.
+  weakspot: {
+    name: 'WEAK SPOT', tier: 'elite', core: true, shape: 'core', move: 'still',
+    size: 58, hp: 1, coin: 0, xp: 0, speed: 0, cooldown: [9e9, 9e9], attacks: [],
   },
   // Worm (like Terraria's Eater of Worlds): HP is split across body parts,
   // every part can be clicked, but the HEAD hurts you if it touches your
