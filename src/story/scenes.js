@@ -112,19 +112,19 @@ export const SCENES = {
     'Somewhere above the city, a signal comes through.',
     { show: 'handler', at: 'right' },
     ['handler', 'Can you hear me? Good. This is your handler.'],
-    ['handler', 'Something big is waking up under the city. Small ones first, then the big one.'],
+    ['handler', 'Something is waking up under the city. The small ones first, then whatever is leading them.'],
     { show: 'astrec', at: 'left' },
-    ['astrec', 'And you want me to... click on them?'],
-    ['handler', 'Very fast. Very hard. Mind the red circles.'],
+    ['astrec', 'Understood. Where do you want me?'],
+    ['handler', 'The outskirts. Watch for the red markings, that\'s where they\'ll strike.'],
     { choice: [
-      { text: '"Let\'s go."',          set: { eager: true } },
-      { text: '"What\'s in it for me?"', set: { eager: false }, goto: 'pay' },
+      { text: '"Let\'s go."',                  set: { eager: true } },
+      { text: '"What do we get out of this?"', set: { eager: false }, goto: 'pay' },
     ] },
-    ['handler', 'That\'s the spirit. Head to the outskirts.'],
+    ['handler', 'Good. Move out.'],
     { end: true },
     { label: 'pay' },
-    ['handler', 'Gems. Shiny ones. You like gems.'],
-    ['astrec', '...Fine.'],
+    ['handler', 'You\'ll be paid in full once the area is secure.'],
+    ['astrec', '...Understood.'],
     { end: true },
 
     // ENDING 1: you failed the test (2 of 3 wrong) and go home. The level isn't cleared, so they can try again.
@@ -146,10 +146,10 @@ export const SCENES = {
   'c1-outskirts-out': [
     { show: 'handler', at: 'right' },
     { if: 'eager', goto: 'eager' },
-    ['handler', 'Done. Your gems are on the way, as promised.'],
+    ['handler', 'Area secure. Payment is on its way, as promised.'],
     { end: true },
     { label: 'eager' },
-    ['handler', 'Clean work. Keep that energy.'],
+    ['handler', 'Clean work.'],
   ],
 
   'c1-street-in': [
@@ -162,7 +162,7 @@ export const SCENES = {
     { bg: 'backgrounds/bg2.png' },
     { show: 'stephen', at: 'right' },
     ['stephen', 'Shortcut over the roofs. Everything up here hits twice as hard.'],
-    ['stephen', 'So do you, though.'],
+    ['stephen', 'The same goes for us. Make it count.'],
   ],
 
   'c1-sewers-in': [
@@ -178,7 +178,7 @@ export const SCENES = {
     { shake: true },
     'The ground shakes.',
     { show: 'astrec', at: 'left' },
-    ['astrec', 'erm what the sigma'],
+    ['astrec', 'What is that thing...?'],
   ],
   'c1-hall-out': [
     { show: 'astrec', at: 'left' },

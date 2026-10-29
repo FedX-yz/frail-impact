@@ -7,17 +7,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { playPress, playStamp, penStart } from '../utils/sfx';
 
-// Page 1: the joke. Edit freely.
+// Page 1: impossibly hard on purpose (it counts for nothing). Edit freely.
 const NONSENSE = [
-  { n: '1', q: 'Evaluate, and show your work:', math: <>∮<sub>∂Ω</sub> e<sup>−x²</sup> · ζ(s) / Γ(½ + iπ) ∧ d(√−1) · lim<sub>n→∞</sub> Σ<sub>k=0</sub><sup>n</sup> (−1)<sup>k</sup> ∫<sub>0</sub><sup>∞</sup> sin(kx²) / ln(x!) dx</> },
-  { n: '2', q: 'A Havoc runs at you at 340 km/h. Your coffee is 82°C. Find the eigenvalues of:', math: <>[ 3 &nbsp;∞ &nbsp;−i ; &nbsp;√2 &nbsp;0 &nbsp;e<sup>π</sup> ; &nbsp;ℵ<sub>0</sub> &nbsp;7 &nbsp;¾ ]</> },
-  { n: '3', q: 'Prove or disprove. Use the space below.', math: <>∀ε&gt;0 ∃δ&gt;0 : &nbsp;P = NP &nbsp;⇔ &nbsp;Havoc(x) ≠ Havoc(x)</> },
+  { n: '1', q: 'Evaluate, and show your work:', math: <>∮<sub>∂Ω</sub> e<sup>−z²</sup> · ζ(s) / Γ(½ + it) dz · lim<sub>n→∞</sub> Σ<sub>k=0</sub><sup>n</sup> (−1)<sup>k</sup> ∫<sub>0</sub><sup>∞</sup> sin(kx²) / ln(x + 1) dx</> },
+  { n: '2', q: 'Find the eigenvalues of the matrix below and determine whether it is diagonalizable:', math: <>[ 3 &nbsp;−2 &nbsp;i ; &nbsp;√2 &nbsp;0 &nbsp;e<sup>π</sup> ; &nbsp;5 &nbsp;7 &nbsp;¾ ]</> },
+  { n: '3', q: 'Prove the following for every continuous f. Use the space below.', math: <>∀ε&gt;0 ∃δ&gt;0 : &nbsp;|x − a| &lt; δ &nbsp;⇒ &nbsp;| ∫<sub>a</sub><sup>x</sup> f(t) e<sup>−t²</sup> dt | &lt; ε</> },
 ];
 // Page 2: the real questions (about the opening). Edit freely: `a` is the index of the right answer.
 const QUESTIONS = [
   { q: 'What are the creatures that overran the world called?', options: ['Frails', 'Havoc', 'Hollows', 'Mutants'], a: 1 },
   { q: 'What are the territories they took from humans called?', options: ['Dead Zones', 'Red Zones', 'Frail Environments', 'Ground Zero'], a: 2 },
-  { q: 'As a manager, where do you watch the battlefield from?', options: ['The front line', 'Drones above', 'A bunker', 'You don\'t'], a: 1 },
+  { q: 'As a manager, where do you watch the battlefield from?', options: ['The front line', 'Drones above', 'A bunker', 'On the field'], a: 1 },
 ];
 const INK = '#1d2a6b';
 
@@ -46,7 +46,7 @@ export default function InterviewTest({ onDone }) {
         </div>
         {page === 0 ? (
           <>
-            <div className="it-note">Answer every question. Calculators are not permitted. Neither is crying.</div>
+            <div className="it-note">Answer every question. Calculators are not permitted.</div>
             {NONSENSE.map(p => (
               <div key={p.n} className="it-q">
                 <div><b>{p.n}.</b> {p.q}</div>

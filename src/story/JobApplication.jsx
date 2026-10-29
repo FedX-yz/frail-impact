@@ -7,10 +7,10 @@ import { playPress, playStamp, penStart } from '../utils/sfx';
 
 // The fine print. Edit freely.
 const APPLICATION_TERMS = [
-  'The Initiative is not responsible for injury, death, or being eaten.',
+  'The Initiative is not responsible for injury or death sustained in the line of duty.',
   'The applicant agrees to manage, deploy and keep alive the agents assigned to them.',
-  'Agents are not to be clicked on. Monsters are.',
-  'Overtime is not paid. Ever.',
+  'All information regarding the Initiative and its operations is classified.',
+  'Employment may be terminated at the sole discretion of the Initiative.',
 ];
 const POSITION = 'Field Manager (probationary)';
 const DEPARTMENT = 'Anomaly Response';
