@@ -11,8 +11,8 @@ import CctvOverlay from './CctvOverlay';
 import TapButton from '../components/TapButton';
 import { Icon, SvgIcon } from '../components/Icon';
 import { withIcons } from '../utils/withIcons';
-import { TS_EFFECTS } from './tenShadows';
-import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, ComboToast, MahoragaLayer, TsChips, TS_CSS,
+import { TS_EFFECTS, SHIKI_IMG } from './tenShadows';
+import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, ComboToast, MahoragaLayer, TsChips, TS_CSS, DogSprite, MAHORAGA_IMG,
   MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK } from './TenShadowsFx';
 
 const BASE = import.meta.env.BASE_URL;
@@ -36,8 +36,8 @@ const PARALLAX = [
   { src: `${BASE}backgrounds/city_far.png`,  loop: `${BASE}backgrounds/city_far_loop.png`,  depth: 14, speed: 22 },
   { src: `${BASE}backgrounds/city_near.png`, loop: `${BASE}backgrounds/city_near_loop.png`, depth: 28, speed: 55 },
 ];
-const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
-const SHIKI_ICON = { dog: '🐺', toad: '🐸', nue: '🦅' };   // Bio's usual kit's shikigami (drawn as icons)
+
+const SHIKI_ICON = { dog: 1, toad: 1, nue: 1 };   // Bio's usual kit's shikigami (drawn sprites, TenShadowsFx.jsx)
 
 // Load attack-pose pictures up front so the first wind-up doesn't show a blank
 Object.values(ENEMY_TYPES).forEach(t => {
@@ -388,10 +388,16 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               );
             }
             // Bio's usual kit: Divine Dogs, the Toad, Nue
-            if (!a.ts && SHIKI_ICON[a.kind]) return (
-              <div key={a.id} className={`shiki classic ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', fontSize: (a.kind === 'nue' ? 40 : 44) * k,
-                opacity: a.life < 1 ? a.life : 1, color: '#c7d2fe' }}><Icon name={a.kind} /></div>
-            );
+            if (!a.ts && SHIKI_ICON[a.kind]) {
+              const tg = a.kind === 'dog' && s.enemies.find(e => e.id === a.target);
+              return (
+                <div key={a.id} className={`shiki classic ${a.kind}`} style={{ position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none',
+                  opacity: a.life < 1 ? a.life : 1, filter: 'drop-shadow(0 0 6px #6366f1) drop-shadow(0 2px 3px #000)' }}>
+                  {a.kind === 'dog' ? <DogSprite white={a.id % 2 === 0} width={70 * k} left={!!tg && tg.x < a.x} />
+                    : <img src={SHIKI_IMG[a.kind]} alt="" draggable={false} width={(a.kind === 'nue' ? 92 : 68) * k} style={{ display: 'block' }} />}
+                </div>
+              );
+            }
             return null;
           })}
           {/* Bio's other kit: Divine Dogs / Totality, Nue, the Toad, Round Deer */}

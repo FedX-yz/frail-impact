@@ -8,6 +8,7 @@ import { playSFX, playPress, playMusic, stopMusic, playVoice, stopVoice } from '
 import { voiceFile } from './voice';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
+import InterviewTest from './InterviewTest';
 
 const BASE = import.meta.env.BASE_URL;
 const NO_STEPS = [];
@@ -16,7 +17,7 @@ const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90 };
 // Plays steps from `i` until one needs the player (a line, a choice, a wait)
 // and returns the new state. Nothing here touches the screen directly.
 function run(steps, from, prev, signed = false) {
-  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false, crawl: null };
+  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false, crawl: null, test: false, ending: null };
   const labelAt = (name) => steps.findIndex(x => x?.label === name);
   let i = from;
   for (let guard = 0; i < steps.length && guard < 2000; guard++) {
@@ -26,6 +27,8 @@ function run(steps, from, prev, signed = false) {
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
     if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl };   // intro text on black
+    if (step.test) return { ...s, i, line: null, choice: null, wait: 0, test: true };   // the interview test (InterviewTest.jsx)
+    if (step.ending) return { ...s, i, line: null, choice: null, wait: 0, ending: step.ending };   // a bad ending: the card, then back to the map
     if (step.application && !signed) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx), once
     if (step.if !== undefined) {   // conditional jump
       if (testFlag(s.flags, step.if) && step.goto) { const j = labelAt(step.goto); if (j >= 0) { i = j; continue; } }
@@ -97,7 +100,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   }, [st.done, st.flags, onEnd]);
 
   const next = useCallback(() => {
-    if (st.done || st.choice || st.application || showLog) return;
+    if (st.done || st.choice || st.application || st.test || st.ending || showLog) return;
     if (st.crawl) { setCrawlTap(t => t + 1); return; }
     if (st.line && !typed) { finish(); return; }
     setSt(prev => {
@@ -118,7 +121,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 
   // waits, auto-play and skip
   useEffect(() => {
-    if (st.done || st.choice || st.application || st.crawl) { if (st.choice || st.application) setSkip(false); return; }
+    if (st.done || st.choice || st.application || st.crawl || st.test || st.ending) { if (st.choice || st.application || st.test || st.ending) setSkip(false); return; }
     let ms = null;
     if (st.wait) ms = st.wait * 1000;
     else if (skip) ms = 70;
@@ -235,6 +238,10 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
         </div>
       )}
       {st.crawl && <IntroCrawl key={st.i} paragraphs={st.crawl} tap={crawlTap} skip={skip} onDone={endCrawl} tall={tall} />}
+      {st.test && (
+        <InterviewTest onDone={passed => setSt(prev => run(steps, prev.i + 1, { ...prev, flags: { ...prev.flags, failedTest: !passed } }, signedRef.current))} />
+      )}
+      {st.ending && <EndingCard ending={st.ending} tall={tall} onDone={() => { if (!ended.current) { ended.current = true; onEnd({ ...st.flags, __ending: st.ending.n }); } }} />}
       {st.application && (
         <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)); }} />
       )}
@@ -288,6 +295,19 @@ function IntroCrawl({ paragraphs, tap, skip, onDone, tall }) {
             textAlign: 'center', opacity: i < n - 1 ? 0.62 : 1, transition: 'opacity 1.2s' }}>{marked(p)}</p>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ENDING n — a bad ending: the title on black, then back to the map (the level isn't cleared)
+function EndingCard({ ending, onDone, tall }) {
+  return (
+    <div onPointerDown={e => e.stopPropagation()} className="vn-crawl" style={{ position: 'absolute', inset: 0, zIndex: 9, background: '#000', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24, textAlign: 'center', cursor: 'default' }}>
+      <div className="vn-crawl-p" style={{ color: '#94a3b8', fontFamily: 'var(--font-narration)', fontSize: tall ? 18 : 22, letterSpacing: 6 }}>ENDING {ending.n}</div>
+      <div className="vn-crawl-p" style={{ color: '#f1f1f1', fontFamily: 'var(--font-dramatic)', fontSize: tall ? 34 : 52, letterSpacing: 4 }}>{ending.title}</div>
+      {ending.text && <div className="vn-crawl-p" style={{ color: '#cbd5e1', fontFamily: 'var(--font-narration)', fontSize: tall ? 16 : 19, maxWidth: 560 }}>{ending.text}</div>}
+      <TapButton className="vn-choice" style={{ marginTop: 10 }} autoFocus onClick={() => { playPress(); onDone(); }}>Try again ↻</TapButton>
     </div>
   );
 }

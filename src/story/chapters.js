@@ -47,7 +47,7 @@ export const CHAPTERS = [
     map: null,
     nodes: [
       {
-        id: 'c1-briefing', name: 'Briefing', desc: 'A call from an unknown number.',
+        id: 'c1-briefing', name: 'The Interview', desc: 'A top-secret job interview at a run-down hospital.',
         x: 9, y: 72, after: [],
         intro: 'c1-briefing',
         rewards: { gems: 5 },

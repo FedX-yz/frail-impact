@@ -1,13 +1,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Bio's Ten Shadows and Mahoraga: everything that's drawn (the rules are in
-// tenShadows.js). Shikigami are game-icons.net silhouettes (data/gameIcons.js)
-// painted in shadow ink with a rim of light, until real sprites exist.
+// tenShadows.js). The Divine Dogs, the Toad, Nue and Mahoraga are drawn sprites
+// (public/allies); the shadows without art yet are game-icons.net silhouettes
+// (data/gameIcons.js) painted in shadow ink with a rim of light.
 // ─────────────────────────────────────────────────────────────────────────────
 import { GAME_ICONS } from '../data/gameIcons';
-import { SHADOWS, SHADOW_BY_ID, COMBOS, costFor, tapFor, combosKnown } from './tenShadows';
+import { SHADOWS, SHADOW_BY_ID, COMBOS, SHIKI_IMG, costFor, tapFor, combosKnown } from './tenShadows';
 
 const BASE = import.meta.env.BASE_URL;
-export const MAHORAGA_IMG = `${BASE}allies/mahoraga.gif`;
+export const MAHORAGA_IMG = `${BASE}allies/mahoraga-shades.png`;
+// the shikigami with art: the black dog looks right, the white one left; the Toad and Nue face you
+// a dog sprite turned toward `left` (true = looking left)
+export function DogSprite({ white, width, left, glow }) {
+  const flip = white ? !left : left;
+  return <img src={white ? SHIKI_IMG.dogWhite : SHIKI_IMG.dogBlack} alt="" draggable={false} width={width}
+    style={{ display: 'block', transform: flip ? 'scaleX(-1)' : undefined, filter: glow }} />;
+}
+const art = (src, width, filter) => <img src={src} alt="" draggable={false} width={width} style={{ display: 'block', filter }} />;
+// the wheel / the toast use the art where there is some
+const ICON_ART = { dogs: SHIKI_IMG.dogWhite, dog: SHIKI_IMG.dogWhite, toad: SHIKI_IMG.toad, nue: SHIKI_IMG.nue };
 export const MAHORAGA_BERSERK_IMG = `${BASE}allies/mahoraga-berserk.png`;   // the berserk General (cut out of the cut-in art)
 export const CUTIN_SUMMON = `${BASE}cardart/bio-shadows-card.png`;          // "…WITH THIS TREASURE I SUMMON!"
 export const CUTIN_BERSERK = `${BASE}cutins/mahoraga-berserk.png`;
@@ -49,29 +60,28 @@ export function TsAllies({ s, k }) {
     const op = a.life < 1 ? Math.max(0, a.life) : 1;
     const base = { position: 'absolute', left: a.x, top: a.y, zIndex: 8, pointerEvents: 'none', opacity: op };
     if (a.kind === 'dog') {
-      const tg = s.enemies.find(e => e.id === a.target), flip = !!tg && tg.x < a.x;
+      const tg = s.enemies.find(e => e.id === a.target), left = !!tg && tg.x < a.x;
+      // Totality: the two dogs as one, bigger, white-hot and red-eyed
       if (a.totality) return (
-        <div key={a.id} className="shiki summoned dog totality" style={{ ...base, filter: a.pack ? 'drop-shadow(0 0 12px #f97316) drop-shadow(0 0 3px #ef4444)' : 'drop-shadow(0 0 12px #e0e7ff) drop-shadow(0 0 3px #ef4444)' }}>
-          <ShikiArt name="dog" size={100 * k} fill="#05040f" rim="#f1f5f9" flip={flip}>
-            <ellipse cx={300} cy={166} rx={26} ry={11} fill="#ef4444" style={{ filter: 'drop-shadow(0 0 10px #ef4444)' }} />
-          </ShikiArt>
+        <div key={a.id} className="shiki summoned dog totality" style={{ ...base, filter: a.pack ? 'drop-shadow(0 0 12px #f97316) drop-shadow(0 0 3px #ef4444)' : 'drop-shadow(0 0 12px #e0e7ff) drop-shadow(0 0 4px #ef4444)' }}>
+          <DogSprite width={124 * k} left={left} />
           {a.howl > 0 && <span className="shiki-howl" style={{ opacity: a.howl / 0.8 }} />}
         </div>
       );
       return (
-        <div key={a.id} className="shiki summoned dog" style={{ ...base, filter: a.pack ? 'drop-shadow(0 0 9px #f97316) drop-shadow(0 2px 3px #000)' : a.white ? 'drop-shadow(0 0 7px #6366f1) drop-shadow(0 2px 3px #000)' : 'drop-shadow(0 0 7px #e0e7ff) drop-shadow(0 2px 3px #000)' }}>
-          <ShikiArt name="dog" size={52 * k} fill={a.white ? '#f8fafc' : INK} rim={a.white ? '#1e1b4b' : '#c7d2fe'} flip={flip} />
+        <div key={a.id} className="shiki summoned dog" style={{ ...base, filter: a.pack ? 'drop-shadow(0 0 9px #f97316) drop-shadow(0 2px 3px #000)' : a.white ? 'drop-shadow(0 0 6px #6366f1) drop-shadow(0 2px 3px #000)' : 'drop-shadow(0 0 6px #e0e7ff) drop-shadow(0 2px 3px #000)' }}>
+          <DogSprite white={a.white} width={70 * k} left={left} />
         </div>
       );
     }
     if (a.kind === 'nue2') return (
       <div key={a.id} className="shiki summoned nue2" style={{ ...base, zIndex: 9 }}>
-        <ShikiArt name="nue" size={74 * k} fill={INK} rim="#fde047" />
+        {art(SHIKI_IMG.nue, 92 * k)}
       </div>
     );
     if (a.kind === 'toad') return (
       <div key={a.id} className="shiki summoned toad" style={{ ...base, filter: 'drop-shadow(0 0 8px #22c55e) drop-shadow(0 2px 3px #000)' }}>
-        <ShikiArt name="toad" size={(a.sit > 0 ? 66 : 50) * k} fill="#06140b" rim="#86efac" />
+        {art(SHIKI_IMG.toad, (a.sit > 0 ? 84 : 68) * k)}
       </div>
     );
     if (a.kind === 'deer') return (
@@ -425,8 +435,11 @@ export function HandSignWheel({ s, sk, W, H, mobile }) {
           <g key={sh.id}>
             {on && <path d={wedgePath(cx, cy, inner, outer, a - Math.PI / 8, a + Math.PI / 8)} fill={ok ? 'rgba(129,140,248,0.38)' : 'rgba(239,68,68,0.22)'} stroke={ok ? '#c7d2fe' : '#f87171'} strokeWidth={2} />}
             <line x1={cx + Math.cos(a + Math.PI / 8) * inner} y1={cy + Math.sin(a + Math.PI / 8) * inner} x2={cx + Math.cos(a + Math.PI / 8) * outer} y2={cy + Math.sin(a + Math.PI / 8) * outer} stroke="rgba(99,102,241,0.35)" strokeWidth={1.5} />
-            <Sil name={sh.icon} x={ix} y={iy} size={iconS * (on ? 1.2 : 1)} fill={!ok ? '#1a1830' : sh.id === 'dogs' ? '#f8fafc' : INK} rim={!ok ? '#4b5563' : on ? '#ffffff' : '#a5b4fc'} sw={20}
-              opacity={ok ? 1 : 0.6} filter={on && ok ? 'drop-shadow(0 0 8px #818cf8)' : undefined} />
+            {ICON_ART[sh.id]
+              ? <image href={ICON_ART[sh.id]} x={ix - iconS * (on ? 0.66 : 0.55)} y={iy - iconS * (on ? 0.6 : 0.5)} width={iconS * (on ? 1.32 : 1.1)} height={iconS * (on ? 1.2 : 1)} preserveAspectRatio="xMidYMid meet"
+                  opacity={ok ? 1 : 0.55} style={{ filter: !ok ? 'grayscale(1) brightness(0.55)' : on ? 'drop-shadow(0 0 8px #818cf8)' : undefined }} />
+              : <Sil name={sh.icon} x={ix} y={iy} size={iconS * (on ? 1.2 : 1)} fill={!ok ? '#1a1830' : INK} rim={!ok ? '#4b5563' : on ? '#ffffff' : '#a5b4fc'} sw={20}
+                  opacity={ok ? 1 : 0.6} filter={on && ok ? 'drop-shadow(0 0 8px #818cf8)' : undefined} />}
             <text x={ix} y={iy + iconS * 0.62 + fs * 0.35} textAnchor="middle" fontSize={fs} fontWeight={800} fill={!ok ? '#6b7280' : on ? '#ffffff' : '#c7d2fe'}
               style={{ letterSpacing: 0.5, paintOrder: 'stroke', stroke: '#05040f', strokeWidth: 3 }}>{sh.short}</text>
             {Array.from({ length: c }, (_, j) => (
@@ -606,13 +619,13 @@ export function MahoragaLayer({ s, k }) {
       <div style={{ position: 'absolute', left: m.x - w * 0.36 * (1 - lift * 0.35), top: m.y + w * 0.42 - w * 0.07, width: w * 0.72 * (1 - lift * 0.35), height: w * 0.14,
         borderRadius: '50%', background: 'rgba(0,0,0,0.55)', zIndex: 13, pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', left: m.x - w / 2, top: Math.max(w * 0.25, m.y - w * 0.3 - rise), width: w, zIndex: 13, pointerEvents: 'none', transform: `scale(${scale})`, transformOrigin: '50% 60%' }}>
-        <div style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 2 * k }}>
-          <DharmaWheel size={w * 0.5} turns={m.wheel} color={color} flash={m.turnFx > 0 || !!f} />
-        </div>
         <img src={m.berserk ? MAHORAGA_BERSERK_IMG : MAHORAGA_IMG} alt="Mahoraga" draggable={false} className={m.berserk ? 'maho-berserk' : undefined}
           style={{ width: '100%', display: 'block', filter: m.invuln > 0.15 && !f ? 'brightness(1.8)' : f ? `drop-shadow(0 0 ${10 + f.t * 30}px #fecaca)` : m.berserk ? 'drop-shadow(0 0 16px #dc2626) drop-shadow(0 0 4px #3b82f6)' : 'drop-shadow(0 0 12px #fde047)' }} />
-        <div style={{ width: '80%', margin: `${3 * k}px auto 0`, height: 7 * k, background: 'rgba(0,0,0,0.7)', borderRadius: 4, border: `1px solid ${color}` }}>
-          <div style={{ width: `${Math.max(0, m.hp / m.maxHp) * 100}%`, height: '100%', background: color, borderRadius: 4 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 * k, width: '86%', margin: `${3 * k}px auto 0` }}>
+          <DharmaWheel size={24 * k} turns={m.wheel} color={color} flash={m.turnFx > 0 || !!f} />
+          <div style={{ flex: 1, height: 7 * k, background: 'rgba(0,0,0,0.7)', borderRadius: 4, border: `1px solid ${color}` }}>
+            <div style={{ width: `${Math.max(0, m.hp / m.maxHp) * 100}%`, height: '100%', background: color, borderRadius: 4 }} />
+          </div>
         </div>
         {m.berserk && m.flashT > 0 && (
           <svg viewBox="-20 -20 40 40" style={{ position: 'absolute', width: 54 * k, height: 54 * k, top: '44%', [m.flashSide > 0 ? 'right' : 'left']: '-22%', overflow: 'visible' }}>
@@ -634,7 +647,8 @@ export function ComboToast({ f }) {
       <div className="ct-icons" style={many ? { flexWrap: 'wrap', width: size * 4 + 6, gap: 2 } : undefined}>
         {f.icons.map((ic, i) => ic === 'wheel'
           ? <DharmaWheel key={i} size={size} turns={Math.floor(t * 3)} color="#fde047" flash={false} />
-          : <ShikiArt key={i} name={ic} size={size} fill={ic === 'dog' && i === 0 && !many ? '#f8fafc' : INK} rim={ic === 'grasp' ? '#818cf8' : '#c7d2fe'} sw={26} />)}
+          : ICON_ART[ic] ? <span key={i} style={{ width: size, display: 'flex', alignItems: 'center' }}>{art(ic === 'dog' && (i > 0 || many) ? SHIKI_IMG.dogBlack : ICON_ART[ic], size)}</span>
+            : <ShikiArt key={i} name={ic} size={size} fill={INK} rim={ic === 'grasp' ? '#818cf8' : '#c7d2fe'} sw={26} />)}
       </div>
       <div>
         <div className="ct-small">NEW COMBO · {f.n}/{f.of}</div>

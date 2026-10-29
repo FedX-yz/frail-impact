@@ -50,10 +50,11 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
 
   const afterBattle = useCallback(() => setPhase(node.outro ? 'outro' : 'result'), [node.outro]);
   const afterScene = useCallback((which) => (f) => {
+    if (f.__ending) { onLeave(); return; }   // a bad ending (scenes.js { ending }): back to the map, nothing saved
     setFlags(f);
     if (which === 'intro') setPhase(node.battle ? 'battle' : node.outro ? 'outro' : 'result');
     else setPhase('result');
-  }, [node.battle, node.outro]);
+  }, [node.battle, node.outro, onLeave]);
 
   useEffect(() => {
     if (phase !== 'battle' || engine) return;

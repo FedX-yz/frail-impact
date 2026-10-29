@@ -32,6 +32,9 @@ export const SHADOWS = [
   { id: 'tiger',    name: 'TIGER FUNERAL', short: 'TIGER',    cost: 3, icon: 'tiger' },
   { id: 'elephant', name: 'MAX ELEPHANT',  short: 'ELEPHANT', cost: 4, icon: 'elephant' },
 ];
+// the shikigami with drawn art (public/allies): the black dog looks right, the white one left
+const ART = import.meta.env.BASE_URL + 'allies/';
+export const SHIKI_IMG = { dogBlack: `${ART}dog-black.png`, dogWhite: `${ART}dog-white.png`, toad: `${ART}toad.png`, nue: `${ART}nue.png` };
 export const SHADOW_BY_ID = Object.fromEntries(SHADOWS.map(x => [x.id, x]));
 export const TAP_SUMMON = [null, 'dogs', 'nue', 'serpent', 'elephant'];   // a tap with that many bars
 // effect kinds TenShadowsFx draws

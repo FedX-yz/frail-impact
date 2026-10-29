@@ -32,12 +32,15 @@
 //   { application: true }             the job application: the player types their name and
 //                                       signs by hand (JobApplication.jsx; edit the terms there)
 //   {manager} inside a line           becomes the player's name from the application
+//   { test: true }                    the interview test (InterviewTest.jsx): a nonsense maths page, then 3
+//                                       questions; 2+ wrong sets the flag failedTest
+//   { ending: { n: 1, title: 'BACK HOME' } }   a bad ending: its card, then back to the map (nothing saved)
 //
 // Everything below is SAMPLE content to show the format. Replace it freely.
 // ─────────────────────────────────────────────────────────────────────────────
 export const SCENES = {
-  // Story mode's first level: you get hired. PLACEHOLDER lines — rewrite them; keep the
-  // { application: true } step (it's skipped on replays once you've signed).
+  // Story mode's first level: the interview. Keep the { test: true } step (fail it → ENDING 1)
+  // and the { application: true } step (skipped on replays once you've signed).
   'c1-briefing': [
     // The opening: black screen, each paragraph fades in, then it all fades out.
     // Music: put a track at public/audio/story/intro.mp3 (it loops until the next { music }).
@@ -45,20 +48,63 @@ export const SCENES = {
     // {style:words} lights words up: red, havoc (glitchy red), gold, zone (worn gold), green, title, em, dim, shake
     { crawl: [
       '{em:Decades ago} a {green:virus} spread throughout the world, mutating humans and other life forms alike into terrifying and powerful creatures. Since then, those creatures have shifted society into chaos, massacring humans in mass to satisfy their hunger.',
-      'Only a small percentage of the total human population remain today, {em:lowering with each passing day.}',
+      'Only a small percentage of the total human population remains today, {em:lowering with each passing day.}',
       'These creatures were called {havoc:"Havoc"}, and their claimed territories from humans are assigned as {zone:"Frail Environments"}.',
       'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the {havoc:Havoc}. Thanks to those efforts, today fending off Havoc hordes became much more manageable, {em:but still on the edge.}',
-      '{title:Frail-Initiative} is a task force created with the intention to unite the strongest humans alive to delve deep into the source of the virus outbreak. A {zone:frail environment} notoriously known for its overwhelming amount of powerful Havoc creatures.',
     ] },
+    { crawl: ['{title:JUNE 9TH 2020}'] },
     { bg: null },
-    'A phone buzzes in the dark. Unknown number.',
+    'You are driving a car heading to the location of your job interview, it\'s a big one.',
+    'It\'s a cold morning, the streets are empty as usual. But it\'s a good thing, it means peace, even if temporary.',
+    'And you are part of the reason this peace came to be. As the manager of the Anti-Havoc Task Force you helped guide your team to victory in battle against the ferocious Havoc beasts in these very streets.',
+    'Given your role as the manager you don\'t get to be on the field, only watch the battlefield from drones above, giving intel to your team. However you are just as important as your reliable field soldiers.',
+    'In fact you\'re crucial to the operation, to make sure your comrades don\'t die and to let them know exactly what\'s happening on the field.',
+    'This interview you\'re going to is top secret. You\'re not even sure why you were selected, but your employer told you to go anyways, said it\'s a big opportunity.',
+    '...',
+    'You reach the location. It\'s a run-down hospital, how welcoming. There\'s a single window lit up.',
+    'You enter the building and try to go to the lit up room. There\'s no electricity, so you stumble your way over there. Inside that room...',
+    'You find balloons with rainbow letters spelling out "Happy Birthday!", and a birthday cake with a candle lit on a table.',
+    ['stranger', 'Happy birthday, dear guest.'],
     { show: 'stranger', at: 'center' },
-    ['stranger', 'Don\'t hang up. You don\'t know me, but I know you.'],
-    ['stranger', 'This city has a monster problem. Not the metaphorical kind.'],
-    ['stranger', 'There\'s a task force that deals with them. The Frail Initiative. It needs a new manager.'],
-    ['stranger', 'Someone to hire the agents, send them out, and bring them back in one piece. That\'s you.'],
-    ['stranger', 'Why you? You\'ll find out. Probably.'],
-    ['stranger', 'There\'s an application on your desk. Sign it.'],
+    'You hear a raspy voice coming from behind two hospital ward screens. Thanks to the light from the candle you can see the person\'s ominous figure.',
+    { choice: [
+      { text: 'What the fuck?', set: { swore: true } },
+      { text: 'Thanks!' },
+    ] },
+    ['stranger', 'Please don\'t be alarmed, I was just so delighted to know you\'d come here. Have a seat.'],
+    { choice: [{ text: 'Sit down' }] },
+    'You grab a chair near the table and sit down facing the figure behind the screens.',
+    ['stranger', 'You are here for a very special reason, do you know why that is?'],
+    { choice: [
+      { text: 'Yes', goto: 'knows' },
+      { text: 'No' },
+    ] },
+    ['stranger', 'You\'ve been chosen for your excellent skills as a manager of the squadrons you\'ve led throughout your career. That\'s the type of person I\'m looking for to be in charge of a very special mission.'],
+    { goto: 'groundzero' },
+    { label: 'knows' },
+    ['stranger', 'Oh? Then tell me.'],
+    { choice: [{ text: 'You want me to become a manager for a special mission.' }] },
+    ['stranger', '...How clever, that\'s correct!'],
+    { label: 'groundzero' },
+    ['stranger', '...Ground zero.'],
+    ['stranger', 'I am reuniting a squad to delve deep into the ground zero of the virus outbreak, where it all started.'],
+    ['stranger', 'I call it... the Frail Initiative.'],
+    { choice: [{ text: 'Ground... zero?!? That\'s not a mission, that\'s a march towards death!!' }] },
+    ['stranger', 'Oh? So you\'re calling it quits? Is that what I\'m hearing?'],
+    { choice: [{ text: '...No. Tell me more.' }] },
+    ['stranger', 'Very well.'],
+    ['stranger', 'The Frail Initiative was created to investigate the ground zero in search of clues to what may have caused the Havoc virus outbreak, in an effort to produce a cure with our finds.'],
+    ['stranger', 'You may be thinking it\'s too dangerous for a squad to go to these depths, however...'],
+    ['stranger', 'The Frail Initiative is formed by a group of the strongest humans available on earth.'],
+    ['stranger', 'Your everyday Havoc threat is nothing more than child\'s play for those individuals. But the ground zero still poses a great threat regardless of our group\'s level, and that\'s where you come in, dear manager.'],
+    ['stranger', 'Are we on the same page? Hm?'],
+    'An opportunity to work alongside the strongest agents...',
+    { choice: [{ text: 'Sounds good, I\'m in.' }] },
+    ['stranger', 'I am delighted to hear that. However... you must pass a test to get the job.'],
+    ['stranger', 'Look over the table next to you, the papers and pen should be at your disposal. Good luck.'],
+    'You take one of the papers...',
+    { test: true },
+    { if: 'failedTest', goto: 'ending1' },
     { application: true },
     ['stranger', 'Welcome to the Frail Initiative, Manager {manager}. Your handler will take it from here.'],
     { hide: 'all' },
@@ -79,6 +125,15 @@ export const SCENES = {
     { label: 'pay' },
     ['handler', 'Gems. Shiny ones. You like gems.'],
     ['astrec', '...Fine.'],
+    { end: true },
+
+    // ENDING 1: you failed the test (2 of 3 wrong) and go home. The level isn't cleared, so they can try again.
+    { label: 'ending1' },
+    { hide: 'all' },
+    'You failed the interview.',
+    'You go home.',
+    { music: null },
+    { ending: { n: 1, title: 'BACK HOME' } },
   ],
 
   'c1-outskirts-in': [
