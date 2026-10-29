@@ -113,7 +113,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const hpScale = type.tier === 'treasure' ? Math.sqrt(s.stage.hpScale) : s.stage.hpScale;
     // Elites can roll an affix (stage 4+)
     const affix = opts.affix !== undefined ? opts.affix
-      : type.tier === 'elite' && Math.random() < s.stage.affixChance + M('affixAdd', 0) ? pick(Object.keys(AFFIXES)) : null;
+      : type.tier === 'elite' && !type.noAffix && Math.random() < s.stage.affixChance + M('affixAdd', 0) ? pick(Object.keys(AFFIXES)) : null;
     const affixHp = affix === 'swift' ? 0.7 : affix ? 1.3 : 1;
     const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp * M('enemyHp') * affixHp));
     // most enemies walk in from the left or right edge instead of popping in
@@ -154,7 +154,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     return e;
   }
 
-  const countTier = tier => s.enemies.filter(e => e.tier === tier && !e.type.horde).length;
+  const countTier = tier => s.enemies.filter(e => e.tier === tier && !e.type.horde && !e.type.core).length;
 
   // Bosses: the Devourer is one enemy; the Worm and Hydra are linked groups
   function spawnBoss(typeId) {
@@ -194,7 +194,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // It can't be hurt while SEALED: weak spots open up around the arena, each tied to it by a
   // tether. Break them all and the seal breaks for a few seconds — hit it then. After that it
   // seals itself again with one more weak spot (up to 5).
-  const SEAL = { first: 3, max: 5, open: 8, hp: 0.05 };   // weak spots each wave, seconds open, each spot's HP (of the boss's max)
+  const SEAL = { first: 3, max: 5, open: 8, hp: 0.08 };   // weak spots each wave, seconds open, each spot's HP (of the boss's max)
   function spawnCores(boss, n) {
     const placed = [];
     for (let i = 0; i < n; i++) {
@@ -384,7 +384,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       T.elite -= dt;
       if (T.elite <= 0) {
         T.elite = st.eliteEvery / M('eliteRate');
-        if (st.elites.length && countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) spawnEnemy(pick(st.elites));
+        // (one-of-a-kind elites, like the Devourer, only one at a time)
+        const pool = st.elites.filter(id => !ENEMY_TYPES[id]?.one || !s.enemies.some(e => e.typeId === id));
+        if (pool.length && countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) spawnEnemy(pick(pool));
       }
     }
   }
@@ -882,7 +884,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
 
     if (e.tier === 'treasure') treasurePowerUp(e);
-    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => x.core !== e.id && !x.swarmGroup); s.globs = []; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
+    if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
+    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.swarmGroup); s.globs = []; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });

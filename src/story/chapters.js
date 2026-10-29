@@ -22,7 +22,7 @@
 //   battle: { ... } or leave it out for a cutscene-only node
 //     level:    difficulty, same scale as endless stages (1 = easiest)
 //     kills:    enemies to defeat (default: the endless stage's number)
-//     boss:     'devourer' | 'worm' | 'hydra' | 'swarmking' — fought after the kills (default: none)
+//     boss:     'worm' | 'hydra' | 'swarmking' — fought after the kills (default: none)
 //     enemies:  basic enemy ids (enemies.js), elites: elite ids ([] = none)
 //     hordes:   false = no swarmling hordes
 //     affixes:  false = elites never get affixes

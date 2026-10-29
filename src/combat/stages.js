@@ -57,7 +57,7 @@ export function makeEndlessStage(n) {
     // stage 1: Xiao don't shoot yet; stage 2: half of them do; then all of them
     armedBasicChance: n < 2 ? 0 : n < 3 ? 0.5 : 1,
 
-    elites: n < 2 ? ['bonk'] : n < 3 ? ['bonk', 'rusher'] : ['bonk', 'rusher', 'shielder'],
+    elites: n < 2 ? ['bonk'] : n < 3 ? ['bonk', 'rusher'] : n < 5 ? ['bonk', 'rusher', 'shielder'] : ['bonk', 'rusher', 'shielder', 'devourer'],
     eliteCap: Math.min(3, 1 + Math.floor(n / 3)),
     eliteEvery: Math.max(8, 16 - n * 0.8),   // big ones come less often
 
@@ -66,7 +66,7 @@ export function makeEndlessStage(n) {
     hordeSize: Math.min(9, 4 + Math.floor(n / 2)),
     hordeArmedChance: Math.min(0.5, 0.15 + n * 0.04),
 
-    boss: ['devourer', 'worm', 'hydra', 'swarmking'][(n - 1) % 4],
+    boss: ['worm', 'hydra', 'swarmking'][(n - 1) % 3],
     bossCooldownMult: Math.max(0.6, 1 - (n - 1) * 0.05),
 
     hpScale: tapered(n, BAL.HP_GROWTH, BAL.HP_GROWTH_LATE),

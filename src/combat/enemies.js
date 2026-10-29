@@ -106,15 +106,18 @@ export const ENEMY_TYPES = {
     shield: { pct: 0.7, radius: 125, regen: 5 },
   },
 
-  // ── Bosses (rotate: Devourer → Worm → Hydra → Devourer …) ──
+  // Devourer of Worlds (elite, stage 5+, one at a time): SEALED until you break its weak spots
+  // around the arena (engine.js → seals). It stands still and throws the big attacks.
   devourer: {
-    name: 'DEVOURER OF WORLDS', tier: 'boss',
-    img: `${BASE}enemies/hoxboss.jpg`, size: 150,
-    hp: 700, coin: 400, gems: 10, speed: 0,
-    bossPatterns: ['slamRing', 'crossSlash', 'barrage', 'rain'],
-    cooldown: [2.6, 3.4],
-    weakPoints: true,   // SEALED until you break its weak spots around the arena (engine.js → seals)
+    name: 'DEVOURER OF WORLDS', tier: 'elite', noAffix: true, one: true,
+    img: `${BASE}enemies/hoxboss.jpg`, size: 120,
+    hp: 320, coin: 180, speed: 0,
+    bossPatterns: ['crossSlash', 'barrage', 'slamRing'],
+    cooldown: [3.4, 4.6],
+    weakPoints: true,
   },
+
+  // ── Bosses (rotate: Worm → Hydra → Swarm King → Worm …) ──
   // THE SWARM KING: hides behind a SWARM SHIELD (it takes no damage) and sends swarms after you,
   // Vampire Survivors style. It spits acid that leaves pools on the ground: the pools eat swarms
   // (lead them through) but don't hurt you, the splash does. Destroy 3 swarms and the shield is

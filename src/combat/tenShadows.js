@@ -518,7 +518,7 @@ export function createTenShadows(c) {
           if (t && !(t.down > 0) && live) {
             const bound = t.boundT > 0;
             sHit(t, sk2.serpentPct * (lev ? 1.5 : 1), { color: lev ? '#7dd3fc' : '#a5b4fc', label: lev ? 'LEVIATHAN ' : 'SERPENT ' });
-            if (t.hp > 0 && s.enemies.includes(t) && t.tier !== 'boss' && !t.group && (bound || t.hp / t.maxHp <= (lev ? Math.max(sk2.devour, 0.5) : sk2.devour))) {
+            if (t.hp > 0 && s.enemies.includes(t) && t.tier !== 'boss' && !t.group && !t.type.weakPoints && (bound || t.hp / t.maxHp <= (lev ? Math.max(sk2.devour, 0.5) : sk2.devour))) {
               floater(bound ? 'BOUND PREY · SWALLOWED' : 'SWALLOWED', t.x, t.y - K(40), '#c7d2fe', true);
               if (bound) combo('boundprey');
               sKill(t);
@@ -564,7 +564,7 @@ export function createTenShadows(c) {
             sHit(e, tg.pct * (1 + missing) * (helpless(e) ? 1.25 : 1) * (tg.pack ? 1.2 : 1), { color: '#fdba74', label: 'TIGER ' });
             effect({ kind: 'claws', x: e.x, y: e.y, r: radius(e), a: rand(-0.7, 0.7), life: 0.32 });
             shake(0.12); sfx('crit');
-            if (tg.mauls === 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group && e.hp / e.maxHp <= 0.25) {
+            if (tg.mauls === 0 && s.enemies.includes(e) && e.tier !== 'boss' && !e.group && !e.sealed && e.hp / e.maxHp <= 0.25) {
               floater('FUNERAL', e.x, e.y - K(44), '#fdba74', true);
               sKill(e);
             }
