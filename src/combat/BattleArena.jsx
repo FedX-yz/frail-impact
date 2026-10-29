@@ -354,6 +354,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             })()}
             {s.hazards.map(h => {
               const grow = Math.min(1, h.t / h.grow), fade = h.t > h.life - 0.5 ? (h.life - h.t) / 0.5 : 1;
+              // the Swarm King's acid: bubbling (it eats swarmlings, it doesn't hurt you)
+              if (h.acid) return (
+                <g key={h.id} opacity={fade}>
+                  <circle cx={h.x} cy={h.y} r={h.r * (0.4 + 0.6 * grow)} fill="rgba(163,230,53,0.30)" stroke="#d9f99d" strokeWidth={2.5 * k} />
+                  <circle cx={h.x} cy={h.y} r={h.r * 0.62 * grow} fill="rgba(190,242,100,0.22)" />
+                  {[0, 1, 2, 3, 4].map(i => {
+                    const ph = (s.time * 0.9 + i * 0.37 + h.id * 0.13) % 1, a = i * 1.9 + h.id;
+                    return <circle key={i} cx={h.x + Math.cos(a) * h.r * 0.55} cy={h.y + Math.sin(a) * h.r * 0.4} r={(2 + 4 * ph) * k * grow} fill="none" stroke="#ecfccb" strokeWidth={1.5} opacity={1 - ph} />;
+                  })}
+                </g>
+              );
               return <circle key={h.id} cx={h.x} cy={h.y} r={h.r * (0.4 + 0.6 * grow)} fill={`rgba(132,204,22,${(grow < 1 ? 0.15 : 0.32) * fade})`}
                 stroke={`rgba(190,242,100,${0.8 * fade})`} strokeWidth={2} strokeDasharray={grow < 1 ? '4 4' : 'none'} />;
             })}
@@ -432,9 +443,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 sway={e.role === 'hydra' ? e.segIndex : null}
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
                 mirror={e.refl && e.refl.state !== 'idle' ? e.refl.state : null} fort={e.fortT > 0} badge={e.type.badge} mad={e.mad ?? 0}
-                sealed={!!e.sealed} />
+                sealed={e.sealed ? (e.sealLabel ?? 'SEALED · break its weak spots') : null} sealKind={e.type.swarmShield ? 'swarm' : null} />
             );
           })}
+
+          {/* the Swarm King's SWARM SHIELD: bats circling it */}
+          {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : Array.from({ length: 10 }, (_, i) => {
+            const a = s.time * 1.6 + i * 0.628, R = b.size * k * (0.62 + 0.06 * Math.sin(s.time * 3 + i)), sz = 34 * k;
+            return <img key={`sw${b.id}-${i}`} src={ENEMY_TYPES.swarmling.img} alt="" draggable={false}
+              style={{ position: 'absolute', left: b.x + Math.cos(a) * R - sz / 2, top: b.y + Math.sin(a) * R * 0.75 - sz / 2, width: sz, height: sz, zIndex: 9, pointerEvents: 'none',
+                transform: Math.sin(a) < 0 ? 'scaleX(-1)' : undefined, filter: 'drop-shadow(0 0 6px #84cc16)' }} />;
+          }))}
 
           {/* ── Kit visuals above the enemies ───────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 9, overflow: 'visible' }}>
@@ -586,6 +605,18 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <circle cx={m.x + (1 - p) * 160 * k} cy={m.y - (1 - p) * 420 * k} r={(18 + 22 * p) * k} fill="#fdba74" style={{ filter: 'drop-shadow(0 0 16px #f97316)' }} />;
             })()}
             {s.effects.filter(f => OVER.has(f.kind)).map(f => <EffectShape key={f.id} f={f} k={k} />)}
+            {/* the Swarm King's acid: where it lands, and the glob arcing there */}
+            {s.globs.map(g => {
+              if (g.t < 0) return null;
+              const p = Math.min(1, g.t / g.dur), x = g.x0 + (g.x - g.x0) * p, y = g.y0 + (g.y - g.y0) * p - Math.sin(p * Math.PI) * 160 * k;
+              return (
+                <g key={g.id}>
+                  <circle cx={g.x} cy={g.y} r={62 * k} fill={`rgba(163,230,53,${0.08 + 0.2 * p})`} stroke="#a3e635" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
+                  <circle cx={g.x} cy={g.y} r={62 * k * p} fill="none" stroke="#ecfccb" strokeWidth={2 * k} opacity={0.8} />
+                  <circle cx={x} cy={y} r={(11 + 5 * p) * k} fill="#bef264" stroke="#3f6212" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 8px #84cc16)' }} />
+                </g>
+              );
+            })}
             {/* projectiles fly above everything on the field (enemy shots, your shots) */}
             {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} layer="air" />)}
             {s.shots.filter(sh => !sh.maho).map(sh => (
@@ -1119,7 +1150,7 @@ function HydraNecks({ heads, k, time }) {
 }
 
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
-  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0, looks = false, sealed = false }) {
+  frozen, down, flashRed, hurt, dashing, paused, hpPct, shieldR, shieldPct, affix, pose, poses, drawScale = 1, turns, sway = null, mirror = null, fort = false, badge = null, mad = 0, looks = false, sealed = null, sealKind = null }) {
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
@@ -1190,8 +1221,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         </div>
       )}
       {tier === 'treasure' && <div className="lure" />}
-      {sealed && <div className="seal-aura" />}
-      {sealed && <div className="seal-tag" style={{ fontSize: 11 * Math.max(0.85, k) }}>SEALED · break its weak spots</div>}
+      {sealed && <div className={`seal-aura${sealKind ? ` ${sealKind}` : ''}`} />}
+      {sealed && <div className={`seal-tag${sealKind ? ` ${sealKind}` : ''}`} style={{ fontSize: 11 * Math.max(0.85, k) }}>{sealed}</div>}
       {showBar && (
         <div style={{ position: 'absolute', left: '10%', right: '10%', top: role === 'hydra' ? `${50 + drawScale * 48}%` : '100%', height: role === 'hydra' ? 8 : 5, background: '#222a', borderRadius: 3, marginTop: 2 }}>
           <div style={{ width: `${hpPct}%`, height: '100%', borderRadius: 3, background: role === 'hydra' ? '#ff4400' : tier === 'elite' ? '#c084fc' : tier === 'treasure' ? '#fbbf24' : '#ff4444' }} />
@@ -1457,6 +1488,8 @@ ${TS_CSS}
   .seal-tag { position:absolute; left:50%; top:-10%; transform:translateX(-50%); color:#fecdd3; font-weight:900; letter-spacing:1px; pointer-events:none;
     background:rgba(76,5,25,0.85); border:1px solid #fb7185; border-radius:4px; padding:1px 7px; white-space:nowrap; z-index:2; }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
+  .seal-aura.swarm { border-color: rgba(163,230,53,0.9); box-shadow: 0 0 22px rgba(132,204,22,0.6), inset 0 0 30px rgba(132,204,22,0.35); }
+  .seal-tag.swarm { color:#ecfccb; background:rgba(26,46,5,0.88); border-color:#a3e635; }
   .dmg-float { position:absolute; pointer-events:none; z-index:15; white-space:nowrap;
                transform:translate(-50%,-50%); text-shadow:0 1px 4px rgba(0,0,0,0.9);
                animation: floatUp 1.1s ease-out forwards; }

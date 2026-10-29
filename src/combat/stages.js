@@ -66,7 +66,7 @@ export function makeEndlessStage(n) {
     hordeSize: Math.min(9, 4 + Math.floor(n / 2)),
     hordeArmedChance: Math.min(0.5, 0.15 + n * 0.04),
 
-    boss: ['devourer', 'worm', 'hydra'][(n - 1) % 3],
+    boss: ['devourer', 'worm', 'hydra', 'swarmking'][(n - 1) % 4],
     bossCooldownMult: Math.max(0.6, 1 - (n - 1) * 0.05),
 
     hpScale: tapered(n, BAL.HP_GROWTH, BAL.HP_GROWTH_LATE),

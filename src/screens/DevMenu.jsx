@@ -8,7 +8,7 @@ import { MODIFIERS } from '../combat/stages';
 // 5 times) or open the site with ?dev in the URL. Everything here changes
 // your real save, so use "Reset Save" in Settings to start clean afterwards.
 // ─────────────────────────────────────────────────────────────────────────────
-const SPAWNABLE = ['xiao', 'swarmling', 'bonk', 'rusher', 'shielder', 'treasure', 'devourer', 'worm', 'hydra'];
+const SPAWNABLE = ['xiao', 'swarmling', 'bonk', 'rusher', 'shielder', 'treasure', 'devourer', 'worm', 'hydra', 'swarmking'];
 const RC = { 6: '#ff4444', 5: '#f0c040', 4: '#a855f7', 3: '#60a5fa' };
 
 export default function DevMenu({ engine, actions, state, mobile, onClose }) {

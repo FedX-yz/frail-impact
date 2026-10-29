@@ -115,6 +115,16 @@ export const ENEMY_TYPES = {
     cooldown: [2.6, 3.4],
     weakPoints: true,   // SEALED until you break its weak spots around the arena (engine.js → seals)
   },
+  // THE SWARM KING: hides behind a SWARM SHIELD (it takes no damage) and sends swarms after you,
+  // Vampire Survivors style. It spits acid that leaves pools on the ground: the pools eat swarms
+  // (lead them through) but don't hurt you, the splash does. Destroy 3 swarms and the shield is
+  // gone, but it spits faster (engine.js → updateSwarmKing).
+  swarmking: {
+    name: 'THE SWARM KING', tier: 'boss',
+    img: `${BASE}enemies/swarmking.jpg`, size: 160,
+    hp: 700, coin: 400, gems: 10, speed: 0, cooldown: [9e9, 9e9], attacks: [],
+    swarmShield: { swarms: 3, size: 14 },
+  },
   // The Devourer's weak spots: they open up around the arena while it's sealed. Their HP is set
   // from the boss's (engine.js → SEAL); they don't attack, move or count as kills.
   weakspot: {
@@ -186,4 +196,6 @@ export const ATTACK_DMG = {
   bite: 14,   // worm head touching your cursor
   blast: 24,  // Volatile elite explosion
   poison: 5,  // Toxic puddle, per tick
+  acid: 16,   // the Swarm King's acid landing on you
+  swarmBite: 5,   // a Swarm King swarmling touching your cursor
 };
