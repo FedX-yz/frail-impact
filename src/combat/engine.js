@@ -1157,6 +1157,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
   function stageClear() {
     s.phase = 'clear'; s.phaseT = 3;
+    s.timeStop = 0;   // a time stop ends with its stage (it used to freeze the start of the next one)
     rt.reset('clear');
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = [];
@@ -1168,6 +1169,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
   function startDefeat() {
     s.phase = 'defeat'; s.phaseT = 2.6;
+    s.timeStop = 0;
     rt.reset('defeat');
     s.attacks = []; s.shots = []; s.hazards = []; s.globs = []; s.combo.n = 0;
     s.banner = { text: 'DEFEATED', sub: s.stage.story ? null : `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
@@ -1175,6 +1177,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
   function loadStage(n) {
     s.stageNum = n; s.stage = makeStage(n);
+    s.timeStop = 0;
     rt.reset('load');
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
     s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = []; s.globs = [];

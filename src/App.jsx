@@ -31,10 +31,11 @@ const SAVE_KEY = 'rhg_v3';
 const isResetting = () => window.__frailResetting === true;
 
 // The deck is saved as full card objects; swap them for the current
-// definitions so edits to characters.js reach old saves.
+// definitions so edits to characters.js reach old saves. A card that isn't in
+// characters.js any more leaves its slot empty (kept as-is it had no stats: 0 HP).
 function rehydrateCard(card) {
   if (!card) return null;
-  return CHARACTERS.find(c => c.id === card.id) ?? card;
+  return CHARACTERS.find(c => c.id === card.id) ?? null;
 }
 
 function loadSave() {

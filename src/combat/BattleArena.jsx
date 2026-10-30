@@ -1309,14 +1309,14 @@ function KitChip({ s, sk, cur, mobile }) {
   if (cur?.type === 'souls') out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to hurl' : ' · hold to charge'}</Chip>);
   else if (s.kit.souls > 0) out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}</Chip>);
   if (cur?.type === 'tenshadows') out.push(<TsChips key="ts" s={s} sk={cur} mobile={mobile} />);
-  if (cur?.type === 'zero') iceChips(s, cur).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
+  if (cur?.type === 'zero') iceChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
   if (s.kit.entangle) out.push(<Chip key="e" color="#a78bfa">🔗 ENTANGLED {s.kit.entangle.t.toFixed(1)}s</Chip>);
   if (s.stats.skill?.passive?.type === 'infinity' && !s.kit.oraSkill) out.push(<Chip key="i" color="#93c5fd">∞ {Math.round(s.kit.inf)}%</Chip>);
-  if (cur?.type === 'tide') out.push(<Chip key="h" color="#38bdf8">{s.kit.tide ? `💧 BEAM ${Math.max(0, cur.dur - s.kit.tide.t).toFixed(1)}s` : s.player.held && s.kit.tideHold === s.player.held.t0 ? 'let go, then hold again' : 'hold M1 for the beam'}</Chip>);
-  else if (cur?.style === 'hold') out.push(<Chip key="h" color="#67e8f9">{s.player.held ? 'CHARGING…' : 'hold M1, let go to fire'}</Chip>);
+  if (cur?.type === 'tide') out.push(<Chip key="h" color="#38bdf8">{s.kit.tide ? `💧 BEAM ${Math.max(0, cur.dur - s.kit.tide.t).toFixed(1)}s` : s.player.held && s.kit.tideHold === s.player.held.t0 ? 'let go, then hold again' : (mobile ? 'hold' : 'hold M1') + ' for the beam'}</Chip>);
+  else if (cur?.style === 'hold') out.push(<Chip key="h" color="#67e8f9">{s.player.held ? 'CHARGING…' : mobile ? 'hold, let go to fire' : 'hold M1, let go to fire'}</Chip>);
   if (sk.passive?.type === 'copy' && s.kit.copied) out.push(<Chip key="cp" color="#f472b6">⧉ {s.kit.copied.name} {Math.max(0, Math.ceil(s.kit.copyT))}s</Chip>);
   if (s.kit.oraSkill) out.push(<Chip key="o" color="#f472b6">ORA · {s.kit.oraSkill.name}</Chip>);
   return out.length ? <>{out}</> : null;

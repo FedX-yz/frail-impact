@@ -26,9 +26,9 @@ export const ICE_INTRO = CUTIN;
 // effect kinds IceFx.jsx draws
 export const ICE_EFFECTS = new Set(['iceburst', 'shatter', 'flashfreeze']);
 // the HUD chips while he's out: [key, colour, text]
-export function iceChips(s, sk) {
+export function iceChips(s, sk, mobile = false) {
   const n = s.enemies.filter(e => e.frozen > 0 && e.tier !== 'boss').length, figs = s.kit.ice?.figures.length ?? 0;
-  const out = [['ice', '#bae6fd', `❄ ${n} frozen${s.player.held && !s.player.held.ice?.drag ? ' · let go: SHATTER' : ' · hold M1: Shatter'}`]];
+  const out = [['ice', '#bae6fd', `❄ ${n} frozen${s.player.held && !s.player.held.ice?.drag ? ' · let go: SHATTER' : mobile ? ' · hold: Shatter' : ' · hold M1: Shatter'}`]];
   if (figs) out.push(['fig', '#e0f2fe', `🧊 ${figs}/${Math.round(sk.cap)}`]);
   return out;
 }

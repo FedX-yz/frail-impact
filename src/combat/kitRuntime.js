@@ -1202,6 +1202,8 @@ export function createKitRuntime(api) {
     s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = []; s.kit.maws = []; s.kit.tentacles = [];
     ts.reset();
     ice.reset();
+    // 6★ Ice's Absolute Zero is a time stop: it ends with the stage (its storm with it)
+    if (s.ult.active?.type === 'absolutezero') s.ult.active = null;
     s.choosing = null;
     if (s.mahoraga) { s.mahoraga = null; if (s.ult.active?.type === 'mahoraga') s.ult.active = null; }
     s.kit.barrage = null; s.kit.emberPt = null; s.kit.entangle = null;
