@@ -5,8 +5,9 @@
 // 3★/4★. On phones the open folder covers the screen.
 //
 // handlerNote (optional, in characters.js): a handwritten line on the card's file.
-import { useState, useMemo } from 'react';
-import { playClose, playPress } from '../utils/sfx';
+import { useState, useMemo, useRef } from 'react';
+import { playClose, playPress, playStamp } from '../utils/sfx';
+import { platinumOn, setPlatinum } from '../utils/secrets';
 import { thumb } from '../utils/assets';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
@@ -45,7 +46,28 @@ export default function CardsScreen({ navigate, collection, cardInventory = {}, 
   const found = CHARACTERS.filter(owned).length;
 
   const pick = (o) => { playPress(); setOpen(o); };
-  const toggle = (id) => { playPress(); setDrawer(d => (d === id ? null : id)); };
+  // The Platinum banner's secret (utils/secrets.js)
+  const knocks = useRef([]);
+  const [knockT, setKnockT] = useState(0);
+  const [cleared, setCleared] = useState(null);   // the clearance stamp, while it's showing
+  const knock = () => {
+    const now = performance.now();
+    knocks.current = [...knocks.current.filter(t => now - t < 2600), now];
+    setKnockT(now);
+    if (knocks.current.length < 6) return false;
+    knocks.current = [];
+    const first = !platinumOn();
+    setPlatinum(true);
+    playStamp(1.2);
+    setCleared({ first, t: now });
+    setTimeout(() => setCleared(null), 3200);
+    return true;
+  };
+  const toggle = (id) => {
+    if (id === '6' && knock()) return;
+    if (id !== '6') knocks.current = [];
+    playPress(); setDrawer(d => (d === id ? null : id));
+  };
 
   const cabinet = (
     <div className="rc-cab">
@@ -57,7 +79,7 @@ export default function CardsScreen({ navigate, collection, cardInventory = {}, 
         const isOpen = drawer === d.id;
         return (
           <div key={d.id} className="rc-dwrap">
-            <button className={`rc-drawer${isOpen ? ' open' : ''}`} onClick={() => toggle(d.id)}>
+            <button key={d.id === '6' ? knockT : undefined} className={`rc-drawer${isOpen ? ' open' : ''}${d.id === '6' && knockT ? ' knock' : ''}`} onClick={() => toggle(d.id)}>
               <span className="rc-label">{d.label}<small>{d.sub}</small></span>
               <span className="rc-pull" />
               <span className="rc-cnt">{have} / {total}{d.id === 'sets' ? ' complete' : ''}</span>
@@ -123,6 +145,16 @@ export default function CardsScreen({ navigate, collection, cardInventory = {}, 
         <div className="rc-sheet">
           <button className="rc-close" onClick={() => { playClose(); setOpen(null); }}>[&nbsp;close&nbsp;]</button>
           {desk}
+        </div>
+      )}
+
+      {cleared && (
+        <div className="rc-clear" onClick={() => setCleared(null)}>
+          <div className="rc-clear-stamp">
+            <div className="a">Ω CLEARANCE {cleared.first ? 'GRANTED' : 'ON FILE'}</div>
+            <div className="b">PLATINUM SERIES</div>
+            <div className="c">{cleared.first ? 'a new banner is open in RECRUIT' : 'the banner is in RECRUIT'}</div>
+          </div>
         </div>
       )}
 
@@ -290,6 +322,17 @@ const CSS = `
   .rc-cabtop { font-size:10.5px; letter-spacing:3px; color:#1a1c1f; text-align:center; background:#d8d2c0; padding:3px 0; box-shadow:inset 0 0 0 1px #000; }
   .rc-drawer { position:relative; width:100%; height:78px; display:flex; align-items:center; justify-content:center; gap:16px; cursor:pointer; font-family:inherit;
     background:linear-gradient(180deg,#5d636b,#454a51); border:2px solid #1d1f22; box-shadow:inset 0 2px 0 rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.35); transition:filter .12s; }
+  .rc-drawer.knock { animation: rcKnock .22s ease-out; }
+  @keyframes rcKnock { 0% { transform: translateX(0); } 25% { transform: translateX(-3px) rotate(-0.4deg); } 55% { transform: translateX(3px) rotate(0.3deg); } 100% { transform: translateX(0); } }
+  .rc-clear { position:fixed; inset:0; z-index:300; display:grid; place-items:center; background: radial-gradient(ellipse at center, rgba(226,232,240,0.18), rgba(0,0,0,0.75)); animation: rcClearIn .25s ease-out both; cursor:pointer; }
+  .rc-clear-stamp { transform: rotate(-8deg); border: 5px double #e2e8f0; color:#f8fafc; padding: 18px 30px; text-align:center; background: rgba(15,23,42,0.85);
+    box-shadow: 0 0 40px rgba(186,230,253,0.45); animation: rcStamp .3s cubic-bezier(.3,1.6,.5,1) both; font-family: var(--font-hit, serif); }
+  .rc-clear-stamp .a { font-size: clamp(14px, 2.4vw, 22px); letter-spacing: 4px; color:#bae6fd; }
+  .rc-clear-stamp .b { font-size: clamp(30px, 6vw, 58px); letter-spacing: 3px; line-height: 1.05;
+    background: linear-gradient(180deg, #fff 0%, #e2e8f0 40%, #94a3b8 55%, #f8fafc 75%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .rc-clear-stamp .c { font-family: var(--font-ui); font-size: 12px; letter-spacing: 2px; color:#cbd5e1; margin-top: 6px; }
+  @keyframes rcClearIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rcStamp { from { transform: rotate(-8deg) scale(2.4); opacity: 0; } to { transform: rotate(-8deg) scale(1); opacity: 1; } }
   .rc-drawer:hover { filter:brightness(1.12); }
   .rc-drawer.open { height:54px; }
   .rc-label { background:#efe7d3; color:#1d1711; width:200px; padding:5px 8px; text-align:center; box-shadow:inset 0 0 0 2px #2b2b2b, 0 0 0 3px #8e949b; font-size:13px; line-height:1.2; }

@@ -3,8 +3,9 @@ import { BANNERS, DEFAULT_SCHEDULE } from '../data/banners.js';
 
 const DAY = 86400000;
 const byId = id => BANNERS.find(b => b.id === id);
-// banners with `hidden: true` never show to players, whatever the schedule says
-const shown = id => { const b = byId(id); return !!b && !b.hidden; };
+// banners with `hidden: true` never show to players, whatever the schedule says; `secret: true`
+// ones don't come from the schedule either (the gacha adds them where they've been found)
+const shown = id => { const b = byId(id); return !!b && !b.hidden && !b.secret; };
 
 // A schedule as saved in the file → { permanent: [ids], entries: [{ id, banner, start, end }] }
 // with times in ms (end: Infinity = no end). Bad entries are dropped; null if it isn't a schedule.

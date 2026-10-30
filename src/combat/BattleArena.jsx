@@ -14,6 +14,8 @@ import { withIcons } from '../utils/withIcons';
 import { TS_EFFECTS, SHIKI_IMG } from './tenShadows';
 import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, ComboToast, MahoragaLayer, TsChips, TS_CSS, DogSprite, MAHORAGA_IMG,
   MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK } from './TenShadowsFx';
+import { IceGround, IceFigures, IceOver, IceEffect, IceScreen, ICE_CSS } from './IceFx';
+import { ICE_EFFECTS, iceChips } from './icePlatinum';
 
 const BASE = import.meta.env.BASE_URL;
 const STATUS_PORTRAITS = {
@@ -50,6 +52,7 @@ Object.values(ENEMY_TYPES).forEach(t => {
 export default function BattleArena({ engine, mainCard, mobile, children, comboTop = 40 }) {
   const ref = useRef(null);
   const frameRef = useRef(null);
+  const qIsM2 = useRef(false);   // Q was pressed as M2 (so its release is M2 letting go)
   // enemy id → DOM node; positions are written straight to these every frame
   const nodes = useRef(new Map());
   const parallaxRefs = useRef([]);
@@ -118,9 +121,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       if (e.repeat) return;   // holding E doesn't spam it
       if (engine.state.choosing && /^[1-3]$/.test(e.key)) { engine.choose(Number(e.key) - 1); return; }
       if (e.key === 'e' || e.key === 'E') engine.activateUlt();
-      if (e.key === 'q' || e.key === 'Q') engine.special();   // M2 for trackpads
+      // Q: the second skill on kits that have one (6★ Ice), otherwise M2 for trackpads
+      if ((e.key === 'q' || e.key === 'Q') && !engine.skill2()) { qIsM2.current = true; engine.special(); }
     };
-    const onKeyUp = (e) => { if (e.key === 'q' || e.key === 'Q') engine.specialUp(); };
+    const onKeyUp = (e) => { if ((e.key === 'q' || e.key === 'Q') && qIsM2.current) { qIsM2.current = false; engine.specialUp(); } };
     // M2 is tracked with mouse events: a right-press while M1 is already held doesn't fire pointerdown
     const onMouseUp = (e) => { if (e.button === 2) engine.specialUp(); };
     // let go of the mouse outside the window / switch apps: the holds end
@@ -157,6 +161,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
   const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); clickT.current = performance.now() / 1000; engine.special(x, y); } };   // M2: the card's special move
   const onSpecial = useCallback((down) => (down ? engine.special() : engine.specialUp()), [engine]);
+  const onSkill2 = useCallback(() => engine.skill2(), [engine]);   // phone: the SKILL button
   // phone: sliding the thumb on the SPECIAL button points Bio's hand-sign wheel
   const onSpecialMove = useCallback((dx, dy) => engine.signAim(dx, dy), [engine]);
 
@@ -183,9 +188,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const curSkill = engine.curSkill?.();
   const curPassive = engine.curPassive?.();
   const sp = engine.specialInfo?.();
+  const sp2 = engine.skill2Info?.();   // Q: 6★ Ice's Flash Freeze
   const P = pl.pos;
   const hover = s.hoverId != null ? s.enemies.find(e => e.id === s.hoverId) : null;
-  const OVER = new Set(['burst', 'shards', 'crit', 'ripple', 'poof', 'bolt', 'rabbits', 'hand', 'claws', 'wisp', 'saved', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
+  const OVER = new Set(['iceburst', 'shatter', 'flashfreeze', 'burst', 'shards', 'crit', 'ripple', 'poof', 'bolt', 'rabbits', 'hand', 'claws', 'wisp', 'saved', 'bigjaws', 'dslash', 'beam', 'slash', 'zap', 'fist', 'stab', 'ratio', 'spiral', 'crack', 'cut', 'implode', 'spikes', 'ring']);   // effects drawn above enemies
   const hpRatio = pl.maxHp ? pl.hp / pl.maxHp : 0;
   // the battle cursor (Settings → Cursor): its skill ring follows the SPECIAL circle, its ult ring the orb
   const prefs = getSettings(), gcTheme = prefs.cursor ?? 'cyan';
@@ -325,6 +331,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             })}
             {/* Bio: Max Elephant's floods, Round Deer's ward, Toad-bound prey, the garden's floor under the enemies */}
             <TsGround s={s} k={k} P={P} time={s.time} />
+            {/* 6★ Ice: frost lines, the figures' cold */}
+            <IceGround s={s} k={k} time={s.time} />
             {/* Hox: Eldritch Presence — a void around your cursor, eyes on its rim watching the nearest enemy */}
             {curPassive?.type === 'presence' && P && !s.mahoraga && (
               <EldritchAura P={P} R={curPassive.radius * k} k={k} time={s.time} look={s.enemies.length ? s.enemies.reduce((b, e) => (!b || Math.hypot(e.x - P.x, e.y - P.y) < Math.hypot(b.x - P.x, b.y - P.y) ? e : b), null) : null} />
@@ -424,6 +432,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           })}
           {/* Bio's other kit: Divine Dogs / Totality, Nue, the Toad, Round Deer */}
           <TsAllies s={s} k={k} />
+          {/* 6★ Ice: the ice figures */}
+          <IceFigures s={s} k={k} />
 
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
           <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
@@ -522,6 +532,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             })()}
             {/* Ten Shadows: the Toad's tongue, the Great Serpent, Tiger Funeral, Piercing Ox, Max Elephant */}
             <TsOver s={s} k={k} time={s.time} />
+            {/* 6★ Ice: Freeze meters, ice around frozen enemies, shards, the Shatter charge */}
+            <IceOver s={s} k={k} P={P} time={s.time} />
             {curSkill?.type === 'tenshadows' && !touchMode && !ringsOn && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
             {/* Hox: the Abyssal Maw opening under the cursor, jaws closing */}
             {(s.kit.maws ?? []).map(m => <Maw key={m.id} m={m} k={k} />)}
@@ -655,6 +667,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Mahoraga's summon / berserk, the garden: cut-ins */}
         {s.kit.cutin && <CutIn c={s.kit.cutin} />}
+        {/* 6★ Ice: Absolute Zero (the burst art, the frozen world, the storm) */}
+        <IceScreen s={s} mainCard={mainCard} mobile={mobile} />
         {s.kit.found && <ComboToast f={s.kit.found} />}
 
         <StageBarView {...stageBarProps(s, bossParts)} />
@@ -693,7 +707,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null}
           spKind={sp?.kind} spColor={sp?.color} spHint={sp?.hint} onSpecial={onSpecial} onSpecialMove={onSpecialMove}
           spFill={!sp ? 0 : sp.kind === 'cd' ? Math.round((1 - (sp.cdMax ? sp.cd / sp.cdMax : 0)) * 40) / 40 : Math.round((sp.fill ?? sp.n / sp.max) * 40) / 40}
-          spText={!sp ? '' : sp.kind === 'cd' ? (sp.cd > 0 ? `${Math.ceil(sp.cd)}s` : '') : `${sp.n}`} />
+          spText={!sp ? '' : sp.kind === 'cd' ? (sp.cd > 0 ? `${Math.ceil(sp.cd)}s` : '') : `${sp.label ?? ''}${sp.n}`}
+          q={sp2 ? { color: sp2.color, hint: sp2.hint, ready: !(sp2.cd > 0), fill: Math.round((1 - (sp2.cdMax ? sp2.cd / sp2.cdMax : 0)) * 40) / 40, text: sp2.cd > 0 ? `${Math.ceil(sp2.cd)}s` : (mobile ? 'SKILL' : 'Q') } : null}
+          onSkill2={onSkill2} />
 
         {/* Room 16's ult: pick a skill (the fight waits) */}
         {s.choosing && (
@@ -989,6 +1005,7 @@ function AttackShape({ a, k, layer }) {
 
 function EffectShape({ f, k }) {
   if (TS_EFFECTS.has(f.kind)) return <TsEffect f={f} k={k} />;   // Bio's
+  if (ICE_EFFECTS.has(f.kind)) return <IceEffect f={f} k={k} />;  // 6★ Ice's
   const p = Math.min(1, f.t / (f.life ?? 0.5));
   if (f.kind === 'beam') return (
     <g opacity={1 - p * p}>
@@ -1172,7 +1189,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
   const ax = affix ? AFFIXES[affix] : null;
   let filter = tint ?? 'none';
   if (down) filter = sway != null ? 'brightness(0.75)' : 'grayscale(1) brightness(0.5)';
-  else if (frozen) filter = 'hue-rotate(180deg) brightness(1.4) saturate(2)';
+  else if (frozen) filter = 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)';   // icy blue whatever colour it was
   else if (flashRed || pose) filter = 'none';
   else if (hurt) filter = `${tint ?? ''} brightness(2.2)`;
   const showBar = tier !== 'boss' || role === 'hydra' || (grouped && role !== 'head');
@@ -1216,14 +1233,14 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
         // the Devourer's weak spot: a pulsing eye of flesh
         <div className={`weak-core${hurt ? ' hit' : ''}`}><i /></div>
       ) : shape === 'segment' ? (
-        <div className="worm-seg" style={{ filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : 'none' }} />
+        <div className="worm-seg" style={{ filter: frozen ? 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)' : hurt ? 'brightness(2)' : 'none' }} />
       ) : pose ? (
         // attack poses: the warn pictures flicker, the attack picture holds;
         // the wrapper turns them toward the attack (--aim-rot / --aim-flip)
         <div className="pose-aim">{[pose === 'warn' ? poses.warn : poses.attack].flat().map((src, i, all) => (
           <img key={src} src={src} alt="" draggable={false}
             className={`enemy-img pose ${pose}${all.length > 1 ? ` flick${i}` : ''}`}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', filter: frozen ? 'hue-rotate(180deg) brightness(1.4)' : hurt ? 'brightness(2)' : undefined }} />
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', filter: frozen ? 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)' : hurt ? 'brightness(2)' : undefined }} />
         ))}</div>
       ) : (
         <img src={img} alt="" draggable={false} decoding="async"
@@ -1291,6 +1308,7 @@ function KitChip({ s, sk, cur, mobile }) {
   if (cur?.type === 'souls') out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to hurl' : ' · hold to charge'}</Chip>);
   else if (s.kit.souls > 0) out.push(<Chip key="m" color="#e879f9">👻 {s.kit.souls}</Chip>);
   if (cur?.type === 'tenshadows') out.push(<TsChips key="ts" s={s} sk={cur} mobile={mobile} />);
+  if (cur?.type === 'zero') iceChips(s, cur).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
@@ -1307,7 +1325,7 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{Children.map(children, c => withIcons(c))}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spHint, onSpecial, onSpecialMove }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spHint, onSpecial, onSpecialMove, q, onSkill2 }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -1321,7 +1339,18 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
             title={mobile ? undefined : spHint ?? (spKind === 'cd' ? 'Special: right-click (M2) or Q' : 'Charge: tap M2 / Q to stock one; hold M2, Q or M1 for 1s to keep charging, let go to release')}
             style={{ '--sp': spColor, width: mobile ? 52 : 46, height: mobile ? 52 : 46 }}>
             <span className="sp-fill" style={{ height: `${Math.min(1, spFill) * 100}%` }} />
-            <span className="sp-txt">{spText || (mobile ? 'SPEC' : 'M2')}</span>
+            <span className="sp-txt">{spText || (mobile ? (q ? 'FIG' : 'SPEC') : 'M2')}</span>
+          </div>
+        )}
+        {/* Q: a second skill (6★ Ice's Flash Freeze), above the SPECIAL circle */}
+        {q && (
+          <div className={`sp-btn${q.ready ? ' ready' : ''}${mobile ? '' : ' display'}`}
+            {...(mobile ? holdButton(onSkill2, null) : {})}
+            onContextMenu={e => e.preventDefault()}
+            title={mobile ? undefined : q.hint}
+            style={{ '--sp': q.color, width: mobile ? 52 : 46, height: mobile ? 52 : 46, bottom: mobile ? '62%' : '58%' }}>
+            <span className="sp-fill" style={{ height: `${Math.min(1, q.fill) * 100}%` }} />
+            <span className="sp-txt" style={{ fontSize: q.text.length > 3 ? 10 : 13 }}>{q.text}</span>
           </div>
         )}
         {/* Portrait first, so the frame's ring and bar sit on top of it */}
@@ -1406,6 +1435,7 @@ function holdButton(onDown, onUp, onMove) {
 const ARENA_CSS = `
   .battle-arena.gc-on, .battle-arena.gc-on * { cursor: none !important; }   /* the game draws the cursor */
 ${TS_CSS}
+${ICE_CSS}
   .mad-aura { position:absolute; inset:-10%; border-radius:50%; pointer-events:none; z-index:-1;
     background: radial-gradient(circle, rgba(126,34,206,0.35), rgba(76,29,149,0.15) 55%, transparent 72%); box-shadow: 0 0 14px rgba(168,85,247,0.6); }
   .mad-aura.full { animation: madPulse 0.5s ease-in-out infinite alternate; box-shadow: 0 0 20px rgba(239,68,68,0.75); }

@@ -4,6 +4,8 @@ const WHEEL_KEY = 'frail_wheel';
 const COMBO_KEY = 'frail_wheel_found';
 const WHEEL_HASH = '3fc6fbc18e6c75ec9e2c7ac785dca5c5c30f037426a1d743b9a302aece5ef4ac';
 
+const PLAT_KEY = 'frail_platinum';
+
 const read = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, v) => { try { if (v == null) localStorage.removeItem(key); else localStorage.setItem(key, v); } catch { /* storage blocked */ } };
 
@@ -35,4 +37,11 @@ export function foundCombo(id) {
 }
 export function combosFound() {
   try { return JSON.parse(read(COMBO_KEY) || '[]'); } catch { return []; }
+}
+
+// The Platinum banner (6★ Ice), found in Records (CardsScreen.jsx). Per device, like the wheel.
+export const platinumOn = () => read(PLAT_KEY) === '1';
+export function setPlatinum(on) {
+  write(PLAT_KEY, on ? '1' : null);
+  if (on) write('frail_banner', 'platinum-series');   // the gacha opens on it next time
 }

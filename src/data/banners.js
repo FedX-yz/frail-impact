@@ -74,18 +74,26 @@ export const BANNERS = [
       uiFrame: { size: [4412, 2310], card: [690, 357, 3139, 1932] },
     },
     {
-      // Placeholder until the Platinum cards have kits: shows as COMING SOON and can't be pulled on.
-      // hidden: players don't see it at all (even if it's on the schedule). Delete that line to show it.
+      // The Platinum Series: a secret banner. It never shows from the schedule; a device sees it
+      // once someone there finds the secret in Records (CardsScreen.jsx, utils/secrets.js).
+      // Only 6★ Ice can be pulled so far (Bonk and Ramsf are still unpullable).
       id: 'platinum-series',
-      hidden: true,
+      secret: true,
       name: 'Platinum Series',
-      subtitle: 'Limited · 6★ Platinum',
+      subtitle: 'Classified · 6★ Platinum',
       accentColor: '#e2e8f0',
       featuredIds: [37, 38, 39],
       boostedRarity: 6,
-      boostedChance: 0.5,
-      comingSoon: true,
-      uiAssets: { bg: null, char1: null, char2: null, text: null },
+      boostedChance: 0.75,
+      sixChance: 0.3,      // a top-tier pull here is a 6★ 30% of the time (10% elsewhere)
+      // placeholder art (made in code; replace any layer with the real one, same size)
+      uiAssets: {
+        bg:    'ui/ui_platinumbannerbg.png',
+        char1: 'ui/ui_platinumbannerchar1.png',   // Bonk and Ramsf, behind (coming later)
+        char2: 'ui/ui_platinumbannerchar2.png',   // Ice, in front
+        text:  'ui/ui_platinumbannertext.png',
+      },
+      uiFrame: { size: [3200, 2000], card: [320, 250, 2560, 1600] },
     },
     {
       id: 'unending-hunger',

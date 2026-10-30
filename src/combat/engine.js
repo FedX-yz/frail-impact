@@ -669,7 +669,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (a.kind === 'shot') {
           const sp = a.speed * dt * rt.shotSpeed(a, dt);   // Infinity slows shots down
           a.x += a.ux * sp; a.y += a.uy * sp;
-          if ((s.fire.length || s.kit.ward) && rt.shotBlocked(a)) {   // Doro's fire walls burn them up, Bio's Round Deer erases them
+          if ((s.fire.length || s.kit.ward || s.kit.ice?.walls.length || s.kit.ice?.figures.length) && rt.shotBlocked(a)) {   // Doro's fire walls burn them up, Bio's Round Deer erases them, 6★ Ice's frost lines and figures stop them
             if (s.fire.length) effect({ kind: 'burst', x: a.x, y: a.y, r: K(18), color: '#fb923c' });
             finishAttack(a); continue;
           }
@@ -801,7 +801,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.vuln) dmg *= e.vuln;                 // Bio: bound by the Toad / standing in the shadow garden
     e.lastHit = s.time;
     const pv = rt.passive();
-    if (e.frozen > 0 && pv?.type === 'frost') dmg *= 1 + pv.bonus;
+    if (e.frozen > 0 && (pv?.type === 'frost' || pv?.type === 'subzero')) dmg *= 1 + pv.bonus;   // (6★ Ice: Sub-Zero)
     // Hox: MAD enemies take more damage (each stack +2%, more with superimposition)
     if (e.mad > 0 && (pv?.type === 'presence' || s.ult.active?.type === 'devourer')) dmg *= 1 + e.mad * (pv?.type === 'presence' ? pv.per : 0.02);
     if (crit && pv?.type === 'critCharge') charge *= 1 + pv.bonus;   // Stephen: crits charge the ult faster
@@ -1053,6 +1053,15 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!P) return false;
     s.player.m2 = { t0: s.time };
     return rt.special(P.x, P.y);
+  }
+  // Q on kits with a second skill (6★ Ice's Flash Freeze): at the cursor. false = Q is just M2
+  function skill2(x, y) {
+    if (!rt.skill2Info()) return false;
+    if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return true;
+    if (x != null) s.player.pos = { x, y };
+    const P = s.player.pos;
+    if (P) asYou(() => rt.skill2(P.x, P.y));
+    return true;
   }
   function specialUp() { asYou(specialUpNow); }
   function specialUpNow() {
@@ -1451,7 +1460,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   const choose = (i) => rt.choose(i);   // Room 16's ult: pick a skill
 
-  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), curPassive: () => rt.passive(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, specialUp, signAim: (dx, dy) => rt.signAim(dx, dy), activateUlt, setStats, loadStage, announce, setReserved, dev };
+  return { state: s, setPaused, restart, choose, curSkill: () => rt.skill(), curPassive: () => rt.passive(), specialInfo: () => rt.specialInfo(), update, resize, pointerMove, pointerDown, pointerHold, special, specialUp, skill2, skill2Info: () => rt.skill2Info(), signAim: (dx, dy) => rt.signAim(dx, dy), activateUlt, setStats, loadStage, announce, setReserved, dev };
 }
 
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n));

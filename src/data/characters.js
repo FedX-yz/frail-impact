@@ -538,28 +538,41 @@ export const CHARACTERS = [
   },
 
   // ── 6★ Platinum Series (the good guys; a Gold Series for the bad guys comes later).
-  // Placeholders: no kits, no titles yet, and `unpullable` keeps them out of every pull.
-  // Bonk and Ramsf have no framed card yet, so their full-body art is used in its place.
+  // The Platinum Series (6★). Only Ice has a kit so far: he's pulled on the secret Platinum
+  // banner only (bannerOnly). Bonk and Ramsf: no kits, no titles yet, and `unpullable` keeps
+  // them out of every pull. They have no framed card yet, so their full-body art stands in.
   {
     id: 37,
     name: 'Ice',
-    subtitle: 'Platinum Series',     // title TBD
+    subtitle: 'Zero Point',
     rarity: 6,
     series: 'platinum',
-    unpullable: true,                // not in any pull yet (remove when it's ready)
-    element: null,
+    bannerOnly: 'platinum-series',   // only pulled on this banner (a secret one, banners.js)
+    element: 'Ice',
     color: '#a5f3fc',
     image:           `${BASE}characters/ice-platinum.png`,
     characterImage:  `${BASE}characters/ice-platinum.png`,
     cardArt:         `${BASE}sprites/ice-platinum.png`,
     sprite:          `${BASE}sprites/ice-platinum.png`,
+    // the art that slams in when he bursts (Absolute Zero). Placeholder: his full-body art
+    burstArt:        `${BASE}sprites/ice-platinum.png`,
+    burstFocus:      [49, 10],       // [x %, y %] of his face in burstArt (the cut-in centres on it)
     portraitFocus:   [50, 12, 3],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/6star.mp4`,
-    resultVideo:     null,
-    stats: { hp: 1600, atk: 200, def: 100 },   // placeholder
-    skill: null,                     // kit coming later
-    ult: null,
+    resultVideo:     eyecatch('ice-platinum'),   // the Platinum eyecatch
+    stats: { hp: 2000, atk: 240, def: 115 },
+    skill: {
+      name: 'Zero Point',
+      description: 'Clicks build Freeze, hold M1 to Shatter everything frozen, drag a frost line, Q to Flash Freeze, M2 for ice figures.',
+      effect: 'zero_point',
+    },
+    ult: {
+      name: 'Absolute Zero',
+      description: 'Time stops, then an ice storm shatters everything frozen.',
+      effect: 'absolute_zero',
+      cooldown: 32,
+    },
     passive: null,
   },
   {

@@ -136,6 +136,24 @@ export const SKILLS = {
                               lv1: { every: 30 }, si: { every: -2 },
                               desc: "Copies another 5★ agent's passive and switches to a new one every {every}s." } },
 
+  // ── PLATINUM (6★ Ice): every style at once — click, hold, drag, Q and M2 (icePlatinum.js) ──
+  zero_point:    { type: 'zero',      style: 'platinum',
+                   chill: 34, freezeDur: 4,                         // click: Freeze per click (a full meter = FROZEN)
+                   full: 0.9, minPct: 3, pct: 9,                    // hold M1: Shatter
+                   cooldown: 10, qRadius: 150, qPct: 1.5,           // Q: Flash Freeze
+                   cap: 3, figPct: 3, figR: 110, figChill: 35,      // M2: ice figures
+                   wallLen: 700, wallDur: 4, wallChill: 140,        // drag: frost line
+                   lv1: { chill: 25, minPct: 1.8, pct: 5.4, cooldown: 13, qRadius: 120, qPct: 0.9, cap: 2, figPct: 1.8 },
+                   si: { chill: 3, pct: 1.4, minPct: 0.4, cooldown: -0.6, qRadius: 10, qPct: 0.25, figPct: 0.5, wallLen: 60 },
+                   desc: 'ZERO POINT. CLICK: every click builds FREEZE on the target ({chill} a click). A full meter FREEZES it solid for {freezeDur}s (elites take twice as many clicks; bosses never freeze, their meter turns into a heavy slow). '
+                     + 'HOLD M1 and let go: SHATTER. Every frozen enemy on screen breaks at once for up to {pct} click DMG (full in {full}s); bosses take it scaled by their freeze meter. '
+                     + 'DRAG (hold M1 and move): draw a FROST LINE up to {wallLen} long that blocks enemy shots and freezes whatever walks through it, for {wallDur}s. '
+                     + 'Q: FLASH FREEZE. Everything within {qRadius} of your cursor freezes on the spot ({qPct} click DMG). {cooldown}s cooldown. '
+                     + 'M2: ICE FIGURES. Tap to sculpt an ice figure at your cursor (up to {cap}): it chills everything near it and soaks enemy shots. Hold M2 for 1s and let go to detonate them all ({figPct} click DMG and a burst of Freeze around each). A Shatter sets them off too.',
+                   passive: { type: 'subzero', bonus: 0.25, chain: 40,
+                              lv1: { bonus: 0.15, chain: 25 }, si: { bonus: 0.04, chain: 6 },
+                              desc: 'Sub-Zero: frozen enemies take +{bonus} DMG from everything. Chain Frost: every shattered enemy throws shards that add {chain} Freeze to whatever is near it.' } },
+
   // ── HOLD: hold M1, release to fire ─────────────────────────────────────
   frost_bolt:    { type: 'lance',     style: 'hold', full: 1.2, minPct: 2.5, pct: 10, width: 50, freeze: 1.5,
                    lv1: { minPct: 1.4, pct: 5.5, freeze: 1 },
@@ -176,6 +194,7 @@ export const STYLES = {
   charge:  { name: 'CHARGE', how: 'Tap M2 to stock up · hold M1 or M2 for 1s to charge, let go to release', phone: 'Tap SPECIAL to stock up · hold anywhere 1s to charge, let go to release', color: '#e879f9' },
   hold:    { name: 'HOLD',   how: 'Hold M1, release to fire',        phone: 'Hold, let go to fire',              color: '#67e8f9' },
   drag:    { name: 'DRAG',   how: 'Hold M1 and drag',                phone: 'Hold and drag',                     color: '#fb923c' },
+  platinum:{ name: 'PLATINUM', how: 'Click · hold M1 · drag · Q · M2', phone: 'Tap · hold · drag · SKILL · FIGURE', color: '#e2e8f0' },
 };
 
 export const ULTS = {
@@ -200,6 +219,11 @@ export const ULTS = {
   devourer_wakes: { type: 'devourer', dur: 8, gaze: 4, gazeR: 150, slam: 4, crunch: 14, devour: 0.35, bossPct: 0.1, charge: 1.4,
                     si: { dur: 0.5, gaze: 0.5, crunch: 2, bossPct: 0.015 },
                     desc: 'THE DEVOURER WAKES. A colossal eye opens over the arena for {dur}s. Its gaze follows your cursor and burns everything near it ({gaze} click DMG per second), tentacles burst from the dark to smash the enemies far from you ({slam} click DMG), and everything goes MAD. Then it feeds: every enemy is bitten for {crunch} click DMG plus 1 per Madness stack, anything under {devour} HP is devoured (bosses lose {bossPct} of their max HP instead), and you are fully healed.' },
+
+  // 6★ Ice (Platinum): time stops, then the storm
+  absolute_zero:  { type: 'absolutezero', dur: 5, storm: 22, shatter: 32, charge: 1.2,
+                    si: { dur: 0.5, storm: 3, shatter: 4 },
+                    desc: 'ABSOLUTE ZERO. Time stops for {dur}s: nothing moves, every attack is cancelled, your clicks build Freeze three times as fast and Flash Freeze has no cooldown. Then the ice storm hits: {storm} click DMG to every enemy, and every frozen one shatters for {shatter} click DMG more (bosses by their freeze meter).' },
 
   // ── Anemic Kaisen ──────────────────────────────────────────────────────
   overtime:        { type: 'overtime',   dur: 8, mult: 1, collapse: 12, charge: 1,
@@ -246,11 +270,12 @@ export const ULT_CD_PER_SI = 0.08;
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['per', 'devour', 'deerHeal', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
   'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
+  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen') return String(Math.round(v));
   if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
@@ -303,7 +328,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush', chill: 'freeze/click', qPct: 'Flash Freeze', qRadius: 'Flash range', figPct: 'figure blast', wallLen: 'frost line', chain: 'chain frost', storm: 'storm', shatter: 'shatter' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { CHARACTERS } from '../data/characters';
 import { BANNERS } from '../data/banners';
 import { bannerStatus, formatTimeLeft, formatLength } from '../utils/bannerSchedule';
+import { platinumOn } from '../utils/secrets';
 import { useLiveSchedule } from '../utils/liveSchedule';
 import { playClose, preloadSound, playMusic, stopMusic, musicElapsed, playStamp, playScribble } from '../utils/sfx';
 import { thumb } from '../utils/assets';
@@ -84,16 +85,18 @@ function doPulls(count, pity4, pity5, banner, force5 = false) {
     // (Before, 5★ was impossible until pull 60.)
     const rate5 = p5 >= 60 ? 2 + (p5 - 60) * 6 : 0.6;
     if (force5) {
-      rarity = 5;
+      rarity = banner.boostedRarity === 6 && banner.featuredIds.length ? 6 : 5;   // (a 6★ banner: its 6★)
     } else if (p5 >= 90 || rand < rate5) {
-      rarity = Math.random() < 0.1 ? 6 : 5; p5 = 0;
+      rarity = Math.random() < (banner.sixChance ?? 0.1) ? 6 : 5; p5 = 0;   // (the Platinum banner: 6★ more often)
     } else if (p4 >= 10 || rand < 5.1) {
       rarity = 4; p4 = 0;
     } else {
       rarity = 3;
     }
 
-    let pool = CHARACTERS.filter(c => c.rarity === rarity && !c.unpullable);   // unpullable: not released yet
+    // unpullable: not released yet · bannerOnly: only on that banner (6★ Ice: the Platinum banner)
+    const pullable = c => !c.unpullable && (!c.bannerOnly || c.bannerOnly === banner.id);
+    let pool = CHARACTERS.filter(c => c.rarity === rarity && pullable(c));
 
     if (
       banner.featuredIds.length > 0 &&
@@ -101,7 +104,7 @@ function doPulls(count, pity4, pity5, banner, force5 = false) {
       (force5 || Math.random() < banner.boostedChance)
     ) {
       const featuredOfRarity = CHARACTERS.filter(c =>
-        banner.featuredIds.includes(c.id) && c.rarity === rarity && !c.unpullable
+        banner.featuredIds.includes(c.id) && c.rarity === rarity && pullable(c)
       );
       if (featuredOfRarity.length > 0) pool = featuredOfRarity;
     }
@@ -161,7 +164,10 @@ export default function GachaScreen({
 
   const now = useNow();
   const schedule = useLiveSchedule();
-  const { live, endsAt, upcoming } = bannerStatus(now, schedule);
+  const status = bannerStatus(now, schedule);
+  const { endsAt, upcoming } = status;
+  // secret banners found on this device (the Platinum banner) go last, always there
+  const live = platinumOn() ? [...status.live, BANNERS.find(b => b.id === 'platinum-series')].filter(Boolean) : status.live;
   const activeBanner = live.find(b => b.id === activeBannerId) || live[0] || BANNERS[0];
   const isPermanent = b => !(b.id in endsAt);
   const timeLeftOf = b => isPermanent(b) ? 'Permanent' : formatTimeLeft(endsAt[b.id] - now);
@@ -873,7 +879,7 @@ zIndex: 10,
         <div style={{ color:'rgba(255,255,255,0.5)', fontSize:13 }}>{activeBanner.subtitle}</div>
         {activeBanner.comingSoon && <div style={{ display:'inline-block', marginTop:6, fontFamily:'var(--font-hit)', fontSize:'clamp(16px,2.6vw,26px)', letterSpacing:2, color:activeBanner.accentColor,
           border:`3px solid ${activeBanner.accentColor}`, borderRadius:6, padding:'0 10px', transform:'rotate(-4deg)', background:'rgba(0,0,0,0.45)' }}>COMING SOON</div>}
-        <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>{isPermanent(activeBanner) ? 'Permanent banner' : endsAt[activeBanner.id] === Infinity ? 'Limited · no end date yet' : `ends in: ${timeLeft}`}</div>
+        <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, marginTop:4 }}>{activeBanner.secret ? 'Classified · only on this device' : isPermanent(activeBanner) ? 'Permanent banner' : endsAt[activeBanner.id] === Infinity ? 'Limited · no end date yet' : `ends in: ${timeLeft}`}</div>
       </div>
     )}
   </div>
@@ -1298,7 +1304,7 @@ zIndex: 10,
                     <div style={{ fontWeight:800, fontSize:16, color:banner.accentColor }}>{banner.name}</div>
                     <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{banner.subtitle}</div>
                     <div style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginTop:3, fontWeight:600 }}>
-                      {isPermanent(banner) ? 'Permanent' : endsAt[banner.id] === Infinity ? 'No end date yet' : `ends in ${timeLeftOf(banner)}`}
+                      {banner.secret ? 'Classified' : isPermanent(banner) ? 'Permanent' : endsAt[banner.id] === Infinity ? 'No end date yet' : `ends in ${timeLeftOf(banner)}`}
                     </div>
                   </div>
                   {isActive && (
