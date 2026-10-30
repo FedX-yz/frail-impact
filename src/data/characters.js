@@ -5,6 +5,9 @@ const BASE = import.meta.env.BASE_URL;
 // card has two files in public/animations/eyecatch/: <name>.mp4 (16:9) and
 // <name>-tall.mp4 (9:16, for phones held upright so nothing gets cropped).
 // resultVideo can be one path (like the older 5★s) or { wide, tall }.
+// 6★ eyecatches: the Platinum Series (the good guys) open their file in the Initiative's
+// records (ACCESS GRANTED); a Gold Series card (the bad guys) would open a containment file
+// (HOSTILE, ACCESS DENIED). Each one is then themed on the card's abilities. HOX is neither.
 const eyecatch = (name) => ({
   wide: `${BASE}animations/eyecatch/${name}.mp4`,
   tall: `${BASE}animations/eyecatch/${name}-tall.mp4`,
@@ -514,7 +517,7 @@ export const CHARACTERS = [
     cardArt:         null,
     voiceLine:       `${BASE}audio/hox-voice.mp3`,
     animationVideo:  `${BASE}animations/6star.mp4`,
-    resultVideo:     null,
+    resultVideo:     eyecatch('hox'),   // his own eyecatch (the secret joke 6★: no series)
     // the strongest card in the game, but inside the same world as everyone else
     // (was 9999 / 999 / 999 and +100% damage: about 12× any other card)
     stats: { hp: 2100, atk: 235, def: 120 },
