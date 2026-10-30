@@ -128,11 +128,12 @@ export const ENEMY_TYPES = {
     hp: 700, coin: 400, gems: 10, speed: 0, cooldown: [9e9, 9e9], attacks: [],
     swarmShield: { swarms: 3 },
   },
-  // The Swarm King's swarms: one cloud of bats with a fixed hitbox that sweeps across the arena
+  // The Swarm King's swarms: one swarm with a fixed hitbox that sweeps across the arena
   // (engine.js → moveSwarm). Only acid hurts it; flying through your cursor bites.
+  // img is a placeholder until the real swarm art is in.
   swarm: {
     name: 'SWARM', tier: 'basic', acidOnly: true, move: 'cross',
-    size: 120, hp: 1, coin: 0, xp: 0, speed: 1, cooldown: [9e9, 9e9], attacks: [],
+    img: `${BASE}enemies/swarm.jpg`, size: 120, hp: 1, coin: 0, xp: 0, speed: 1, cooldown: [9e9, 9e9], attacks: [],
   },
   // The Devourer's weak spots: they open up around the arena while it's sealed. Their HP is set
   // from the boss's (engine.js → SEAL); they don't attack, move or count as kills.

@@ -733,16 +733,14 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
 // A Swarm King swarm: a cloud of bats around its fixed hitbox (the ring), thinning out as the acid eats it
 function SwarmCloud({ e, k, time }) {
-  const R = e.size * k * 0.5, frac = Math.max(0, e.hp / e.maxHp), n = Math.max(3, Math.ceil(16 * frac)), sz = 36 * k, left = Math.cos(e.angle) < 0;
+  const R = e.size * k * 0.5, frac = Math.max(0, e.hp / e.maxHp), left = Math.cos(e.angle) < 0;
+  const tilt = (e.angle - (left ? Math.PI : 0)) * 0.5 * (left ? -1 : 1), bob = Math.sin(time * 9 + e.id) * 3 * k;
   return (
     <div style={{ position: 'absolute', left: e.x, top: e.y, width: 0, height: 0, zIndex: 7, pointerEvents: 'none' }}>
       <div className="swarm-ring" style={{ left: -R, top: -R, width: R * 2, height: R * 2 }} />
-      {Array.from({ length: n }, (_, i) => {
-        const a = i * 2.39996 + time * 2.4, rr = R * 0.8 * Math.sqrt((i + 0.5) / 16);
-        const x = Math.cos(a) * rr, y = Math.sin(a) * rr * 0.75 + Math.sin(time * 11 + i) * 3 * k;
-        return <img key={i} src={ENEMY_TYPES.swarmling.img} alt="" draggable={false}
-          style={{ position: 'absolute', left: x - sz / 2, top: y - sz / 2, width: sz, height: sz, transform: left ? 'scaleX(-1)' : undefined }} />;
-      })}
+      <img src={e.type.img} alt="" draggable={false} className="swarm-img"
+        style={{ left: -R * 0.9, top: -R * 0.9 + bob, width: R * 1.8, height: R * 1.8, opacity: 0.45 + 0.55 * frac,
+          transform: `${left ? 'scaleX(-1) ' : ''}rotate(${(left ? -tilt : tilt) * 57.3}deg)` }} />
       <div style={{ position: 'absolute', left: -R * 0.6, width: R * 1.2, top: -R - 10 * k, height: 5, background: '#1a2e05', borderRadius: 3 }}>
         <div style={{ width: `${frac * 100}%`, height: '100%', background: '#a3e635', borderRadius: 3 }} />
       </div>
@@ -1508,6 +1506,7 @@ ${TS_CSS}
   .seal-tag { position:absolute; left:50%; top:-10%; transform:translateX(-50%); color:#fecdd3; font-weight:900; letter-spacing:1px; pointer-events:none;
     background:rgba(76,5,25,0.85); border:1px solid #fb7185; border-radius:4px; padding:1px 7px; white-space:nowrap; z-index:2; }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
+  .swarm-img { position:absolute; border-radius:50%; object-fit:cover; object-position:50% 30%; filter: drop-shadow(0 0 8px rgba(132,204,22,0.8)); }
   .swarm-ring { position:absolute; border-radius:50%; border:2px dashed rgba(190,242,100,0.55); background: radial-gradient(circle, rgba(26,46,5,0.35), rgba(26,46,5,0.08) 70%, transparent 72%);
     animation: sealSpin 4s linear infinite; }
   .seal-aura.swarm { border-color: rgba(163,230,53,0.9); box-shadow: 0 0 22px rgba(132,204,22,0.6), inset 0 0 30px rgba(132,204,22,0.35); }
