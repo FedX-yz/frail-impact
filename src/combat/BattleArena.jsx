@@ -1384,14 +1384,15 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
 });
 
 // Touch/mouse handlers for an on-screen button inside the arena: the press stays on the button
-// (captured) and none of its moves reach the arena, so it doesn't drag your aim onto the button.
+// (captured) and a finger's moves don't reach the arena, so it doesn't drag your aim onto the button.
+// Mouse moves still go through, so the battle cursor glides over the button instead of sticking.
 // onMove (optional) gets how far the finger has slid since the press.
 function holdButton(onDown, onUp, onMove) {
   const stop = e => e.stopPropagation();
   return {
     onPointerDown: e => { e.stopPropagation(); e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } e.currentTarget.dataset.px = e.clientX; e.currentTarget.dataset.py = e.clientY; onDown?.(); },
     onPointerMove: e => {
-      e.stopPropagation();
+      if (e.pointerType !== 'mouse') e.stopPropagation();   // a mouse passing over the button still moves the battle cursor
       const d = e.currentTarget.dataset;
       if (onMove && d.px != null && d.px !== '') onMove(e.clientX - Number(d.px), e.clientY - Number(d.py));
     },
