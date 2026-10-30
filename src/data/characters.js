@@ -517,6 +517,7 @@ export const CHARACTERS = [
     cardArt:         null,
     voiceLine:       `${BASE}audio/hox-voice.mp3`,
     animationVideo:  `${BASE}animations/6star.mp4`,
+    ultBubble:       'bleedeye',     // his ult bubble is a bleeding eye (combat/UltBubble.jsx)
     resultVideo:     eyecatch('hox'),   // his own eyecatch (the secret joke 6★: no series)
     // the strongest card in the game, but inside the same world as everyone else
     // (was 9999 / 999 / 999 and +100% damage: about 12× any other card)
@@ -559,7 +560,8 @@ export const CHARACTERS = [
     sprite:          `${BASE}sprites/ice-platinum.png`,
     // the art that slams in when he bursts (Absolute Zero). Placeholder: his full-body art
     burstArt:        `${BASE}sprites/ice-platinum.png`,
-    burstFocus:      [49, 10],       // [x %, y %] of his face in burstArt (the cut-in centres on it)
+    burstFocus:      [49, 10],
+    ultBubble:       'gauntlet',     // his ult bubble is his gauntlet (combat/UltBubble.jsx)       // [x %, y %] of his face in burstArt (the cut-in centres on it)
     portraitFocus:   [50, 12, 3],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/6star.mp4`,

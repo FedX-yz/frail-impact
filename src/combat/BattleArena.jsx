@@ -14,6 +14,7 @@ import { withIcons } from '../utils/withIcons';
 import { TS_EFFECTS, SHIKI_IMG } from './tenShadows';
 import { TsAllies, TsGround, TsOver, TsEffect, WorldCuts, ShadowGauge, HandSignWheel, ChimeraGarden, CutIn, ComboToast, MahoragaLayer, TsChips, TS_CSS, DogSprite, MAHORAGA_IMG,
   MAHORAGA_BERSERK_IMG, CUTIN_SUMMON, CUTIN_BERSERK } from './TenShadowsFx';
+import UltBubble from './UltBubble';
 import { IceGround, IceFigures, IceOver, IceEffect, IceScreen, ICE_CSS } from './IceFx';
 import { ICE_EFFECTS, iceChips } from './icePlatinum';
 
@@ -703,7 +704,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
-          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd}
+          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd} ultActive={!!s.ult.active}
           onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null}
           spKind={sp?.kind} spColor={sp?.color} spHint={sp?.hint} onSpecial={onSpecial} onSpecialMove={onSpecialMove}
           spFill={!sp ? 0 : sp.kind === 'cd' ? Math.round((1 - (sp.cdMax ? sp.cd / sp.cdMax : 0)) * 40) / 40 : Math.round((sp.fill ?? sp.n / sp.max) * 40) / 40}
@@ -1325,7 +1326,7 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{Children.map(children, c => withIcons(c))}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spHint, onSpecial, onSpecialMove, q, onSkill2 }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, ultActive = false, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spHint, onSpecial, onSpecialMove, q, onSkill2 }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -1380,14 +1381,18 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
               style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 18%', transform: 'scale(1.35)', transformOrigin: '50% 25%' }} />
           </div>
         )}
+        {/* 6★: their own ult bubble (a gauntlet, an eye…) instead of the round orb */}
+        {mainCard?.ultBubble && (
+          <UltBubble kind={mainCard.ultBubble} charge={ult ? charge : 0} ready={!!ultReady} cooling={!!cd} active={ultActive} />
+        )}
         {/* Ult orb — fills from the bottom with charge */}
-        <img src={`${BASE}ui/ul_statusult.png`} alt="" draggable={false} style={{
+        {!mainCard?.ultBubble && <img src={`${BASE}ui/ul_statusult.png`} alt="" draggable={false} style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none',
           clipPath: `inset(${(1 - (ult ? charge : 0)) * 100}% 0 0 0)`,
           filter: ultReady ? 'drop-shadow(0 0 10px #c084fc) brightness(1.2)' : cd ? 'grayscale(0.85) brightness(0.7)' : 'none',
           animation: ultReady ? 'orbReady 0.9s ease-in-out infinite' : 'none',
-        }} />
-        <img src={`${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
+        }} />}
+        <img src={mainCard?.ultBubble ? `${BASE}ui/ui_status_noorb.png` : `${BASE}ui/ui_status.png`} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
         <div
           {...holdButton(onUlt, null)}
           title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : mainCard?.ult ? 'Ult unlocks at LV50' : 'No ult'}
