@@ -84,7 +84,7 @@ export function createKitRuntime(api) {
   // An ult's hit: flat click DMG × mult, no crit (like the older ults)
   const ultHit = (e, mult, color, label) => api.damageEnemy(e, s.stats.clickDmg * mult, { color, label, charge: 0 });
   // things worth hitting: not treasure, not a hydra head that's down (it can't be damaged)
-  const foes = () => s.enemies.filter(e => e.tier !== 'treasure' && !(e.down > 0));
+  const foes = () => s.enemies.filter(e => e.tier !== 'treasure' && !(e.down > 0) && !e.type.acidOnly);   // (swarms: only acid hurts them)
   const fighting = () => s.phase === 'fight' || s.phase === 'boss' || s.phase === 'bossIntro';
   const radius = e => e.size * s.k * 0.5;
   const center = () => ({ x: s.W / 2, y: s.H / 2 });
@@ -205,7 +205,7 @@ export function createKitRuntime(api) {
 
   // ── Jerry's repel ────────────────────────────────────────────────────────
   // Bosses, worm parts and hydra heads are too heavy to throw
-  const heavy = e => e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || !!e.group || !!e.type?.core;
+  const heavy = e => e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || !!e.group || !!e.type?.core || !!e.type?.acidOnly;
   // Throw an enemy away from a point. false = it didn't budge
   function launch(e, from, power = 1) {
     if (heavy(e) || e.down > 0 || !s.enemies.includes(e)) return false;

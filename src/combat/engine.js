@@ -252,22 +252,47 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── The Swarm King ───────────────────────────────────────────────────────
-  // SWARM SHIELD up: it takes no damage. Swarms come for you one after another (up to 2 at once);
-  // destroy 3 whole swarms and the shield is gone. It spits acid at you the whole fight (faster
-  // once the shield is down): the splash hurts, the pool it leaves eats swarmlings.
-  const SWK = { spawnEvery: [7, 12], maxSwarms: 2, spit: [[3.6, 4.6], [1.6, 2.2]], globs: [2, 3], pool: { r: 72, life: 9 }, splash: 62 };
-  function spawnSwarm(boss, n) {
-    const P = aimPoint(), gid = uid++;
-    const c = { x: s.W * (P.x < s.W / 2 ? 0.95 : 0.05), y: rand(s.H * 0.25, s.H * 0.8) };   // from the far side
-    for (let i = 0; i < n; i++) {
-      const pos = { x: clamp(c.x + rand(-K(40), K(40)), 0, s.W), y: clamp(c.y + rand(-K(70), K(70)), s.H * 0.12, s.H * 0.92) };
-      const sw = spawnEnemy('swarmling', { pos, armed: false });
-      sw.swarmOff = { a: rand(0, Math.PI * 2), d: K(rand(16, 70)) };   // right on top of you
-      sw.swarmGroup = gid; sw.bites = true;
+  // SWARM SHIELD up: it takes no damage. Swarms sweep across the arena from one side to the
+  // other and vanish; they only steer a little toward your cursor, and nothing you do hurts
+  // them — only its acid pools do. Lead 3 swarms through the acid and the shield is gone.
+  // It spits acid the whole fight (faster once the shield is down): the splash hurts you,
+  // the pool it leaves eats swarms.
+  const SWK = { spawnEvery: [3.2, 5], maxSwarms: 2, speed: 300, steer: 1.5, maxOff: 0.85, spit: [[3.2, 4.2], [1.6, 2.2]], globs: [2, 3], pool: { r: 72, life: 9 }, splash: 62 };
+  const angleDiff = (a, b) => ((a - b + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;   // a − b in −π…π
+  function spawnSwarm(boss) {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const y = rand(s.H * 0.22, s.H * 0.82);
+    const c = spawnEnemy('swarm', { pos: { x: dir > 0 ? -K(80) : s.W + K(80), y } });
+    c.hp = c.maxHp = 100;
+    c.dir = dir; c.angle = dir > 0 ? 0 : Math.PI; c.owner = boss.id;
+    floater('A SWARM!', dir > 0 ? K(70) : s.W - K(70), y - K(60), '#bef264', true);
+    sfx('howl');
+  }
+  // a swarm flies straight across, bending a little toward your cursor while you're ahead of it
+  function moveSwarm(e, dt) {
+    const P = aimPoint(), head = e.dir > 0 ? 0 : Math.PI;
+    const ahead = (P.x - e.x) * e.dir > K(20);
+    const off = ahead ? clamp(angleDiff(Math.atan2(P.y - e.y, P.x - e.x), head), -SWK.maxOff, SWK.maxOff) : 0;
+    e.angle += clamp(angleDiff(head + off, e.angle), -SWK.steer * dt, SWK.steer * dt);
+    const sp = Math.max(K(SWK.speed), s.W * 0.42) * (e.slow ?? 1);   // crosses any screen in ~2.5s
+    e.x += Math.cos(e.angle) * sp * dt; e.y = clamp(e.y + Math.sin(e.angle) * sp * dt, s.H * 0.1, s.H * 0.92);
+    if (e.dir > 0 ? e.x > s.W + K(100) : e.x < -K(100)) e.escaped = true;
+    else if (e.x < -K(180) || e.x > s.W + K(180)) e.escaped = true;   // (never lost off-screen)
+  }
+  // a swarm the acid finished off
+  function swarmMelted(e) {
+    effect({ kind: 'burst', x: e.x, y: e.y, r: e.size * s.k * 0.6, color: '#a3e635' });
+    effect({ kind: 'shards', x: e.x, y: e.y, r: e.size * s.k * 0.6, color: '#d9f99d', n: 14 });
+    const b = s.enemies.find(x => x.id === e.owner), st = b?.swk, sh = b?.type.swarmShield;
+    if (!st || st.killed >= sh.swarms) { floater('MELTED', e.x, e.y - K(40), '#bef264', true); return; }
+    st.killed++;
+    if (st.killed < sh.swarms) announce(`SWARM MELTED · ${st.killed}/${sh.swarms}`, '#bef264');
+    else {
+      announce('THE SWARM SHIELD IS DOWN · HIT IT!', '#facc15');
+      effect({ kind: 'flash', color: '#a3e635', life: 0.4 });
+      effect({ kind: 'ring', x: b.x, y: b.y, r: b.size * s.k * 1.2, color: '#facc15', life: 0.6 });
+      shake(0.5); sfx('bigKill');
     }
-    effect({ kind: 'ring', x: c.x, y: c.y, r: K(90), color: '#a3e635', life: 0.5 });
-    floater('A SWARM!', clamp(c.x, K(60), s.W - K(60)), c.y - K(50), '#bef264', true);
-    return gid;
   }
   function spit(boss, n, life) {
     const P = aimPoint();
@@ -278,31 +303,23 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     sfx('hiss');
   }
   function updateSwarmKing(dt) {
+    // swarms that made it across vanish
+    if (s.enemies.some(e => e.escaped)) {
+      s.enemies.filter(e => e.escaped).forEach(e => floater('IT GOT AWAY', clamp(e.x, K(70), s.W - K(70)), e.y - K(50), '#a8a29e'));
+      s.enemies = s.enemies.filter(e => !e.escaped);
+    }
     for (const b of s.enemies) {
       const sh = b.type.swarmShield;
       if (!sh || s.phase === 'clear' || s.phase === 'defeat') continue;
-      const st = b.swk ?? (b.swk = { killed: 0, swarms: [], spawnT: 1, spitT: 2.5 });
-      // whole swarms gone
-      const alive = st.swarms.filter(g => s.enemies.some(e => e.swarmGroup === g));
-      for (let i = alive.length; i < st.swarms.length; i++) {
-        if (st.killed >= sh.swarms) continue;
-        st.killed++;
-        if (st.killed < sh.swarms) announce(`SWARM DESTROYED · ${st.killed}/${sh.swarms}`, '#bef264');
-        else {
-          announce('THE SWARM SHIELD IS DOWN · HIT IT!', '#facc15');
-          effect({ kind: 'flash', color: '#a3e635', life: 0.4 });
-          effect({ kind: 'ring', x: b.x, y: b.y, r: b.size * s.k * 1.2, color: '#facc15', life: 0.6 });
-          shake(0.5); sfx('bigKill');
-        }
-      }
-      st.swarms = alive;
+      const st = b.swk ?? (b.swk = { killed: 0, spawnT: 3, spitT: 1.2 });
       const shielded = st.killed < sh.swarms;
       b.sealed = shielded; b.sealWord = 'SHIELDED';
-      b.sealLabel = `SWARM SHIELD · destroy the swarms ${st.killed}/${sh.swarms}`;
+      b.sealLabel = `SWARM SHIELD · lead the swarms into the acid ${st.killed}/${sh.swarms}`;
       // the next swarm
-      if ((st.spawnT -= dt) <= 0 && alive.length < SWK.maxSwarms) {
-        st.swarms.push(spawnSwarm(b, Math.round(sh.size * (shielded ? 1 : 0.6))));
-        st.spawnT = shielded ? rand(...SWK.spawnEvery) : rand(14, 18);
+      const out = s.enemies.filter(e => e.owner === b.id && e.type.acidOnly).length;
+      if ((st.spawnT -= dt) <= 0 && out < SWK.maxSwarms) {
+        spawnSwarm(b);
+        st.spawnT = shielded ? rand(...SWK.spawnEvery) : rand(9, 13);
       }
       // acid
       if ((st.spitT -= dt) <= 0) {
@@ -454,7 +471,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const pushWeight = e => (e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || e.group || e.move === 'still'
     || e.dashing || e.kb || e.frozen > 0 ? 0 : e.tier === 'elite' ? 1 / 3 : e.tier === 'treasure' ? 2 : 1);
   function separateEnemies() {
-    const list = s.enemies.filter(e => !e.entering && !(e.down > 0));
+    const list = s.enemies.filter(e => !e.entering && !(e.down > 0) && !e.type.acidOnly);
     for (let i = 0; i < list.length; i++) {
       const a = list[i], wa = pushWeight(a);
       for (let j = i + 1; j < list.length; j++) {
@@ -476,6 +493,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function moveEnemy(e, dt) {
+    if (e.move === 'cross') { moveSwarm(e, dt); return; }
     if (e.move === 'worm') { moveWorm(e, dt); return; }
     if (e.role === 'hydra') { moveHydraHead(e, dt); return; }
     if (e.dashing) return;
@@ -769,8 +787,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (m >= 0) { announce(`COMBO ${c.n}!  +${Math.round(Math.min(c.n, BAL.COMBO_MAX) * BAL.COMBO_PER * 100)}% DMG`, ['#facc15', '#fb923c', '#f43f5e'][m]); sfx('combo', m); rt.onCombo(m); }
   }
 
-  function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false, linked = false } = {}) {
+  function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false, linked = false, acid = false } = {}) {
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
+    if (e.type.acidOnly && !acid) return 0;   // a Swarm King swarm: only its acid hurts it
     if (e.sealed) {   // the Devourer behind its seal: break the weak spots first
       if (s.time - (e.sealHitT ?? -9) > 0.4) { e.sealHitT = s.time; floater(e.sealWord ?? 'SEALED', e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, '#fda4af', true); sfx('shield'); }
       return 0;
@@ -842,7 +861,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       color: e.affix ? AFFIXES[e.affix].color : e.tier === 'elite' ? '#c084fc' : e.tier === 'treasure' ? '#fbbf24' : e.tier === 'boss' ? '#ff6a3d' : '#ffd84a' });
     sfx(big ? 'bigKill' : 'kill');
     if (e.tier === 'elite') { s.hitStop = Math.max(s.hitStop, 0.05); shake(0.12); }
-    if (t.core) { coreBroken(e); return; }   // a Devourer weak spot (no reward, not a kill)
+    if (t.core) { coreBroken(e); return; }       // a Devourer weak spot (no reward, not a kill)
+    if (t.acidOnly) { swarmMelted(e); return; }   // a Swarm King swarm (no reward, not a kill)
     const reward = e.affix ? BAL.AFFIX_REWARD : 1;
     const coins = Math.round((t.coin ?? 0) * s.stage.coinScale * s.stats.coinMult * M('coin') * reward);
     const gems  = t.gems ? Math.round(t.gems * s.stage.gemScale * M('gem')) : 0;
@@ -885,7 +905,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
-    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.swarmGroup); s.globs = []; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
+    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });
@@ -937,6 +957,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     // topmost first (later = drawn on top); generous hitbox for fingers
     for (let i = s.enemies.length - 1; i >= 0; i--) {
       const e = s.enemies[i];
+      if (e.type.acidOnly) continue;   // clicks go through swarms
       if (dist(x, y, e.x, e.y) <= e.size * s.k * 0.55 + K(6)) return e;
     }
     return null;
@@ -944,7 +965,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   function nearestEnemy(x, y) {
     let best = null, bd = Infinity;
-    for (const e of s.enemies) { if (e.down > 0) continue; const d = dist(x, y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
+    for (const e of s.enemies) { if (e.down > 0 || e.type.acidOnly) continue; const d = dist(x, y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
     return best;
   }
 
@@ -1218,8 +1239,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         h.tick = (h.tick ?? 0) - dt;
         if (h.tick > 0 || h.t < h.grow) return;
         h.tick = 0.25;
-        s.enemies.filter(e => e.tier !== 'boss' && !e.type.core && e.tier !== 'treasure' && !(e.down > 0) && dist(e.x, e.y, h.x, h.y) <= h.r + e.size * s.k * 0.3)
-          .forEach(e => damageEnemy(e, e.maxHp * (e.tier === 'elite' ? 0.08 : 0.4), { color: '#bef264', quiet: true }));
+        s.enemies.filter(e => e.tier !== 'boss' && !e.type.core && e.tier !== 'treasure' && !(e.down > 0) && dist(e.x, e.y, h.x, h.y) <= h.r + e.size * s.k * (e.type.acidOnly ? 0.5 : 0.3))
+          .forEach(e => damageEnemy(e, e.maxHp * (e.type.acidOnly ? 0.34 : e.tier === 'elite' ? 0.08 : 0.4), { color: '#bef264', quiet: !e.type.acidOnly, acid: true, label: e.type.acidOnly ? 'ACID ' : '' }));
       });
       s.hazards = s.hazards.filter(h => h.t < h.life);
     }
@@ -1320,7 +1341,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         }
       }
       // a Swarm King swarmling touching your cursor bites
-      if (e.bites && TG && !(e.frozen > 0) && dist(TG.x, TG.y, e.x, e.y) <= e.size * s.k * 0.35 + TG.r) hurt(enemyDmg('swarmBite'), 'bite', e);
+      if (e.type.acidOnly && TG && dist(TG.x, TG.y, e.x, e.y) <= e.size * s.k * 0.5 + TG.r) hurt(enemyDmg('swarmBite'), 'bite', e);   // a swarm flying through your cursor
       // worm head bites your cursor
       if (e.move === 'worm' && e.role === 'head' && TG && dist(TG.x, TG.y, e.x, e.y) <= e.size * s.k * 0.45 + TG.r) {
         hurt(enemyDmg('bite'), 'bite', e);
