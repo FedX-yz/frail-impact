@@ -474,13 +474,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             );
           })}
 
-          {/* the Swarm King's SWARM SHIELD: bats circling it */}
-          {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : Array.from({ length: 10 }, (_, i) => {
-            const a = s.time * 1.6 + i * 0.628, R = b.size * k * (b.drawScale ?? 1) * (0.4 + 0.03 * Math.sin(s.time * 3 + i)), sz = 34 * k * Math.max(1, (b.drawScale ?? 1) * 0.75);
-            return <img key={`sw${b.id}-${i}`} src={ENEMY_TYPES.swarm.img} alt="" draggable={false}
-              style={{ position: 'absolute', left: b.x + Math.cos(a) * R - sz / 2, top: b.y + Math.sin(a) * R * 0.75 - sz / 2, width: sz, height: sz, zIndex: 9, pointerEvents: 'none',
-                transform: `${Math.sin(a) < 0 ? 'scaleX(-1) ' : ''}scaleY(${flap(s.time, i)})`, filter: 'drop-shadow(0 0 6px #84cc16)' }} />;
-          }))}
+          {/* the Swarm King's SWARM SHIELD: swarmlings crawling all over it, more circling */}
+          {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : <ShieldSwarm key={`sw${b.id}`} b={b} k={k} time={s.time} img={ENEMY_TYPES.swarm.img} />)}
 
           {/* the Swarm King's swarm storm: bats flying out in a spiral */}
           {s.bolts.map(b => b.kind !== 'bat' ? null : (
@@ -816,10 +811,38 @@ function GasCloud({ g, k, time }) {
 const flap = (t, seed) => 0.86 + 0.14 * Math.abs(Math.sin(t * 14 + seed * 1.7));
 
 // where each swarmling sits in a swarm: a loose blob, front-heavy, biggest in the middle
-const FLOCK = Array.from({ length: 11 }, (_, i) => {
-  const a = i * 2.399, r = Math.sqrt((i + 0.5) / 11);   // sunflower spread
-  return { x: Math.cos(a) * r * 0.9, y: Math.sin(a) * r * 0.72, sz: 0.85 - r * 0.25, ph: i * 1.31 };
+const FLOCK = Array.from({ length: 17 }, (_, i) => {
+  const a = i * 2.399, r = Math.sqrt((i + 0.5) / 17);   // sunflower spread
+  return { x: Math.cos(a) * r * 0.92, y: Math.sin(a) * r * 0.74, sz: 0.74 - r * 0.22, ph: i * 1.31 };
 });
+
+// the swarm shield: swarmlings smothering the host's body, each buzzing around its own spot
+// and facing the way it's drifting (not at you), plus a ring of them circling him
+const COVER = Array.from({ length: 26 }, (_, i) => {
+  const a = i * 2.399, r = Math.sqrt((i + 0.5) / 26);
+  return { x: Math.cos(a) * r * 0.36, y: Math.sin(a) * r * 0.4 + 0.04, w: 1.1 + (i % 5) * 0.23, ph: i * 1.77, sz: 0.95 + (i % 3) * 0.12 };
+});
+function ShieldSwarm({ b, k, time, img }) {
+  const D = b.size * k * (b.drawScale ?? 1), base = 30 * k * Math.max(1, (b.drawScale ?? 1) * 0.72);
+  const bat = (key, x, y, sz, faceLeft, z, ph) => (
+    <img key={key} src={img} alt="" draggable={false} className="swarm-bat"
+      style={{ left: b.x + x - sz / 2, top: b.y + y - sz / 2, width: sz, height: sz, zIndex: z, pointerEvents: 'none',
+        transform: `${faceLeft ? 'scaleX(-1) ' : ''}scaleY(${flap(time, ph)})` }} />
+  );
+  return (
+    <>
+      {COVER.map((c, i) => {
+        const u = time * c.w + c.ph;
+        const x = (c.x + Math.cos(u) * 0.05) * D, y = (c.y + Math.sin(u * 1.3) * 0.035) * D;
+        return bat(`c${i}`, x, y, base * c.sz, Math.sin(u) > 0, 9, c.ph);   // x' = -sin(u): flying left when sin(u) > 0
+      })}
+      {Array.from({ length: 10 }, (_, i) => {
+        const a = time * 1.6 + i * 0.628, R = D * (0.4 + 0.03 * Math.sin(time * 3 + i));
+        return bat(`o${i}`, Math.cos(a) * R, Math.sin(a) * R * 0.75, base * 1.1, Math.sin(a) > 0, Math.sin(a) > 0 ? 10 : 8, i);
+      })}
+    </>
+  );
+}
 
 // a Swarm King swarm: a flock of swarmlings flying together. They thin out as the swarm
 // takes acid; the shadow ring is its hitbox.
