@@ -852,7 +852,7 @@ function SwarmCloud({ e, k, time }) {
   const tilt = rel * 0.5 * (left ? -1 : 1), cs = Math.cos(tilt), sn = Math.sin(tilt);
   const n = Math.max(4, Math.round(FLOCK.length * (0.35 + 0.65 * frac)));
   return (
-    <div style={{ position: 'absolute', left: e.x, top: e.y, width: 0, height: 0, zIndex: 7, pointerEvents: 'none' }}>
+    <div style={{ position: 'absolute', left: e.x, top: e.y, width: 0, height: 0, zIndex: 10, pointerEvents: 'none' }}>
       <div className="swarm-ring" style={{ left: -R, top: -R, width: R * 2, height: R * 2 }} />
       {FLOCK.slice(0, n).map((b, i) => {
         const jx = Math.sin(time * 2.3 + b.ph + e.id) * 0.07, jy = Math.cos(time * 3.1 + b.ph * 1.3 + e.id) * 0.08;
