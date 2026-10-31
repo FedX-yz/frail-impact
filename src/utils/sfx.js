@@ -141,24 +141,27 @@ export function stopMusic(fade = 0.3) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Boss music: on while a boss is out (BattleArena.jsx calls bossMusic). The two
-// songs take turns, one per boss fight; if a fight outlasts its song, the other
-// one comes on. Streamed by an <audio> element (a decoded 3-minute song would be
-// ~70 MB of memory) but played through Web Audio, so the volume works on iPhones.
+// Boss music: on while a boss is out (BattleArena.jsx calls bossMusic). A boss can have its
+// own song (song = { src, buffer }: enemies.js → music, the Swarm King's two phases); the
+// rest share the general boss songs, which take turns, one per fight (a fight that outlasts
+// its song moves on to the other one). Own songs loop.
+// Long songs are streamed by an <audio> element (a decoded 3-minute song would be ~70 MB of
+// memory) but played through Web Audio, so the volume works on iPhones; `buffer` songs are
+// short loops, decoded whole so they loop without a gap.
 // ─────────────────────────────────────────────────────────────────────────────
 const BOSS_TRACKS = [`${BASE}audio/music/boss1.mp3`, `${BASE}audio/music/boss2.mp3`];
 let bossNext = Math.floor(Math.random() * BOSS_TRACKS.length);
-let boss = null;   // { el, gain, idx, on }
+let boss = null;   // { el, gain, on, key, song, idx, buf: { node, t0, dur, at } }
 function bossPlayer() {
   if (boss) return boss;
   const el = new Audio();
   el.preload = 'none';
   const gain = _audioCtx.createGain();
   gain.gain.value = 0;
-  try { _audioCtx.createMediaElementSource(el).connect(gain); gain.connect(musicBus); } catch { /* no Web Audio for media: plays at element volume */ }
-  boss = { el, gain, idx: -1, on: false, stopT: 0 };
-  // a fight longer than the song: the other song
-  el.addEventListener('ended', () => { if (boss.on) bossTrack((boss.idx + 1) % BOSS_TRACKS.length, 0.4); });
+  gain.connect(musicBus);
+  try { _audioCtx.createMediaElementSource(el).connect(gain); } catch { /* no Web Audio for media: plays at element volume */ }
+  boss = { el, gain, on: false, key: null, song: null, idx: -1, buf: null, timer: 0 };
+  el.addEventListener('ended', () => { if (boss.on && !boss.song) playBoss(null, 0.4, (boss.idx + 1) % BOSS_TRACKS.length); });
   return boss;
 }
 // iPhones only let an <audio> element play from a tap, so play it once (silently) on the first one
@@ -168,9 +171,9 @@ function primeBoss() {
   if (primed) return;
   primed = true;
   const b = bossPlayer();
-  if (b.idx >= 0) return;
+  if (b.key) return;
   b.el.src = SILENCE;
-  b.el.play().then(() => { if (b.idx < 0) b.el.pause(); }).catch(() => {});
+  b.el.play().then(() => { if (!b.key) b.el.pause(); }).catch(() => {});
 }
 function fadeBoss(to, sec) {
   const g = boss.gain.gain, t = _audioCtx.currentTime;
@@ -178,38 +181,76 @@ function fadeBoss(to, sec) {
   g.setValueAtTime(Math.max(0.0001, g.value), t);
   g.linearRampToValueAtTime(Math.max(0.0001, to), t + Math.max(0.01, sec));
 }
-function bossTrack(idx, fadeIn) {
+// stop whatever is sounding (remembering where a looped buffer was, for resume)
+function haltBoss() {
+  const b = boss;
+  if (b.buf?.node) {
+    b.buf.at = (_audioCtx.currentTime - b.buf.t0) % b.buf.dur;
+    try { b.buf.node.stop(); } catch { /* done */ }
+    b.buf.node = null;
+  }
+  b.el.pause();
+}
+// start a song (null = the next general boss song) from `from` seconds
+function playBoss(song, fadeIn, idx = null, from = 0) {
   const b = bossPlayer();
-  b.idx = idx;
-  b.el.src = BOSS_TRACKS[idx];
-  b.el.currentTime = 0;
+  haltBoss();
+  b.song = song;
+  b.gain.gain.cancelScheduledValues(_audioCtx.currentTime);
   b.gain.gain.setValueAtTime(0.0001, _audioCtx.currentTime);
+  if (song?.buffer) {
+    const key = b.key = song.src;
+    b.el.removeAttribute('src');
+    loadBuffer(`${BASE}${song.src}`).then(decoded => {
+      if (!b.on || b.key !== key) return;
+      const node = _audioCtx.createBufferSource();
+      node.buffer = decoded; node.loop = true;
+      node.connect(b.gain);
+      const t = _audioCtx.currentTime + 0.02, at = from % decoded.duration;
+      node.start(t, at);
+      b.buf = { node, t0: t - at, dur: decoded.duration, at };
+      fadeBoss(1, fadeIn);
+    }).catch(() => {});
+    return;
+  }
+  b.buf = null;
+  if (song) { b.key = song.src; b.el.src = `${BASE}${song.src}`; b.el.loop = true; }
+  else { b.idx = idx ?? bossNext; bossNext = (b.idx + 1) % BOSS_TRACKS.length; b.key = `general:${b.idx}`; b.el.src = BOSS_TRACKS[b.idx]; b.el.loop = false; }
+  b.el.currentTime = from;
   b.el.play().then(() => { if (b.on) fadeBoss(1, fadeIn); }).catch(() => {});
 }
-// 'start': a new boss fight (the next song) · 'resume': back on the battle screen mid-fight
-// (same song, same spot) · 'stop': the boss is down / you lost (fade out) · 'pause': left the screen
-export function bossMusic(cmd) {
+const songKey = (song) => song?.src ?? 'general';
+// 'start': a new boss fight · 'switch': the boss changed songs mid-fight (the Swarm King's
+// phase 2) · 'resume': back on the battle screen mid-fight (same song, same spot) ·
+// 'stop': the boss is down / you lost (fade out) · 'pause': left the battle screen
+export function bossMusic(cmd, song = null) {
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
   const b = bossPlayer();
-  clearTimeout(b.stopT);
-  if (cmd === 'start' || (cmd === 'resume' && b.idx < 0)) {
+  clearTimeout(b.timer);
+  const same = b.key && (song ? b.key === song.src : !b.song && b.key?.startsWith('general'));
+  if (cmd === 'resume' && same) {
     b.on = true;
-    const idx = bossNext; bossNext = (bossNext + 1) % BOSS_TRACKS.length;
-    bossTrack(idx, 1.6);
-  } else if (cmd === 'resume') {
+    if (b.song?.buffer) playBoss(b.song, 0.8, null, b.buf?.at ?? 0);
+    else b.el.play().then(() => { if (b.on) fadeBoss(1, 0.8); }).catch(() => {});
+  } else if (cmd === 'start' || cmd === 'resume') {
     b.on = true;
-    b.el.play().then(() => { if (b.on) fadeBoss(1, 0.8); }).catch(() => {});
+    playBoss(song, 1.6);
+  } else if (cmd === 'switch') {
+    b.on = true;
+    fadeBoss(0, 0.3);
+    b.timer = setTimeout(() => { if (b.on) playBoss(song, 0.5); }, 320);
   } else if (b.on) {
     b.on = false;
     const sec = cmd === 'pause' ? 0.25 : 2;
     fadeBoss(0, sec);
-    b.stopT = setTimeout(() => {
+    b.timer = setTimeout(() => {
       if (b.on) return;
-      b.el.pause();
-      if (cmd !== 'pause') { b.idx = -1; b.el.removeAttribute('src'); b.el.load(); }   // a finished fight: forget the song
+      haltBoss();
+      if (cmd !== 'pause') { b.key = null; b.song = null; b.buf = null; b.el.removeAttribute('src'); b.el.load(); }   // a finished fight: forget the song
     }, sec * 1000 + 60);
   }
 }
+export const bossSongKey = songKey;
 
 export const playClose = () => playSFX(`${BASE}sounds/ui_close.mp3`);
 export const playPress = () => {

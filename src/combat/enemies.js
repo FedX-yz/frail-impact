@@ -118,15 +118,30 @@ export const ENEMY_TYPES = {
   },
 
   // ── Bosses (rotate: Worm → Hydra → Swarm King → Worm …) ──
-  // THE SWARM KING: hides behind a SWARM SHIELD (it takes no damage). Swarms sweep across the
-  // arena from one side to the other, steering a little toward your cursor; nothing you do hurts
-  // them, only the acid it spits at you: the splash hurts you, the pool it leaves eats swarms.
-  // Lead 3 swarms through the acid and the shield is gone, but it spits faster (engine.js).
+  // THE SWARM KING, in two phases (spawnBoss('swarmking') starts with phase 1):
+  //   phase 1 (swarmhost): the bloated host. It just sits in its puddle and spits acid now and
+  //     then (more when it's hurt). Kill it and it bursts: the Swarm King crawls out of it.
+  //   phase 2 (swarmking): hides behind a SWARM SHIELD (it takes no damage). Swarms sweep across
+  //     the arena from one side to the other, steering a little toward your cursor; nothing you
+  //     do hurts them, only the acid it spits at you: the splash hurts you, the pool it leaves
+  //     eats swarms. Lead 3 swarms through the acid and the shield is gone, but it spits faster.
+  // music: its own song per phase (instead of the general boss music). buffer: a short loop
+  // that's decoded whole so it loops without a gap.
+  swarmhost: {
+    name: 'THE SWARM KING', barName: 'THE SWARM KING · PHASE 1', tier: 'boss',
+    img: `${BASE}enemies/swarmking_host.png`, size: 170, drawScale: 1.3,
+    hp: 420, coin: 0, xp: 300, speed: 0, cooldown: [9e9, 9e9], attacks: [],
+    acidSpit: { every: [2.6, 3.6], globs: [1, 2], hurtGlobs: [2, 3], pool: 6 },   // (hurtGlobs: under half HP)
+    nextPhase: 'swarmking',
+    music: { src: 'audio/music/swarmking1.mp3', buffer: true },
+  },
   swarmking: {
-    name: 'THE SWARM KING', tier: 'boss',
-    img: `${BASE}enemies/swarmking.jpg`, size: 160,
+    name: 'THE SWARM KING', barName: 'THE SWARM KING · PHASE 2', tier: 'boss',
+    img: `${BASE}enemies/swarmking.png`, size: 165, drawScale: 1.6,
     hp: 700, coin: 400, gems: 10, speed: 0, cooldown: [9e9, 9e9], attacks: [],
     swarmShield: { swarms: 3 },
+    firstPhase: 'swarmhost',
+    music: { src: 'audio/music/swarmking2.mp3' },
   },
   // The Swarm King's swarms: one swarm with a fixed hitbox that sweeps across the arena
   // (engine.js → moveSwarm). Only acid hurts it; flying through your cursor bites.

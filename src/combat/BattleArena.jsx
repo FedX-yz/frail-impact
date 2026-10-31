@@ -4,7 +4,7 @@ import { AFFIXES, ENEMY_TYPES } from './enemies';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
-import { bossMusic } from '../utils/sfx';
+import { bossMusic, bossSongKey } from '../utils/sfx';
 import { CursorArt } from '../components/GameCursor';
 import { CURSOR_SIZES, trackHp } from '../utils/cursor';
 import FocusImg from '../components/FocusImg';
@@ -116,16 +116,18 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   }, [engine]);
 
   // Boss music (utils/sfx.js): on from the BOSS INCOMING banner until the boss is down
-  // or you lose; leaving the battle screen pauses it, coming back mid-fight resumes it
+  // or you lose; a boss with its own song per phase switches when the phase does. Leaving
+  // the battle screen pauses it, coming back mid-fight resumes it.
   const bossOn = engine.state.phase === 'bossIntro' || engine.state.phase === 'boss';
-  const bossWas = useRef(null);
+  const bossSong = bossOn ? bossSongKey(engine.state.bossMusic) : null;
+  const bossWas = useRef('mount');
   useEffect(() => {
     const was = bossWas.current;
-    bossWas.current = bossOn;
-    if (bossOn) bossMusic(was === null ? 'resume' : 'start');
-    else if (was) bossMusic('stop');
-  }, [bossOn]);
-  useEffect(() => () => { if (bossWas.current) bossMusic('pause'); }, []);
+    bossWas.current = bossSong;
+    if (bossSong) bossMusic(was === 'mount' ? 'resume' : was ? 'switch' : 'start', engine.state.bossMusic);
+    else if (was && was !== 'mount') bossMusic('stop');
+  }, [bossSong, engine]);
+  useEffect(() => () => { const w = bossWas.current; if (w && w !== 'mount') bossMusic('pause'); }, []);
 
   // E = ult
   useEffect(() => {
@@ -1554,6 +1556,8 @@ ${ICE_CSS}
     box-shadow: 0 0 22px rgba(244,63,94,0.6), inset 0 0 30px rgba(244,63,94,0.35); animation: sealSpin 6s linear infinite; }
   .seal-tag { position:absolute; left:50%; top:-10%; transform:translateX(-50%); color:#fecdd3; font-weight:900; letter-spacing:1px; pointer-events:none;
     background:rgba(76,5,25,0.85); border:1px solid #fb7185; border-radius:4px; padding:1px 7px; white-space:nowrap; z-index:2; }
+  /* phones: long seal labels wrap instead of running off the arena */
+  @media (max-width: 560px) { .seal-tag { white-space:normal; width:max-content; max-width:56vw; text-align:center; line-height:1.25; } }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
   .swarm-img { position:absolute; border-radius:50%; object-fit:cover; object-position:50% 30%; filter: drop-shadow(0 0 8px rgba(132,204,22,0.8)); }
   .swarm-ring { position:absolute; border-radius:50%; border:2px dashed rgba(190,242,100,0.55); background: radial-gradient(circle, rgba(26,46,5,0.35), rgba(26,46,5,0.08) 70%, transparent 72%);

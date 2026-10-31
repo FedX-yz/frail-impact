@@ -47,6 +47,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     floaterVer: 0,
     reserved: null,   // HUD box (status frame) enemies shouldn't stand behind
     bossInfo: null,   // { name, maxHp } for the boss bar
+    bossMusic: null,  // this boss's own song ({ src, buffer }), null = the general boss music
   };
 
   const cb = (name, ...args) => callbacks.current?.[name]?.(...args);
@@ -157,8 +158,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const countTier = tier => s.enemies.filter(e => e.tier === tier && !e.type.horde && !e.type.core).length;
 
   // Bosses: the Devourer is one enemy; the Worm and Hydra are linked groups
-  function spawnBoss(typeId) {
+  // (direct: this exact type, not its first phase)
+  function spawnBoss(typeId, { direct = false } = {}) {
+    if (!direct && ENEMY_TYPES[typeId]?.firstPhase) typeId = ENEMY_TYPES[typeId].firstPhase;
     const t = ENEMY_TYPES[typeId];
+    s.bossMusic = t.music ?? null;   // BattleArena plays it (null: the general boss music)
     const group = uid++;
     let parts = [];
     if (t.kind === 'worm') {
@@ -184,7 +188,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     } else {
       parts.push(spawnEnemy(typeId));
     }
-    s.bossInfo = { name: t.name, maxHp: parts.reduce((a, p) => a + p.maxHp, 0), group: parts[0]?.group };
+    s.bossInfo = { name: t.barName ?? t.name, maxHp: parts.reduce((a, p) => a + p.maxHp, 0), group: parts[0]?.group };
     // most of the small fry clear out when a boss shows up (less clutter around it)
     const keep = Math.max(1, Math.floor(s.stage.basicCap / 4));
     s.enemies.filter(e => e.tier === 'basic' && !e.type.horde && e.life == null).slice(keep).forEach(e => { e.life = rand(0.4, 1.8); });
@@ -302,6 +306,28 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
     sfx('hiss');
   }
+  // Phase 1 is dead: it bursts open and the Swarm King (phase 2) crawls out where it sat
+  function burstHost(e) {
+    const R = e.size * s.k;
+    s.globs = [];
+    effect({ kind: 'flash', color: '#a3e635', life: 0.5 });
+    effect({ kind: 'burst', x: e.x, y: e.y, r: R * 1.6, color: '#a3e635' });
+    effect({ kind: 'ring', x: e.x, y: e.y, r: R * 2.2, color: '#d9f99d', life: 0.8 });
+    effect({ kind: 'shards', x: e.x, y: e.y, r: R * 1.4, color: '#bef264', n: 26 });
+    effect({ kind: 'shards', x: e.x, y: e.y, r: R * 1.1, color: '#c4b5fd', n: 14 });
+    // it splatters acid all around (the pools are there to melt phase 2's swarms)
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + rand(-0.3, 0.3), d = R * rand(0.9, 1.6);
+      const at = { x: clamp(e.x + Math.cos(a) * d, s.W * 0.06, s.W * 0.94), y: clamp(e.y + Math.sin(a) * d * 0.7, s.H * 0.14, s.H * 0.9) };
+      s.globs.push({ id: uid++, x0: e.x, y0: e.y, x: at.x, y: at.y, t: -i * 0.06, dur: 0.55, life: 7, harmless: true });
+    }
+    s.hitStop = 0.35; shake(0.9); sfx('boom'); sfx('splash');
+    spawnBoss(e.type.nextPhase, { direct: true });
+    const king = s.enemies.find(x => x.tier === 'boss' && x.typeId === e.type.nextPhase);
+    if (king) { king.x = e.x; king.y = e.y; king.hurt = 0.3; }
+    s.banner = { text: 'IT BURSTS OPEN', sub: ENEMY_TYPES[e.type.nextPhase].name, t: 2.4, boss: true };
+  }
+
   function updateSwarmKing(dt) {
     // swarms that made it across vanish
     if (s.enemies.some(e => e.escaped)) {
@@ -309,6 +335,17 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       s.enemies = s.enemies.filter(e => !e.escaped);
     }
     for (const b of s.enemies) {
+      // phase 1: spits now and then (more once it's hurt)
+      const as = b.type.acidSpit;
+      if (as && s.phase !== 'clear' && s.phase !== 'defeat' && !(b.frozen > 0)) {
+        if (b.spitT == null) b.spitT = 2;
+        if ((b.spitT -= dt) <= 0) {
+          b.spitT = rand(...as.every);
+          spit(b, Math.round(rand(...(b.hp < b.maxHp / 2 ? as.hurtGlobs : as.globs))), as.pool);
+          b.attackT = 0.4;
+        }
+        continue;
+      }
       const sh = b.type.swarmShield;
       if (!sh || s.phase === 'clear' || s.phase === 'defeat') continue;
       const st = b.swk ?? (b.swk = { killed: 0, spawnT: 3, spitT: 1.2 });
@@ -335,7 +372,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (g.t < g.dur || g.landed) continue;
         g.landed = true;
         const r = K(SWK.splash);
-        if (T0 && dist(T0.x, T0.y, g.x, g.y) <= r + T0.r) hurt(enemyDmg('acid'), 'circle');
+        if (T0 && !g.harmless && dist(T0.x, T0.y, g.x, g.y) <= r + T0.r) hurt(enemyDmg('acid'), 'circle');
         s.hazards.push({ id: uid++, x: g.x, y: g.y, r: K(SWK.pool.r), t: 0, grow: 0.3, life: g.life ?? SWK.pool.life, acid: true });
         effect({ kind: 'burst', x: g.x, y: g.y, r, color: '#a3e635' });
         effect({ kind: 'shards', x: g.x, y: g.y, r, color: '#d9f99d', n: 10 });
@@ -905,6 +942,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
+    if (e.tier === 'boss' && t.nextPhase && s.phase !== 'clear' && s.phase !== 'defeat') { burstHost(e); return; }   // the Swarm King's phase 1
     if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
@@ -1153,6 +1191,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   function startBossIntro() {
     s.phase = 'bossIntro'; s.phaseT = 2.4;
+    const bt = ENEMY_TYPES[s.stage.boss], first = ENEMY_TYPES[bt?.firstPhase] ?? bt;
+    s.bossMusic = first?.music ?? null;   // its song starts with the BOSS INCOMING banner
     s.banner = { text: '⚠ BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true };
   }
   function stageClear() {
@@ -1429,10 +1469,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   // ── Sandbox / dev menu ──────────────────────────────────────────────────
   const dev = {
-    spawn: (typeId, n = 1) => {
+    // (direct: a boss's later phase on its own, e.g. spawn('swarmking', 1, true))
+    spawn: (typeId, n = 1, direct = false) => {
       const t = ENEMY_TYPES[typeId];
       if (!t) return;
-      if (t.tier === 'boss') { s.phase = 'boss'; spawnBoss(typeId); return; }
+      if (t.tier === 'boss') { s.phase = 'boss'; spawnBoss(typeId, { direct }); return; }
       if (typeId === 'swarmling') { spawnHorde(); return; }
       for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : spawnEnemy(typeId, { armed: true });
     },
