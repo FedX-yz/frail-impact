@@ -275,7 +275,7 @@ const SFX_FILES = {
   miss:    null,   // click on empty space
   // Bio (Ten Shadows / Mahoraga)
   summon: null, sign: null, tick: null, bark: null, howl: null, thunder: null, ox: null, deer: null, hiss: null, roar: null,
-  trumpet: null, splash: null, tongue: null, domain: null, wheel: null, gun: null, leap: null, charge: null, worldslash: null, discover: null, saved: null, dive: null,
+  trumpet: null, splash: null, tongue: null, domain: null, wheel: null, gun: null, leap: null, charge: null, worldslash: null, discover: null, saved: null, dive: null, fart: null,
 };
 Object.values(SFX_FILES).filter(Boolean).forEach(f => loadBuffer(`${BASE}sounds/${f}`).catch(() => {}));
 
@@ -333,6 +333,23 @@ function sweep(type, pts, dur, vol, delay = 0, vib = 0) {
   o.start(t); o.stop(t + dur + 0.02);
 }
 
+// a low buzz whose loudness flutters fast (a wet, rippling rasp)
+function flutter(f0, f1, dur, vol, delay = 0) {
+  const t = now() + delay;
+  const o = _audioCtx.createOscillator(), g = _audioCtx.createGain(), am = _audioCtx.createGain();
+  const l = _audioCtx.createOscillator(), lg = _audioCtx.createGain(), f = _audioCtx.createBiquadFilter();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * 1.15, t + dur * 0.25); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  l.type = 'square'; l.frequency.setValueAtTime(34, t); l.frequency.linearRampToValueAtTime(22, t + dur);
+  lg.gain.value = 0.5; am.gain.value = 0.5;   // loudness 0…1, 22-34 times a second
+  l.connect(lg); lg.connect(am.gain);
+  f.type = 'lowpass'; f.frequency.value = 700;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.05);
+  g.gain.setValueAtTime(vol, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(am); am.connect(f); f.connect(g); g.connect(master);
+  o.start(t); l.start(t); o.stop(t + dur + 0.02); l.stop(t + dur + 0.02);
+}
+
 const SYNTH = {
   hit:     () => { crunch(vary(1800), 0.05, 0.35, 2); tone('triangle', vary(420), 180, 0.06, 0.18); },
   crit:    () => { crunch(vary(2600), 0.08, 0.45, 1.5); tone('square', vary(880), 330, 0.1, 0.12); tone('triangle', vary(1320), 660, 0.12, 0.1, 0.02); },
@@ -368,12 +385,13 @@ const SYNTH = {
   discover: () => { [784, 988, 1175, 1568].forEach((f, i) => tone('triangle', f, f, 0.24, 0.09, i * 0.075)); tone('sine', 2093, 2093, 0.9, 0.05, 0.3); crunch(4200, 0.3, 0.07, 0.6, 0.3); },
   saved:   () => { [523, 659, 784, 1046].forEach((f, i) => tone('sine', f, f * 1.01, 0.8, 0.09, i * 0.04)); crunch(2600, 0.45, 0.18, 0.5); },
   dive:    () => { sweep('sine', [[0, 1900], [0.3, 320]], 0.32, 0.1); crunch(1800, 0.3, 0.12, 0.7); },
+  fart:    () => { flutter(105, 62, 1.25, 0.32); crunch(140, 1.1, 0.35, 1.2, 0.02); crunch(420, 0.5, 0.12, 2, 0.05); },
   worldslash: () => { crunch(6500, 0.5, 0.6, 0.4); crunch(300, 0.9, 0.6, 0.4, 0.04); tone('sine', 1900, 180, 0.55, 0.2); tone('sine', 60, 30, 0.9, 0.3, 0.05); },
 };
 
 // Too many sounds at once turn into mush: limit how often each can play
 const MIN_GAP = { hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06,
-  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2 };
+  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2, fart: 1 };
 const lastPlayed = {};
 export function sfx(name, arg) {
   if (!getSettings().combatSfx || getSettings().volume <= 0) return;

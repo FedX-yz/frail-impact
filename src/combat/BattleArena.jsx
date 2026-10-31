@@ -378,7 +378,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             })()}
             {s.hazards.map(h => {
               const grow = Math.min(1, h.t / h.grow), fade = h.t > h.life - 0.5 ? (h.life - h.t) / 0.5 : 1;
-              // the Swarm King's acid: bubbling (it eats swarmlings, it doesn't hurt you)
+              // the Swarm King's acid: bubbling (it hurts you and eats swarms)
               if (h.acid) return (
                 <g key={h.id} opacity={fade}>
                   <circle cx={h.x} cy={h.y} r={h.r * (0.4 + 0.6 * grow)} fill="rgba(163,230,53,0.30)" stroke="#d9f99d" strokeWidth={2.5 * k} />
@@ -476,14 +476,21 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* the Swarm King's SWARM SHIELD: bats circling it */}
           {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : Array.from({ length: 10 }, (_, i) => {
-            const a = s.time * 1.6 + i * 0.628, R = b.size * k * (0.62 + 0.06 * Math.sin(s.time * 3 + i)), sz = 34 * k;
+            const a = s.time * 1.6 + i * 0.628, R = b.size * k * (b.drawScale ?? 1) * (0.4 + 0.03 * Math.sin(s.time * 3 + i)), sz = 34 * k * Math.max(1, (b.drawScale ?? 1) * 0.75);
             return <img key={`sw${b.id}-${i}`} src={ENEMY_TYPES.swarmling.img} alt="" draggable={false}
               style={{ position: 'absolute', left: b.x + Math.cos(a) * R - sz / 2, top: b.y + Math.sin(a) * R * 0.75 - sz / 2, width: sz, height: sz, zIndex: 9, pointerEvents: 'none',
                 transform: Math.sin(a) < 0 ? 'scaleX(-1)' : undefined, filter: 'drop-shadow(0 0 6px #84cc16)' }} />;
           }))}
 
+          {/* the Swarm King's swarm storm: bats flying out in a spiral */}
+          {s.bolts.map(b => b.kind !== 'bat' ? null : (
+            <img key={b.id} src={ENEMY_TYPES.swarmling.img} alt="" draggable={false} className="storm-bat"
+              style={{ left: b.x - b.r * 1.5, top: b.y - b.r * 1.5, width: b.r * 3, height: b.r * 3, transform: Math.cos(b.ang) < 0 ? 'scaleX(-1)' : undefined }} />
+          ))}
+
           {/* ── Kit visuals above the enemies ───────────────────────── */}
           <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 9, overflow: 'visible' }}>
+            {s.gas && <GasCloud g={s.gas} k={k} time={s.time} />}
             {s.kit.souls > 0 && P && (
               <g>
                 {Array.from({ length: s.kit.souls }, (_, i) => {
@@ -637,15 +644,34 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             {/* the Swarm King's acid: where it lands, and the glob arcing there */}
             {s.globs.map(g => {
               if (g.t < 0) return null;
-              const p = Math.min(1, g.t / g.dur), x = g.x0 + (g.x - g.x0) * p, y = g.y0 + (g.y - g.y0) * p - Math.sin(p * Math.PI) * 160 * k;
+              const p = Math.min(1, g.t / g.dur), R = g.r ?? 62 * k;
+              // (rain falls straight down; the rest arcs out of its mouth)
+              const x = g.x0 + (g.x - g.x0) * p, y = g.rain ? g.y0 + (g.y - g.y0) * p * p : g.y0 + (g.y - g.y0) * p - Math.sin(p * Math.PI) * 160 * k;
               return (
                 <g key={g.id}>
-                  <circle cx={g.x} cy={g.y} r={62 * k} fill={`rgba(163,230,53,${0.08 + 0.2 * p})`} stroke="#a3e635" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
-                  <circle cx={g.x} cy={g.y} r={62 * k * p} fill="none" stroke="#ecfccb" strokeWidth={2 * k} opacity={0.8} />
-                  <circle cx={x} cy={y} r={(11 + 5 * p) * k} fill="#bef264" stroke="#3f6212" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 8px #84cc16)' }} />
+                  <circle cx={g.x} cy={g.y} r={R} fill={`rgba(163,230,53,${0.08 + 0.2 * p})`} stroke="#a3e635" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
+                  <circle cx={g.x} cy={g.y} r={R * p} fill="none" stroke="#ecfccb" strokeWidth={2 * k} opacity={0.8} />
+                  {g.rain
+                    ? <ellipse cx={x} cy={y} rx={7 * k} ry={16 * k} fill="#bef264" stroke="#3f6212" strokeWidth={2.5 * k} style={{ filter: 'drop-shadow(0 0 8px #84cc16)' }} />
+                    : <circle cx={x} cy={y} r={(11 + 5 * p) * k} fill="#bef264" stroke="#3f6212" strokeWidth={3 * k} style={{ filter: 'drop-shadow(0 0 8px #84cc16)' }} />}
                 </g>
               );
             })}
+            {/* its acid shots, and where the next fan of them is going */}
+            {s.bolts.map(b => b.kind !== 'acid' ? null : (
+              <g key={b.id} style={{ filter: 'drop-shadow(0 0 7px #84cc16)' }}>
+                <line x1={b.x - Math.cos(b.ang) * b.r * 2.6} y1={b.y - Math.sin(b.ang) * b.r * 2.6} x2={b.x} y2={b.y} stroke="#a3e635" strokeWidth={b.r * 1.1} strokeLinecap="round" opacity={0.55} />
+                <circle cx={b.x} cy={b.y} r={b.r} fill="#d9f99d" stroke="#3f6212" strokeWidth={2.5 * k} />
+              </g>
+            ))}
+            {s.enemies.map(e => !e.tele ? null : (
+              <g key={`tele${e.id}`}>
+                {e.tele.angs.map((a, i) => (
+                  <line key={i} x1={e.tele.x} y1={e.tele.y} x2={e.tele.x + Math.cos(a) * 420 * k} y2={e.tele.y + Math.sin(a) * 420 * k}
+                    stroke="#a3e635" strokeWidth={3 * k} strokeDasharray={`${10 * k} ${8 * k}`} opacity={0.4 + 0.4 * Math.abs(Math.sin(s.time * 14))} />
+                ))}
+              </g>
+            ))}
             {/* projectiles fly above everything on the field (enemy shots, your shots) */}
             {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} layer="air" />)}
             {s.shots.filter(sh => !sh.maho).map(sh => (
@@ -763,10 +789,33 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   );
 }
 
+// The Swarm King's gas: murky puffs churning around it, a dashed rim where it hurts
+function GasCloud({ g, k, time }) {
+  const grow = Math.min(1, g.t / g.grow), fade = Math.min(1, Math.max(0, (g.life - g.t) / 0.8)), R = g.r * (0.5 + 0.5 * grow);
+  return (
+    <g opacity={fade}>
+      <defs>
+        <radialGradient id="gas-puff">
+          <stop offset="0%" stopColor="#b5b84a" stopOpacity="0.55" />
+          <stop offset="60%" stopColor="#7c7f2a" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="#4d5218" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx={g.x} cy={g.y} r={R} fill="rgba(110,112,36,0.22)" />
+      {Array.from({ length: 11 }, (_, i) => {
+        const a = time * (i % 2 ? 0.35 : -0.28) + i * 0.571, d = R * (0.25 + 0.5 * ((i * 0.37) % 1)), r = R * (0.42 + 0.12 * Math.sin(time * 1.3 + i));
+        return <circle key={i} cx={g.x + Math.cos(a) * d} cy={g.y + Math.sin(a) * d * 0.85} r={r} fill="url(#gas-puff)" />;
+      })}
+      <circle cx={g.x} cy={g.y} r={R * 0.92} fill="none" stroke="#d9e36b" strokeWidth={2 * k} strokeDasharray={`${14 * k} ${10 * k}`} strokeDashoffset={-time * 30} opacity={0.55} />
+    </g>
+  );
+}
+
 // A Swarm King swarm: a cloud of bats around its fixed hitbox (the ring), thinning out as the acid eats it
 function SwarmCloud({ e, k, time }) {
   const R = e.size * k * 0.5, frac = Math.max(0, e.hp / e.maxHp), left = Math.cos(e.angle) < 0;
-  const tilt = (e.angle - (left ? Math.PI : 0)) * 0.5 * (left ? -1 : 1), bob = Math.sin(time * 9 + e.id) * 3 * k;
+  const off = Math.atan2(Math.sin(e.angle), Math.cos(e.angle)), rel = left ? (off > 0 ? off - Math.PI : off + Math.PI) : off;   // heading vs straight left/right
+  const tilt = rel * 0.5 * (left ? -1 : 1), bob = Math.sin(time * 9 + e.id) * 3 * k;
   return (
     <div style={{ position: 'absolute', left: e.x, top: e.y, width: 0, height: 0, zIndex: 7, pointerEvents: 'none' }}>
       <div className="swarm-ring" style={{ left: -R, top: -R, width: R * 2, height: R * 2 }} />
@@ -1559,6 +1608,7 @@ ${ICE_CSS}
   /* phones: long seal labels wrap instead of running off the arena */
   @media (max-width: 560px) { .seal-tag { white-space:normal; width:max-content; max-width:56vw; text-align:center; line-height:1.25; } }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
+  .storm-bat { position:absolute; z-index:9; pointer-events:none; filter: drop-shadow(0 0 5px #a78bfa) drop-shadow(0 0 2px #000); }
   .swarm-img { position:absolute; border-radius:50%; object-fit:cover; object-position:50% 30%; filter: drop-shadow(0 0 8px rgba(132,204,22,0.8)); }
   .swarm-ring { position:absolute; border-radius:50%; border:2px dashed rgba(190,242,100,0.55); background: radial-gradient(circle, rgba(26,46,5,0.35), rgba(26,46,5,0.08) 70%, transparent 72%);
     animation: sealSpin 4s linear infinite; }

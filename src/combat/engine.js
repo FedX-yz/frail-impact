@@ -38,6 +38,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     combo: { n: 0, t: 0, best: 0 },      // landed hits in a row (see BAL.COMBO_*)
     hazards: [],                         // poison puddles from Toxic elites, the Swarm King's acid (acid: true)
     globs: [],                           // the Swarm King's acid in the air
+    bolts: [],                           // the Swarm King's bats and acid shots
+    gas: null,                           // the Swarm King's gas cloud
     hitStop: 0,                          // tiny freeze on big kills (game feel)
     paused: false,                       // story mode pause menu
     over: null,                          // story battles: 'won' / 'lost' once it has ended
@@ -118,7 +120,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const affixHp = affix === 'swift' ? 0.7 : affix ? 1.3 : 1;
     const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp * M('enemyHp') * affixHp));
     // most enemies walk in from the left or right edge instead of popping in
-    let p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * 0.62, y: s.H * 0.42 } : randomPoint());
+    let p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * (type.bossPos?.[0] ?? 0.62), y: s.H * (type.bossPos?.[1] ?? 0.42) } : randomPoint());
     let entering = null;
     if (type.enter && !opts.pos && s.W) {
       const left = Math.random() < 0.5, half = type.size * s.k * 0.6;
@@ -256,126 +258,323 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── The Swarm King ───────────────────────────────────────────────────────
-  // SWARM SHIELD up: it takes no damage. Swarms sweep across the arena from one side to the
-  // other and vanish; they only steer a little toward your cursor, and nothing you do hurts
-  // them — only its acid pools do. Lead 3 swarms through the acid and the shield is gone.
-  // It spits acid the whole fight (faster once the shield is down): the splash hurts you,
-  // the pool it leaves eats swarms.
-  const SWK = { spawnEvery: [3.2, 5], maxSwarms: 2, speed: 300, steer: 1.5, maxOff: 0.85, spit: [[3.2, 4.2], [1.6, 2.2]], globs: [2, 3], pool: { r: 72, life: 9 }, splash: 62 };
+  // Phase 1, the host (swarmhost): huge, it just sits there. SWARM SHIELD up: it takes no damage.
+  // Swarms fly in from the edge of the screen on the far side from your cursor and cross toward
+  // you; nothing you do hurts them, only its acid does. It spits acid at you: the splash hurts,
+  // the pool it leaves hurts you too while you stand in it, and eats swarms. Lead 7 swarms
+  // through the acid and the shield is gone, and it spits more often. Now and then a SWARM STORM:
+  // bats pour out of it in a turning spiral (its spitting pauses meanwhile). Once the shield is
+  // down it also lets out a cloud of gas around itself, and acid rains down until the gas clears.
+  // Phase 2, the Swarm King itself (swarmking): no shield, but it darts around fast and attacks
+  // from range: acid spit, a fan of acid shots, the swarm storm. Every so often it flies off the
+  // screen, acid rains down and swarms sweep across; it comes back once that's over.
+  const SWK = {
+    swarm: { speed: 300, steer: 1.5, maxOff: 0.85, every: [3.2, 5], everyOpen: [9, 13], max: 2 },
+    spit: { every: [3.2, 4.2], everyOpen: [1.5, 2.1], globs: 2, globsOpen: 3 },
+    pool: { r: 72, life: 9, lifeOpen: 6 }, splash: 62,
+    pattern: { first: [8, 11], every: [11, 15], everyOpen: [8, 11], open: 5 },   // storms / gas (open: the first gas after the shield breaks)
+    storm: { dur: 4.6, windup: 0.7, gap: 0.22, arms: 4, turn: 0.33, speed: 190, r: 15 },
+    gas: { grow: 0.7, life: 7.5, r: 0.45, rainGap: 0.3, rainR: 46 },   // r: × its drawn size
+    moth: { dash: [0.3, 0.42], hover: [0.6, 1.2], keep: 240, atk: [1.9, 2.8], hide: [16, 21], hideDur: 6.5, rainGap: 0.24, swarmGap: 1.8, swarms: 3 },
+    fan: { n: 7, spread: 0.95, volleys: 2, windup: 0.65, gap: 0.35, speed: 400, r: 12 },
+  };
   const angleDiff = (a, b) => ((a - b + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;   // a − b in −π…π
+  const drawnSize = b => b.size * s.k * (b.drawScale ?? 1);
+  // a spot on its picture (type.mouth / type.vent: × its drawn size, from its middle)
+  const spotOn = (b, key) => { const m = b.type[key] ?? [0, 0], D = drawnSize(b); return { x: b.x + m[0] * D, y: b.y + m[1] * D }; };
+
+  // a swarm: comes in from the edge of the screen on the far side from your cursor, flying at you
   function spawnSwarm(boss) {
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    const y = rand(s.H * 0.22, s.H * 0.82);
-    const c = spawnEnemy('swarm', { pos: { x: dir > 0 ? -K(80) : s.W + K(80), y } });
+    const P = aimPoint(), cx = s.W / 2, cy = s.H / 2;
+    let a = Math.atan2(cy - P.y, cx - P.x);
+    if (dist(P.x, P.y, cx, cy) < K(30)) a = rand(0, Math.PI * 2);
+    a += rand(-0.25, 0.25);   // (not always the exact same line)
+    const dx = Math.cos(a), dy = Math.sin(a);
+    const t = Math.min(Math.abs(dx) > 1e-3 ? cx / Math.abs(dx) : Infinity, Math.abs(dy) > 1e-3 ? cy / Math.abs(dy) : Infinity) + K(70);
+    const x = cx + dx * t, y = cy + dy * t;
+    const c = spawnEnemy('swarm', { pos: { x, y } });
     c.hp = c.maxHp = 100;
-    c.dir = dir; c.angle = dir > 0 ? 0 : Math.PI; c.owner = boss.id;
-    floater('A SWARM!', dir > 0 ? K(70) : s.W - K(70), y - K(60), '#bef264', true);
+    c.angle = c.head = Math.atan2(P.y - y, P.x - x); c.owner = boss.id;
+    floater('A SWARM!', clamp(x, K(80), s.W - K(80)), clamp(y - K(50), K(60), s.H - K(40)), '#bef264', true);
     sfx('howl');
   }
-  // a swarm flies straight across, bending a little toward your cursor while you're ahead of it
+  // a swarm flies straight on, bending a little toward your cursor while you're ahead of it
   function moveSwarm(e, dt) {
-    const P = aimPoint(), head = e.dir > 0 ? 0 : Math.PI;
-    const ahead = (P.x - e.x) * e.dir > K(20);
-    const off = ahead ? clamp(angleDiff(Math.atan2(P.y - e.y, P.x - e.x), head), -SWK.maxOff, SWK.maxOff) : 0;
-    e.angle += clamp(angleDiff(head + off, e.angle), -SWK.steer * dt, SWK.steer * dt);
-    const sp = Math.max(K(SWK.speed), s.W * 0.42) * (e.slow ?? 1);   // crosses any screen in ~2.5s
-    e.x += Math.cos(e.angle) * sp * dt; e.y = clamp(e.y + Math.sin(e.angle) * sp * dt, s.H * 0.1, s.H * 0.92);
-    if (e.dir > 0 ? e.x > s.W + K(100) : e.x < -K(100)) e.escaped = true;
-    else if (e.x < -K(180) || e.x > s.W + K(180)) e.escaped = true;   // (never lost off-screen)
+    const P = aimPoint(), c = SWK.swarm;
+    const ahead = (P.x - e.x) * Math.cos(e.head) + (P.y - e.y) * Math.sin(e.head) > K(20);
+    const off = ahead ? clamp(angleDiff(Math.atan2(P.y - e.y, P.x - e.x), e.head), -c.maxOff, c.maxOff) : 0;
+    e.angle += clamp(angleDiff(e.head + off, e.angle), -c.steer * dt, c.steer * dt);
+    const sp = Math.max(K(c.speed), Math.hypot(s.W, s.H) * 0.36) * (e.slow ?? 1);   // crosses any screen in ~2.5s
+    e.x += Math.cos(e.angle) * sp * dt; e.y += Math.sin(e.angle) * sp * dt;
+    const m = K(110), out = e.x < -m || e.x > s.W + m || e.y < -m || e.y > s.H + m;
+    const away = (e.x - s.W / 2) * Math.cos(e.angle) + (e.y - s.H / 2) * Math.sin(e.angle) > 0;
+    if (out && (away || s.time - e.born > 8)) e.escaped = true;   // (never lost off-screen)
   }
   // a swarm the acid finished off
   function swarmMelted(e) {
     effect({ kind: 'burst', x: e.x, y: e.y, r: e.size * s.k * 0.6, color: '#a3e635' });
     effect({ kind: 'shards', x: e.x, y: e.y, r: e.size * s.k * 0.6, color: '#d9f99d', n: 14 });
     const b = s.enemies.find(x => x.id === e.owner), st = b?.swk, sh = b?.type.swarmShield;
-    if (!st || st.killed >= sh.swarms) { floater('MELTED', e.x, e.y - K(40), '#bef264', true); return; }
+    if (!st || !sh || st.killed >= sh.swarms) { floater('MELTED', e.x, e.y - K(40), '#bef264', true); return; }
     st.killed++;
     if (st.killed < sh.swarms) announce(`SWARM MELTED · ${st.killed}/${sh.swarms}`, '#bef264');
     else {
       announce('THE SWARM SHIELD IS DOWN · HIT IT!', '#facc15');
       effect({ kind: 'flash', color: '#a3e635', life: 0.4 });
-      effect({ kind: 'ring', x: b.x, y: b.y, r: b.size * s.k * 1.2, color: '#facc15', life: 0.6 });
+      effect({ kind: 'ring', x: b.x, y: b.y, r: drawnSize(b) * 0.55, color: '#facc15', life: 0.6 });
       shake(0.5); sfx('bigKill');
+      if (!st.pat) st.patT = SWK.pattern.open;   // a moment to hit it before the gas
     }
   }
+  // acid arcing out of its mouth at you (and around you); where it lands it leaves a pool
   function spit(boss, n, life) {
-    const P = aimPoint();
+    const P = aimPoint(), o = spotOn(boss, 'mouth');
     for (let i = 0; i < n; i++) {
       const at = i === 0 ? { x: P.x + rand(-K(25), K(25)), y: P.y + rand(-K(25), K(25)) } : randomPoint(P, K(230));
-      s.globs.push({ id: uid++, x0: boss.x, y0: boss.y - boss.size * s.k * 0.15, x: at.x, y: at.y, t: -i * 0.18, dur: 0.95, life });
+      s.globs.push({ id: uid++, x0: o.x, y0: o.y, x: at.x, y: at.y, t: -i * 0.18, dur: 0.95, life });
     }
+    boss.attackT = 0.4;
     sfx('hiss');
   }
+  // acid falling straight down from above the screen: half of it near you
+  function rainDrop() {
+    const P = aimPoint();
+    const at = Math.random() < 0.5 ? randomPoint(P, K(170)) : { x: rand(s.W * 0.04, s.W * 0.96), y: rand(s.H * 0.14, s.H * 0.94) };
+    s.globs.push({ id: uid++, x0: at.x, y0: -K(40), x: at.x, y: at.y, t: 0, dur: 0.8, rain: true, r: K(SWK.gas.rainR) });
+  }
+  // its projectiles (bats in a swarm storm, acid shots): straight lines, they hit your cursor
+  function bolt(kind, x, y, ang, speed, r, dmgKey) {
+    if (s.bolts.length >= 220) return;
+    s.bolts.push({ id: uid++, kind, x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, ang, r, dmg: enemyDmg(dmgKey) });
+  }
+  function updateBolts(dt) {
+    if (!s.bolts.length) return;
+    const T = rt.target(), blockers = s.fire.length || s.kit.ward || s.kit.ice?.walls.length || s.kit.ice?.figures.length;
+    const m = K(60);
+    for (const b of s.bolts) {
+      const f = rt.shotSpeed(b, dt);   // Infinity slows them down
+      b.x += b.vx * dt * f; b.y += b.vy * dt * f;
+      if (blockers && rt.shotBlocked(b)) { b.dead = true; continue; }   // fire walls, the Round Deer, ice
+      if (T && dist(T.x, T.y, b.x, b.y) <= b.r + T.r + K(4)) { b.dead = true; hurt(b.dmg, 'shot'); continue; }
+      if (b.x < -m || b.y < -m || b.x > s.W + m || b.y > s.H + m) b.dead = true;
+    }
+    s.bolts = s.bolts.filter(b => !b.dead);
+  }
+
+  // SWARM STORM: bats pour out of it in a turning spiral
+  function startStorm(b, st) {
+    st.pat = { kind: 'storm', t: 0, emit: 0, base: rand(0, Math.PI * 2), spin: Math.random() < 0.5 ? 1 : -1 };
+    st.lastStorm = s.time;
+    announce('SWARM STORM', '#c4b5fd');
+    b.attackT = 0.8; sfx('howl');
+  }
+  function runStorm(b, st, dt) {
+    const p = st.pat, c = SWK.storm;
+    p.t += dt;
+    if (p.t >= c.dur) { st.pat = null; return; }
+    if (p.t < c.windup) return;
+    if ((p.emit -= dt) > 0) return;
+    p.emit += c.gap;
+    const o = spotOn(b, 'vent');
+    for (let i = 0; i < c.arms; i++) bolt('bat', o.x, o.y, p.base + i * Math.PI * 2 / c.arms, K(c.speed), K(c.r), 'batShot');
+    p.base += c.turn * p.spin;
+    if (!p.flipped && p.t > (c.windup + c.dur) / 2) { p.flipped = true; p.spin *= -1; }   // halfway: it turns the other way
+    if (Math.random() < 0.3) b.attackT = 0.25;
+  }
+  // the gas: a cloud around it that hurts while your cursor is inside; acid rains until it clears
+  function startGas(b, st) {
+    const o = spotOn(b, 'vent');
+    s.gas = { id: uid++, owner: b.id, x: o.x, y: o.y, r: drawnSize(b) * SWK.gas.r, t: 0, grow: SWK.gas.grow, life: SWK.gas.life };
+    st.pat = { kind: 'gas', t: 0, rainT: 0.9 };
+    announce('☁ TOXIC GAS · stay out, dodge the rain', '#bef264');
+    effect({ kind: 'ring', x: o.x, y: o.y, r: s.gas.r, color: '#a3a33a', life: 0.7 });
+    b.attackT = 0.8; shake(0.35); sfx('fart');
+  }
+  function runGas(b, st, dt) {
+    const p = st.pat, g = s.gas;
+    p.t += dt;
+    if (!g || g.t >= g.life) { st.pat = null; return; }
+    if (g.t < g.life - 0.6 && (p.rainT -= dt) <= 0) { p.rainT += SWK.gas.rainGap; rainDrop(); }
+  }
+
+  // ── Phase 2: the Swarm King, darting around ──
+  function mothSpot(b) {
+    const P = aimPoint(), c = SWK.moth;
+    for (let i = 0; i < 20; i++) {
+      const p = { x: rand(s.W * 0.14, s.W * 0.86), y: rand(s.H * 0.22, s.H * 0.64) };
+      if (dist(p.x, p.y, P.x, P.y) < K(c.keep) && i < 15) continue;   // keeps its distance from you
+      if (dist(p.x, p.y, b.x, b.y) < K(150) && i < 18) continue;     // (and actually goes somewhere)
+      return p;
+    }
+    return { x: s.W - b.x, y: s.H * 0.4 };
+  }
+  const dashTo = (b, st, p, dur = rand(...SWK.moth.dash)) => { st.mv.dash = { x0: b.x, y0: b.y, x1: p.x, y1: p.y, t: 0, dur }; };
+  function moveMoth(b, st, dt) {
+    const mv = st.mv;
+    if (mv.dash) {
+      const d = mv.dash; d.t += dt;
+      const p = Math.min(1, d.t / d.dur), e = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+      b.x = d.x0 + (d.x1 - d.x0) * e; b.y = d.y0 + (d.y1 - d.y0) * e;
+      if (p >= 1) { mv.dash = null; mv.hover = rand(...SWK.moth.hover); }
+      return;
+    }
+    if (b.hidden) return;
+    b.x += Math.cos(s.time * 2.1 + b.id) * K(22) * dt; b.y += Math.sin(s.time * 2.7 + b.id) * K(16) * dt;   // hovering
+    if (st.pat) return;   // holds still while it attacks
+    if ((mv.hover -= dt) <= 0) dashTo(b, st, mothSpot(b));
+  }
+  function startFan(b, st) {
+    const o = spotOn(b, 'mouth'), P = aimPoint();
+    st.pat = { kind: 'fan', t: 0, fired: 0, aim: Math.atan2(P.y - o.y, P.x - o.x) };
+    b.tele = { x: o.x, y: o.y, angs: fanAngles(st.pat.aim, 0) };
+    b.attackT = SWK.fan.windup; sfx('charge');
+  }
+  function fanAngles(aim, half) {
+    const c = SWK.fan, step = c.spread / (c.n - 1);
+    return Array.from({ length: c.n }, (_, i) => aim + (i - (c.n - 1) / 2) * step + (half ? step / 2 : 0));
+  }
+  function runFan(b, st, dt) {
+    const p = st.pat, c = SWK.fan;
+    p.t += dt;
+    if (p.fired < c.volleys && p.t >= c.windup + p.fired * c.gap) {
+      const o = spotOn(b, 'mouth');
+      fanAngles(p.aim, p.fired % 2).forEach(a => bolt('acid', o.x, o.y, a, K(c.speed), K(c.r), 'acidShot'));
+      p.fired++; b.tele = null; b.attackT = 0.3; sfx('hiss');
+    }
+    if (p.fired >= c.volleys && p.t >= c.windup + c.volleys * c.gap) st.pat = null;
+  }
+  // it flies off the screen; acid rains and swarms sweep across until it comes back
+  function startHide(b, st) {
+    const side = b.x < s.W / 2 ? -1 : 1, D = drawnSize(b);
+    st.pat = { kind: 'hide', step: 'out' };
+    dashTo(b, st, { x: side < 0 ? -D * 0.7 : s.W + D * 0.7, y: clamp(b.y - K(120), s.H * 0.1, s.H * 0.5) }, 0.5);
+    announce('IT TAKES TO THE SKY', '#c4b5fd');
+    sfx('dive');
+  }
+  function runHide(b, st, dt) {
+    const p = st.pat, c = SWK.moth;
+    if (p.step === 'out') {
+      if (st.mv.dash) return;
+      b.hidden = true; p.step = 'gone'; p.t = 0; p.rainT = 0.4; p.swarmT = 0.8; p.swarms = 0;
+      announce('ACID RAIN · keep moving', '#bef264');
+    } else if (p.step === 'gone') {
+      p.t += dt;
+      if ((p.rainT -= dt) <= 0 && p.t < c.hideDur - 0.9) { p.rainT += c.rainGap; rainDrop(); }
+      if (p.swarms < c.swarms && (p.swarmT -= dt) <= 0) { p.swarmT = c.swarmGap; p.swarms++; spawnSwarm(b); }
+      if (p.t >= c.hideDur) {
+        const side = Math.random() < 0.5 ? -1 : 1, D = drawnSize(b);
+        b.x = side < 0 ? -D * 0.7 : s.W + D * 0.7; b.y = rand(s.H * 0.2, s.H * 0.45);
+        b.hidden = false; p.step = 'in';
+        dashTo(b, st, mothSpot(b), 0.6);
+        sfx('dive');
+      }
+    } else if (!st.mv.dash) {
+      st.pat = null; st.hideT = rand(...c.hide); st.atkT = 1.2;
+    }
+  }
+  function updateMoth(b, st, dt) {
+    moveMoth(b, st, dt);
+    if (st.pat) {
+      if (st.pat.kind === 'storm') runStorm(b, st, dt);
+      else if (st.pat.kind === 'fan') runFan(b, st, dt);
+      else if (st.pat.kind === 'hide') runHide(b, st, dt);
+      return;
+    }
+    if (st.mv.dash) return;
+    if ((st.hideT -= dt) <= 0) { startHide(b, st); return; }
+    if ((st.atkT -= dt) > 0) return;
+    st.atkT = rand(...SWK.moth.atk);
+    const r = Math.random();
+    if (r < 0.3) spit(b, 2, SWK.pool.lifeOpen);
+    else if (r < 0.75 || s.time - (st.lastStorm ?? -99) < 10) startFan(b, st);
+    else startStorm(b, st);
+  }
+
+  // ── Phase 1: the host ──
+  function updateHost(b, st, dt) {
+    const sh = b.type.swarmShield, shielded = st.killed < sh.swarms;
+    b.sealed = shielded; b.sealWord = 'SHIELDED';
+    b.sealLabel = `SWARM SHIELD · lead the swarms into the acid ${st.killed}/${sh.swarms}`;
+    // the next swarm (none while it's gassing)
+    const out = s.enemies.filter(e => e.owner === b.id && e.type.acidOnly).length;
+    if (st.pat?.kind !== 'gas' && (st.swarmT -= dt) <= 0 && out < SWK.swarm.max) {
+      spawnSwarm(b);
+      st.swarmT = rand(...(shielded ? SWK.swarm.every : SWK.swarm.everyOpen));
+    }
+    // a storm / the gas (its spitting pauses meanwhile)
+    if (st.pat) {
+      if (st.pat.kind === 'storm') runStorm(b, st, dt); else runGas(b, st, dt);
+      if (!st.pat) { st.patT = rand(...(shielded ? SWK.pattern.every : SWK.pattern.everyOpen)); st.spitT = Math.max(st.spitT, 1); }
+      return;
+    }
+    if ((st.patT -= dt) <= 0) {
+      if (!shielded && st.next !== 'storm') { startGas(b, st); st.next = 'storm'; }
+      else { startStorm(b, st); st.next = 'gas'; }
+      return;
+    }
+    if ((st.spitT -= dt) <= 0) {
+      st.spitT = rand(...(shielded ? SWK.spit.every : SWK.spit.everyOpen));
+      spit(b, shielded ? SWK.spit.globs : SWK.spit.globsOpen, shielded ? SWK.pool.life : SWK.pool.lifeOpen);
+    }
+  }
+
   // Phase 1 is dead: it bursts open and the Swarm King (phase 2) crawls out where it sat
   function burstHost(e) {
-    const R = e.size * s.k;
-    s.globs = [];
+    const R = drawnSize(e) * 0.5, o = spotOn(e, 'vent');
+    s.globs = []; s.bolts = []; s.gas = null;
+    s.enemies = s.enemies.filter(x => !(x.type.acidOnly && x.owner === e.id));
     effect({ kind: 'flash', color: '#a3e635', life: 0.5 });
-    effect({ kind: 'burst', x: e.x, y: e.y, r: R * 1.6, color: '#a3e635' });
-    effect({ kind: 'ring', x: e.x, y: e.y, r: R * 2.2, color: '#d9f99d', life: 0.8 });
-    effect({ kind: 'shards', x: e.x, y: e.y, r: R * 1.4, color: '#bef264', n: 26 });
-    effect({ kind: 'shards', x: e.x, y: e.y, r: R * 1.1, color: '#c4b5fd', n: 14 });
-    // it splatters acid all around (the pools are there to melt phase 2's swarms)
+    effect({ kind: 'burst', x: o.x, y: o.y, r: R * 1.3, color: '#a3e635' });
+    effect({ kind: 'ring', x: o.x, y: o.y, r: R * 1.8, color: '#d9f99d', life: 0.8 });
+    effect({ kind: 'shards', x: o.x, y: o.y, r: R * 1.2, color: '#bef264', n: 26 });
+    effect({ kind: 'shards', x: o.x, y: o.y, r: R, color: '#c4b5fd', n: 14 });
+    // it splatters acid all around
     for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2 + rand(-0.3, 0.3), d = R * rand(0.9, 1.6);
-      const at = { x: clamp(e.x + Math.cos(a) * d, s.W * 0.06, s.W * 0.94), y: clamp(e.y + Math.sin(a) * d * 0.7, s.H * 0.14, s.H * 0.9) };
-      s.globs.push({ id: uid++, x0: e.x, y0: e.y, x: at.x, y: at.y, t: -i * 0.06, dur: 0.55, life: 7, harmless: true });
+      const a = (i / 5) * Math.PI * 2 + rand(-0.3, 0.3), d = R * rand(0.8, 1.3);
+      const at = { x: clamp(o.x + Math.cos(a) * d, s.W * 0.06, s.W * 0.94), y: clamp(o.y + Math.sin(a) * d * 0.7, s.H * 0.14, s.H * 0.9) };
+      s.globs.push({ id: uid++, x0: o.x, y0: o.y, x: at.x, y: at.y, t: -i * 0.06, dur: 0.55, life: 5, harmless: true });
     }
     s.hitStop = 0.35; shake(0.9); sfx('boom'); sfx('splash');
     spawnBoss(e.type.nextPhase, { direct: true });
     const king = s.enemies.find(x => x.tier === 'boss' && x.typeId === e.type.nextPhase);
-    if (king) { king.x = e.x; king.y = e.y; king.hurt = 0.3; }
+    if (king) { king.x = o.x; king.y = o.y; king.hurt = 0.3; }
     s.banner = { text: 'IT BURSTS OPEN', sub: ENEMY_TYPES[e.type.nextPhase].name, t: 2.4, boss: true };
   }
 
   function updateSwarmKing(dt) {
     // swarms that made it across vanish
     if (s.enemies.some(e => e.escaped)) {
-      s.enemies.filter(e => e.escaped).forEach(e => floater('IT GOT AWAY', clamp(e.x, K(70), s.W - K(70)), e.y - K(50), '#a8a29e'));
+      s.enemies.filter(e => e.escaped).forEach(e => floater('IT GOT AWAY', clamp(e.x, K(70), s.W - K(70)), clamp(e.y - K(50), K(40), s.H - K(40)), '#a8a29e'));
       s.enemies = s.enemies.filter(e => !e.escaped);
     }
+    const alive = s.phase !== 'clear' && s.phase !== 'defeat';
     for (const b of s.enemies) {
-      // phase 1: spits now and then (more once it's hurt)
-      const as = b.type.acidSpit;
-      if (as && s.phase !== 'clear' && s.phase !== 'defeat' && !(b.frozen > 0)) {
-        if (b.spitT == null) b.spitT = 2;
-        if ((b.spitT -= dt) <= 0) {
-          b.spitT = rand(...as.every);
-          spit(b, Math.round(rand(...(b.hp < b.maxHp / 2 ? as.hurtGlobs : as.globs))), as.pool);
-          b.attackT = 0.4;
-        }
-        continue;
-      }
-      const sh = b.type.swarmShield;
-      if (!sh || s.phase === 'clear' || s.phase === 'defeat') continue;
-      const st = b.swk ?? (b.swk = { killed: 0, spawnT: 3, spitT: 1.2 });
-      const shielded = st.killed < sh.swarms;
-      b.sealed = shielded; b.sealWord = 'SHIELDED';
-      b.sealLabel = `SWARM SHIELD · lead the swarms into the acid ${st.killed}/${sh.swarms}`;
-      // the next swarm
-      const out = s.enemies.filter(e => e.owner === b.id && e.type.acidOnly).length;
-      if ((st.spawnT -= dt) <= 0 && out < SWK.maxSwarms) {
-        spawnSwarm(b);
-        st.spawnT = shielded ? rand(...SWK.spawnEvery) : rand(9, 13);
-      }
-      // acid
-      if ((st.spitT -= dt) <= 0) {
-        st.spitT = rand(...SWK.spit[shielded ? 0 : 1]);
-        spit(b, SWK.globs[shielded ? 0 : 1], shielded ? SWK.pool.life : 6);   // (faster spitting, shorter pools: less clutter)
-      }
+      const kind = b.type.swk;
+      if (!kind || !alive || b.frozen > 0) continue;
+      if (kind === 'host') updateHost(b, b.swk ?? (b.swk = { killed: 0, swarmT: 2.5, spitT: 1.6, patT: rand(...SWK.pattern.first), pat: null, next: 'gas' }), dt);
+      else updateMoth(b, b.swk ?? (b.swk = { swarmT: 0, atkT: 1.4, hideT: rand(10, 13), pat: null, mv: { dash: null, hover: 0.8 } }), dt);
     }
-    // acid in the air: lands where it was aimed, splashes, leaves a pool
+    updateBolts(dt);
+    // the gas: hurts your cursor while it's inside
+    const g = s.gas;
+    if (g) {
+      g.t += dt;
+      const T = rt.target();
+      if (T && g.t > g.grow * 0.6 && g.t < g.life - 0.4 && dist(T.x, T.y, g.x, g.y) <= g.r * 0.92 + T.r) hurt(enemyDmg('gas'), 'poison');
+      if (g.t >= g.life || !s.enemies.some(e => e.id === g.owner)) s.gas = null;
+    }
+    // acid in the air: lands where it was aimed, splashes, leaves a pool (rain: no pool)
     if (s.globs.length) {
       const T0 = rt.target();
       for (const g of s.globs) {
         g.t += dt;
         if (g.t < g.dur || g.landed) continue;
         g.landed = true;
-        const r = K(SWK.splash);
-        if (T0 && !g.harmless && dist(T0.x, T0.y, g.x, g.y) <= r + T0.r) hurt(enemyDmg('acid'), 'circle');
-        s.hazards.push({ id: uid++, x: g.x, y: g.y, r: K(SWK.pool.r), t: 0, grow: 0.3, life: g.life ?? SWK.pool.life, acid: true });
+        const r = g.r ?? K(SWK.splash);
+        if (T0 && !g.harmless && dist(T0.x, T0.y, g.x, g.y) <= r + T0.r) hurt(enemyDmg(g.rain ? 'acidRain' : 'acid'), 'circle');
+        if (!g.rain) s.hazards.push({ id: uid++, x: g.x, y: g.y, r: K(SWK.pool.r), t: 0, grow: 0.3, life: g.life ?? SWK.pool.life, acid: true });
         effect({ kind: 'burst', x: g.x, y: g.y, r, color: '#a3e635' });
-        effect({ kind: 'shards', x: g.x, y: g.y, r, color: '#d9f99d', n: 10 });
+        effect({ kind: 'shards', x: g.x, y: g.y, r, color: '#d9f99d', n: g.rain ? 6 : 10 });
         sfx('splash');
       }
       s.globs = s.globs.filter(g => !g.landed);
@@ -827,6 +1026,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function damageEnemy(e, rawDmg, { crit = false, color, label = '', charge = 1, quiet = false, linked = false, acid = false } = {}) {
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
     if (e.type.acidOnly && !acid) return 0;   // a Swarm King swarm: only its acid hurts it
+    if (e.hidden) return 0;                   // the Swarm King, off the screen
     if (e.sealed) {   // the Devourer behind its seal: break the weak spots first
       if (s.time - (e.sealHitT ?? -9) > 0.4) { e.sealHitT = s.time; floater(e.sealWord ?? 'SEALED', e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, '#fda4af', true); sfx('shield'); }
       return 0;
@@ -943,7 +1143,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
     if (e.tier === 'boss' && t.nextPhase && s.phase !== 'clear' && s.phase !== 'defeat') { burstHost(e); return; }   // the Swarm King's phase 1
-    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
+    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });
@@ -995,7 +1195,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     // topmost first (later = drawn on top); generous hitbox for fingers
     for (let i = s.enemies.length - 1; i >= 0; i--) {
       const e = s.enemies[i];
-      if (e.type.acidOnly) continue;   // clicks go through swarms
+      if (e.type.acidOnly || e.hidden) continue;   // clicks go through swarms (and the Swarm King isn't there while it hides)
       if (dist(x, y, e.x, e.y) <= e.size * s.k * 0.55 + K(6)) return e;
     }
     return null;
@@ -1003,7 +1203,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   function nearestEnemy(x, y) {
     let best = null, bd = Infinity;
-    for (const e of s.enemies) { if (e.down > 0 || e.type.acidOnly) continue; const d = dist(x, y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
+    for (const e of s.enemies) { if (e.down > 0 || e.type.acidOnly || e.hidden) continue; const d = dist(x, y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
     return best;
   }
 
@@ -1200,7 +1400,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.timeStop = 0;   // a time stop ends with its stage (it used to freeze the start of the next one)
     rt.reset('clear');
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = [];
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null;
     const r = s.stage.clearReward;
     const coins = Math.round((r?.coins ?? 0) * M('coin')), gems = Math.round((r?.gems ?? 0) * M('gem'));
     s.banner = { text: s.stage.story ? 'VICTORY!' : `${stageLabel()} CLEAR!`, t: 3, good: true,
@@ -1211,7 +1411,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.phase = 'defeat'; s.phaseT = 2.6;
     s.timeStop = 0;
     rt.reset('defeat');
-    s.attacks = []; s.shots = []; s.hazards = []; s.globs = []; s.combo.n = 0;
+    s.attacks = []; s.shots = []; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null; s.combo.n = 0;
     s.banner = { text: 'DEFEATED', sub: s.stage.story ? null : `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
     cb('onDefeat', s.stageNum);
   }
@@ -1220,7 +1420,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.timeStop = 0;
     rt.reset('load');
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = []; s.globs = [];
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null;
     s.player.hp = s.player.maxHp; s.player.invuln = 1;
     s.timers.basic = 0.3; s.timers.elite = 4; s.timers.horde = 8;
     s.banner = stageBanner();
@@ -1287,7 +1487,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (T0 && h.t > h.grow && h.t < h.life && dist(T0.x, T0.y, h.x, h.y) <= h.r + T0.r) hurt(enemyDmg('poison'), 'poison');
           return;
         }
-        // the Swarm King's acid: eats whatever small walks through it (not you, not bosses)
+        // the Swarm King's acid: hurts you while your cursor is in it, eats whatever small walks
+        // through it (not bosses)
+        if (T0 && h.t > h.grow && h.t < h.life - 0.3 && dist(T0.x, T0.y, h.x, h.y) <= h.r * 0.85 + T0.r) hurt(enemyDmg('acidPool'), 'poison');
         h.tick = (h.tick ?? 0) - dt;
         if (h.tick > 0 || h.t < h.grow) return;
         h.tick = 0.25;
@@ -1483,7 +1685,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
     clearEnemies: () => {
       rt.reset('load');
-      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = [];
+      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null;
       // boss removed → back to the fight, one kill short of summoning it again
       if (s.phase === 'boss' || s.phase === 'bossIntro') { s.phase = 'fight'; s.kills = Math.min(s.kills, s.stage.killTarget - 1); }
     },
