@@ -4,6 +4,7 @@ import { AFFIXES, ENEMY_TYPES } from './enemies';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
+import { bossMusic } from '../utils/sfx';
 import { CursorArt } from '../components/GameCursor';
 import { CURSOR_SIZES, trackHp } from '../utils/cursor';
 import FocusImg from '../components/FocusImg';
@@ -113,6 +114,18 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [engine]);
+
+  // Boss music (utils/sfx.js): on from the BOSS INCOMING banner until the boss is down
+  // or you lose; leaving the battle screen pauses it, coming back mid-fight resumes it
+  const bossOn = engine.state.phase === 'bossIntro' || engine.state.phase === 'boss';
+  const bossWas = useRef(null);
+  useEffect(() => {
+    const was = bossWas.current;
+    bossWas.current = bossOn;
+    if (bossOn) bossMusic(was === null ? 'resume' : 'start');
+    else if (was) bossMusic('stop');
+  }, [bossOn]);
+  useEffect(() => () => { if (bossWas.current) bossMusic('pause'); }, []);
 
   // E = ult
   useEffect(() => {

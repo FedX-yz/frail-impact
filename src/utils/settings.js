@@ -3,7 +3,8 @@
 const KEY = 'frail_settings';
 // cursor: the battle cursor's colour ('system' = the normal arrow), cursorSize: s / m / l / xl,
 // cursorRings: skill + ult charge next to it
-const DEFAULTS = { volume: 1, combatSfx: true, shake: true, cctv: true, crt: true, cursor: 'cyan', cursorSize: 'm', cursorRings: true };
+// music: songs only (boss music, pull music, story music), under the main volume
+const DEFAULTS = { volume: 1, music: 0.8, combatSfx: true, shake: true, cctv: true, crt: true, cursor: 'cyan', cursorSize: 'm', cursorRings: true };
 
 let current = { ...DEFAULTS };
 try { current = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { /* use defaults */ }

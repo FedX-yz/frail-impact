@@ -161,6 +161,13 @@ export default function SettingsScreen({ navigate, devMode, toggleDev, profile, 
                 style={{ flex:1, accentColor:'#ff8c00' }} />
               <span style={{ width:40, textAlign:'right', color:'#889', fontVariantNumeric:'tabular-nums' }}>{Math.round(prefs.volume * 100)}%</span>
             </label>
+            <label style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <span style={{ width:110, fontWeight:700 }}>Music</span>
+              <input id="set-music" type="range" min={0} max={1} step={0.05} value={prefs.music ?? 0.8}
+                onChange={e => change('music', Number(e.target.value))}
+                style={{ flex:1, accentColor:'#ff8c00' }} />
+              <span style={{ width:40, textAlign:'right', color:'#889', fontVariantNumeric:'tabular-nums' }}>{Math.round((prefs.music ?? 0.8) * 100)}%</span>
+            </label>
             <Toggle label="Combat sounds" sub="Hits, crits, kills, explosions" on={prefs.combatSfx}
               onChange={v => { change('combatSfx', v); if (v) setTimeout(() => sfx('crit'), 30); }} />
             <Toggle label="Screen shake" sub="When you get hit, crit or kill something big" on={prefs.shake} onChange={v => change('shake', v)} />

@@ -9,6 +9,11 @@ const master = _audioCtx.createGain();
 master.gain.value = getSettings().volume;
 master.connect(_audioCtx.destination);
 onSettings(s => { master.gain.value = s.volume; });
+// Songs go through their own volume too (Settings → Music), then the master
+const musicBus = _audioCtx.createGain();
+musicBus.gain.value = getSettings().music ?? 0.8;
+musicBus.connect(master);
+onSettings(s => { musicBus.gain.value = s.music ?? 0.8; });
 
 // Decoded sounds. `ready` holds finished buffers so a click can play them
 // synchronously; `loading` de-duplicates downloads.
@@ -61,7 +66,7 @@ UI_SOUNDS.forEach(src => loadBuffer(src).catch(() => {}));
 
 // Browsers keep audio locked until the first tap/click/key; unlock it on the
 // very first one so that interaction's own sound isn't lost.
-const unlock = () => { if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {}); };
+const unlock = () => { if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {}); primeBoss(); };
 window.addEventListener('pointerdown', unlock, { capture: true });
 window.addEventListener('keydown', unlock, { capture: true });
 
@@ -85,7 +90,7 @@ export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1, loop = false 
     if (handle.stopped) return null;
     const source = _audioCtx.createBufferSource(), g = _audioCtx.createGain();
     source.buffer = decoded; source.loop = loop;
-    source.connect(g); g.connect(master);
+    source.connect(g); g.connect(musicBus);
     const t = _audioCtx.currentTime + 0.03;
     if (fadeIn > 0) {
       // swells in (slow at first, full volume right on the drop)
@@ -133,6 +138,77 @@ export function stopMusic(fade = 0.3) {
     m.gain.gain.linearRampToValueAtTime(0.0001, t + Math.max(0.01, fade));
     m.source.stop(t + Math.max(0.01, fade) + 0.02);
   } catch { /* already stopped */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boss music: on while a boss is out (BattleArena.jsx calls bossMusic). The two
+// songs take turns, one per boss fight; if a fight outlasts its song, the other
+// one comes on. Streamed by an <audio> element (a decoded 3-minute song would be
+// ~70 MB of memory) but played through Web Audio, so the volume works on iPhones.
+// ─────────────────────────────────────────────────────────────────────────────
+const BOSS_TRACKS = [`${BASE}audio/music/boss1.mp3`, `${BASE}audio/music/boss2.mp3`];
+let bossNext = Math.floor(Math.random() * BOSS_TRACKS.length);
+let boss = null;   // { el, gain, idx, on }
+function bossPlayer() {
+  if (boss) return boss;
+  const el = new Audio();
+  el.preload = 'none';
+  const gain = _audioCtx.createGain();
+  gain.gain.value = 0;
+  try { _audioCtx.createMediaElementSource(el).connect(gain); gain.connect(musicBus); } catch { /* no Web Audio for media: plays at element volume */ }
+  boss = { el, gain, idx: -1, on: false, stopT: 0 };
+  // a fight longer than the song: the other song
+  el.addEventListener('ended', () => { if (boss.on) bossTrack((boss.idx + 1) % BOSS_TRACKS.length, 0.4); });
+  return boss;
+}
+// iPhones only let an <audio> element play from a tap, so play it once (silently) on the first one
+const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+let primed = false;
+function primeBoss() {
+  if (primed) return;
+  primed = true;
+  const b = bossPlayer();
+  if (b.idx >= 0) return;
+  b.el.src = SILENCE;
+  b.el.play().then(() => { if (b.idx < 0) b.el.pause(); }).catch(() => {});
+}
+function fadeBoss(to, sec) {
+  const g = boss.gain.gain, t = _audioCtx.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(Math.max(0.0001, g.value), t);
+  g.linearRampToValueAtTime(Math.max(0.0001, to), t + Math.max(0.01, sec));
+}
+function bossTrack(idx, fadeIn) {
+  const b = bossPlayer();
+  b.idx = idx;
+  b.el.src = BOSS_TRACKS[idx];
+  b.el.currentTime = 0;
+  b.gain.gain.setValueAtTime(0.0001, _audioCtx.currentTime);
+  b.el.play().then(() => { if (b.on) fadeBoss(1, fadeIn); }).catch(() => {});
+}
+// 'start': a new boss fight (the next song) · 'resume': back on the battle screen mid-fight
+// (same song, same spot) · 'stop': the boss is down / you lost (fade out) · 'pause': left the screen
+export function bossMusic(cmd) {
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  const b = bossPlayer();
+  clearTimeout(b.stopT);
+  if (cmd === 'start' || (cmd === 'resume' && b.idx < 0)) {
+    b.on = true;
+    const idx = bossNext; bossNext = (bossNext + 1) % BOSS_TRACKS.length;
+    bossTrack(idx, 1.6);
+  } else if (cmd === 'resume') {
+    b.on = true;
+    b.el.play().then(() => { if (b.on) fadeBoss(1, 0.8); }).catch(() => {});
+  } else if (b.on) {
+    b.on = false;
+    const sec = cmd === 'pause' ? 0.25 : 2;
+    fadeBoss(0, sec);
+    b.stopT = setTimeout(() => {
+      if (b.on) return;
+      b.el.pause();
+      if (cmd !== 'pause') { b.idx = -1; b.el.removeAttribute('src'); b.el.load(); }   // a finished fight: forget the song
+    }, sec * 1000 + 60);
+  }
 }
 
 export const playClose = () => playSFX(`${BASE}sounds/ui_close.mp3`);
