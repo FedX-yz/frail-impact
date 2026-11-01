@@ -58,6 +58,21 @@ function ffmpeg(src, ext, args) {
 const VIDEO_ARGS = ['-vf', "scale='min(1280,iw)':-2", '-c:v', 'libx264', '-preset', 'medium', '-crf', '26',
   '-maxrate', '1800k', '-bufsize', '3600k', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart']
 const audioArgs = size => ['-codec:a', 'libmp3lame', '-b:a', size > 3e6 ? '128k' : '96k']
+// An MP3's bitrate (kb/s) from its first frame header, 0 if it can't tell. Audio that's already
+// at ≤128k (mastered story music and sounds) is left alone: encoding it again only loses quality.
+function mp3Kbps(buf) {
+  let i = 0
+  if (buf.length > 10 && buf.toString('latin1', 0, 3) === 'ID3') i = 10 + (((buf[6] & 0x7f) << 21) | ((buf[7] & 0x7f) << 14) | ((buf[8] & 0x7f) << 7) | (buf[9] & 0x7f))
+  const end = Math.min(buf.length - 4, i + 65536)
+  const V1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], V2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
+  for (; i < end; i++) {
+    if (buf[i] !== 0xff || (buf[i + 1] & 0xe0) !== 0xe0) continue
+    const ver = (buf[i + 1] >> 3) & 3, layer = (buf[i + 1] >> 1) & 3, bi = buf[i + 2] >> 4
+    if (layer !== 1 || ver === 1 || bi === 0 || bi === 15) continue   // MPEG audio layer III only
+    return (ver === 3 ? V1 : V2)[bi]
+  }
+  return 0
+}
 
 function optimizeAssets() {
   let outDir
@@ -121,6 +136,7 @@ function optimizeAssets() {
         before += src.length
         const isVideo = /\.mp4$/i.test(file)
         if (!ffmpegPath || (!isVideo && src.length < 150e3)) { after += src.length; continue }   // tiny UI sounds: leave
+        if (!isVideo && /\.mp3$/i.test(file) && mp3Kbps(src) > 0 && mp3Kbps(src) <= 128) { after += src.length; continue }   // already web-sized
         try {
           const args = isVideo ? VIDEO_ARGS : audioArgs(src.length)
           const out = await cached(src, args.join(' '), s => ffmpeg(s, isVideo ? 'mp4' : 'mp3', args))

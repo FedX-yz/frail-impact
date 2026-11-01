@@ -19,7 +19,14 @@
 //   { if: 'brave', goto: 'x' }        jump only if the flag is set ('!brave' = not set)
 //   { set: { metHox: true } }         set flags without a choice
 //   { end: true }                     stop the scene here
-//   { shake: true }   { wait: 0.8 }   { sfx: 'ui_warp' }  (a file in public/sounds/)
+//   { shake: true }   { wait: 0.8 }
+//   { sfx: 'door_slam' }              a sound (public/sounds/door_slam.mp3). It belongs to the line that
+//                                       comes up next and plays when that line appears. Options:
+//                                       delay: 1.5   …seconds later (dropped if the player clicks on first)
+//                                       at: 'end'    …once the line is typed out and its voice is done
+//                                       hold: false  auto mode doesn't wait for it (background sounds)
+//                                       Story sounds, music and ambience are mastered to the game's mix
+//                                       levels by tools/master-audio.py (the levels are listed at its top)
 //   { crawl: ['…', '…'] }             paragraphs of text fading in one by one on black, then fading out;
 //                                       {red:words} lights words up (red, havoc, gold, zone, green, title, em, dim, shake)
 //   { music: 'audio/story/x.mp3' }    music (path in public/), loops until the next { music };
@@ -58,7 +65,7 @@ export const SCENES = {
     { bg: null },
     { music: 'audio/story/drive.mp3' },
     { ambience: 'audio/story/amb/wind.mp3' },
-    { sfx: 'car_drive' },
+    { sfx: 'car_drive', delay: 1.2, hold: false },   // a car passing: sets the scene
     'You are driving a car heading to the location of your job interview, it\'s a big one.',
     'It\'s a cold morning, the streets are empty as usual. But it\'s a good thing, it means peace, even if temporary.',
     'And you are part of the reason this peace came to be. As the manager of the Anti-Havoc Task Force you helped guide your team to victory in battle against the ferocious Havoc beasts in these very streets.',
@@ -66,13 +73,13 @@ export const SCENES = {
     'In fact you\'re crucial to the operation, to make sure your comrades don\'t die and to let them know exactly what\'s happening on the field.',
     'This interview you\'re going to is top secret. You\'re not even sure why you were selected, but your employer told you to go anyways, said it\'s a big opportunity.',
     '...',
-    { sfx: 'car_arrive' },
     { music: 'audio/story/hospital.mp3' },
     { ambience: 'audio/story/amb/night.mp3' },
+    { sfx: 'car_arrive', delay: 0.3 },
     'You reach the location. It\'s a run-down hospital, how welcoming. There\'s a single window lit up.',
-    { sfx: 'door_creak' },
+    { sfx: 'door_creak', delay: 0.3 },
+    { sfx: 'footsteps', delay: 3.2 },   // once the door's open
     'You enter the building and try to go to the lit up room. There\'s no electricity, so you stumble your way over there. Inside that room...',
-    { sfx: 'footsteps' },
     { music: 'audio/story/birthday.mp3' },
     'You find balloons with rainbow letters spelling out "Happy Birthday!", and a birthday cake with a candle lit on a table.',
     ['stranger', 'Happy birthday, dear guest.'],
@@ -113,7 +120,7 @@ export const SCENES = {
     { choice: [{ text: 'Sounds good, I\'m in.' }] },
     ['stranger', 'I am delighted to hear that. However... you must pass a test to get the job.'],
     ['stranger', 'Look over the table next to you, the papers and pen should be at your disposal. Good luck.'],
-    { sfx: 'paper_take' },
+    { sfx: 'paper_take', delay: 0.2 },
     'You take one of the papers...',
     { music: 'audio/story/test.mp3' },
     { test: true },
@@ -122,10 +129,10 @@ export const SCENES = {
     // You passed: it's your birthday, apparently.
     { music: 'audio/story/birthday.mp3' },
     ['stranger', 'Hmmmmm... well...'],
-    { sfx: 'party_horn' },
+    { sfx: 'party_horn', at: 'end' },   // right after he's said it
     ['stranger', 'Con-gra..........tulations!!!!!!! You may now blow out the candle, Mr. Manager, it\'s your birthday!!!'],
     { choice: [{ text: 'Do as he said' }] },
-    { sfx: 'candle_blow' },
+    { sfx: 'candle_blow', delay: 0.35 },
     'You blow out the candle on the birthday cake. Didn\'t think to make a wish beforehand.',
     ['stranger', 'Okay Mr. Manager, now sign this contract right here.'],
     { application: true },   // type your name and sign by hand (skipped on replays once you've signed)
@@ -136,7 +143,6 @@ export const SCENES = {
     { choice: [{ text: 'Ok, thanks!' }] },
     { hide: 'all' },
     { bg: null },   // [ ] outside the hospital, cake in hand (same picture slot as ending 1)
-    { sfx: 'door_creak' },
     { music: 'audio/story/cake.mp3' },
     { ambience: null },
     'You exit the abandoned hospital with your birthday cake!',
@@ -147,11 +153,11 @@ export const SCENES = {
     // level isn't cleared, so they can try again.
     { label: 'ending1' },
     { music: null },
-    { sfx: 'paper_crumple' },
+    { sfx: 'paper_crumple', at: 'end' },   // he scrunches up your test
     ['stranger', 'Hmmmmm.... No, that\'s not quite it.'],
-    { shake: true },
     ['stranger', 'I\'m afraid our birthday party here is over. Out of here!!'],
-    { sfx: 'door_slam' },
+    { sfx: 'door_slam' },   // …and you're out
+    { shake: true },
     { ambience: 'audio/story/amb/wind.mp3' },
     { hide: 'all' },
     { bg: null },   // [ ] a picture of you outside the hospital goes here
@@ -172,7 +178,7 @@ export const SCENES = {
     { music: 'audio/story/zdistrict.mp3' },
     { ambience: 'audio/story/amb/crowd.mp3' },
     'You arrive at Z district.',
-    { sfx: 'bus_idle' },
+    { sfx: 'bus_idle', delay: 0.8, hold: false },
     'It\'s pretty packed here, a bunch of people gathered around a bus. There\'s also a car carrier with a big vehicle under cover. You wonder what\'s hiding there.',
     'You look around and don\'t see anyone familiar. It\'s not like you could recognize the person that was behind the hospital screens anyway.',
     'Someone approaches you.',
@@ -208,9 +214,9 @@ export const SCENES = {
     ['reef', 'I\'m gonna hold you to that!!', '???'],
     ['ice', 'Shut your whore mouth!!! Alright, this is my last one...', '???'],
     { sfx: 'pack_tear' },
+    { sfx: 'card_flip', delay: 1.6 },   // "…after a few cards"
     'They open another pack, and after a few cards...',
-    { sfx: 'card_flip' },
-    { sfx: 'gasp' },
+    { sfx: 'gasp', delay: 0.15 },
     'They hit the jackpot!',
     { shake: true },
     { hide: 'all' },

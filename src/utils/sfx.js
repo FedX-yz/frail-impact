@@ -4,10 +4,16 @@ const BASE = import.meta.env.BASE_URL;
 
 const _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// Everything goes through one master volume (Settings → Volume)
+// Everything goes through one master volume (Settings → Volume), then a safety limiter:
+// it only acts on peaks near full scale (several loud sounds at once), which would
+// otherwise clip and crackle.
 const master = _audioCtx.createGain();
 master.gain.value = getSettings().volume;
-master.connect(_audioCtx.destination);
+const limiter = _audioCtx.createDynamicsCompressor();
+limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20;
+limiter.attack.value = 0.002; limiter.release.value = 0.12;
+master.connect(limiter);
+limiter.connect(_audioCtx.destination);
 onSettings(s => { master.gain.value = s.volume; });
 // Songs go through their own volume too (Settings → Music), then the master
 const musicBus = _audioCtx.createGain();
@@ -51,6 +57,9 @@ function start(decoded, gain, rate = 1) {
   gainNode.connect(master);
   source.start(0);
 }
+
+// How long a sound is (0 until it's loaded) — the story's auto mode waits for its sounds.
+export const soundLength = (src) => ready.get(src)?.duration ?? 0;
 
 export const playSFX = (src, gain = 2.5, rate = 1) => {
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
@@ -104,19 +113,22 @@ export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1, loop = false 
   }).catch(() => null);
 }
 // Voiced story lines: one at a time, a new one (or stopVoice) cuts the last off.
+// onEnd() is called once when the line has finished (or couldn't be played).
+// The files are mastered to the dialogue level (-17 LUFS), so they play at unity.
 let voice = null;
-export function playVoice(src) {
+export function playVoice(src, onEnd = null) {
   stopVoice();
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
   const h = { stopped: false };
   voice = h;
+  const done = () => { if (!h.ended) { h.ended = true; if (!h.stopped) onEnd?.(); } };
   loadBuffer(src).then(decoded => {
     if (h.stopped) return;
     const s = _audioCtx.createBufferSource(), g = _audioCtx.createGain();
-    s.buffer = decoded; g.gain.value = 1.4;
-    s.connect(g); g.connect(master); s.start();
+    s.buffer = decoded; g.gain.value = 1;
+    s.connect(g); g.connect(master); s.onended = done; s.start();
     h.source = s;
-  }).catch(() => {});
+  }).catch(done);
 }
 export function stopVoice() {
   if (!voice) return;
@@ -264,7 +276,7 @@ export function storyTrack(ch, src, { fadeIn = 1.5, gain = 0.8, loop = true } = 
     c.gain.gain.setValueAtTime(0.0001, _audioCtx.currentTime);
     c.el.play().then(() => { if (c.src === src) rampStory(c, gain, fadeIn); }).catch(() => {});
   };
-  if (c.src && !c.el.paused) { rampStory(c, 0, 0.7); c.src = src; c.timer = setTimeout(start, 720); }
+  if (c.src && !c.el.paused) { rampStory(c, 0, 1); c.src = src; c.timer = setTimeout(start, 1020); }   // out, then in
   else start();
 }
 export function stopStoryTrack(ch, fade = 1.2) {

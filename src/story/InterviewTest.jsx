@@ -60,7 +60,7 @@ export default function InterviewTest({ onDone }) {
               </div>
             ))}
             <Scratch />
-            <div className="it-buttons"><button className="it-btn" onClick={() => { playSFX(PAGE_TURN); setPage(1); }}>Turn the page ▸</button></div>
+            <div className="it-buttons"><button className="it-btn" onClick={() => { playSFX(PAGE_TURN, 1); setPage(1); }}>Turn the page ▸</button></div>
           </>
         ) : (
           <>
@@ -79,7 +79,7 @@ export default function InterviewTest({ onDone }) {
               </div>
             ))}
             <div className="it-buttons">
-              <button className="it-btn ghost" onClick={() => { playSFX(PAGE_TURN); setPage(0); }} disabled={handed}>◂ Page 1</button>
+              <button className="it-btn ghost" onClick={() => { playSFX(PAGE_TURN, 1); setPage(0); }} disabled={handed}>◂ Page 1</button>
               <button className="it-btn" onClick={hand} disabled={!all || handed}>Hand it in</button>
             </div>
             {handed && <div className={`it-grade${right >= QUESTIONS.length - 1 ? '' : ' fail'}`}>{right}/{QUESTIONS.length}</div>}

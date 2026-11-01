@@ -4,7 +4,7 @@ import { CAST } from './cast';
 import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
-import { playSFX, playPress, storyTrack, stopStoryTrack, playVoice, stopVoice, preloadSound } from '../utils/sfx';
+import { playSFX, playPress, storyTrack, stopStoryTrack, playVoice, stopVoice, preloadSound, soundLength } from '../utils/sfx';
 import { voiceFile } from './voice';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
@@ -12,6 +12,7 @@ import { CREDITS } from './credits';
 import InterviewTest from './InterviewTest';
 
 const BASE = import.meta.env.BASE_URL;
+const sfxUrl = (n) => `${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`;   // { sfx: 'name' } → public/sounds/name.mp3
 const NO_STEPS = [];
 // spots for { show, at }. For four people at once, use p1…p4 (evenly spread)
 const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90, p1: 15, p2: 38, p3: 62, p4: 85 };
@@ -53,7 +54,7 @@ function run(steps, from, prev, signed = false) {
     if (step.hide) s.actors = step.hide === 'all' ? [] : s.actors.filter(a => a.id !== step.hide);
     if (step.set) Object.assign(s.flags, step.set);
     if (step.shake) s.shakeN = (s.shakeN ?? 0) + 1;
-    if (step.sfx) s.sfx.push(step.sfx);
+    if (step.sfx) s.sfx.push({ name: step.sfx, delay: step.delay ?? 0, at: step.at ?? null, hold: step.hold ?? true, gain: step.gain });
     if ('music' in step) s.music = { src: step.music, loop: step.loop ?? true, n: (s.music?.n ?? 0) + 1 };
     if ('ambience' in step) s.ambience = { src: step.ambience, n: (s.ambience?.n ?? 0) + 1 };
     if (step.wait) return { ...s, i, line: null, choice: null, wait: step.wait };
@@ -96,19 +97,59 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const endCrawl = useCallback(() => setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)), [steps]);
 
   // voiced lines (cast.js → voice): play when the line comes up, cut off by the next one
-  // (keyed by the line itself: a choice coming up under it mustn't play it again)
+  // (keyed by the line itself: a choice coming up under it mustn't play it again).
+  // voiceDone: the line's voice has finished (auto mode and 'end' sounds wait for it)
   const lineKey = st.line ? `${st.line.at}:${st.line.who}` : null;
+  const voiced = !!(st.line && CAST[st.line.who]?.voice);
+  const [voiceDone, setVoiceDone] = useState(true);
   useEffect(() => {
     const v = st.line && CAST[st.line.who]?.voice;
-    if (v && !skip) playVoice(asset(voiceFile(v.dir, st.line.text)));
-    else stopVoice();
+    if (!v || skip) { stopVoice(); setVoiceDone(true); return; }
+    let alive = true;
+    setVoiceDone(false);
+    playVoice(asset(voiceFile(v.dir, st.line.text)), () => { if (alive) { setVoiceDone(true); window.__vnDebug?.('voiceEnd', st.line.text.slice(0, 30)); } });
+    const safety = setTimeout(() => { if (alive) setVoiceDone(true); }, 4000 + st.line.text.length * 90);   // never wait forever
+    return () => { alive = false; clearTimeout(safety); };
   }, [lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => stopVoice(), []);
 
-  // sounds from { sfx } steps
-  const sfxUrl = (n) => `${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`;
+  // ── sounds from { sfx } steps ───────────────────────────────────────────
+  // They belong to the line that comes up after them: they play when it appears, `delay`
+  // seconds later, or (at: 'end') once it's done (typed out and its voice finished).
+  // Clicking past a line drops its pending delayed sounds but still plays its 'end' ones
+  // (they're punchlines); skipping plays none. cues.until: when the sounds that should be
+  // heard out (hold) will have finished — auto mode waits for it.
+  const cues = useRef({ timers: [], end: [], until: 0 });
+  const playCue = useCallback((c) => {
+    const url = sfxUrl(c.name);
+    playSFX(url, c.gain ?? (c.name.startsWith('ui_') ? 2.5 : 1));   // story sounds are mastered for unity gain
+    window.__vnDebug?.('cue', c.name);
+    if (c.hold) cues.current.until = Math.max(cues.current.until, performance.now() + soundLength(url) * 1000);
+  }, []);
   useEffect(() => { steps.forEach(x => x?.sfx && preloadSound(sfxUrl(x.sfx))); }, [steps]);   // ready before they're needed
-  useEffect(() => { st.sfx?.forEach(n => playSFX(sfxUrl(n))); }, [st.sfx]);
+  useEffect(() => {
+    const k = cues.current;
+    k.timers.forEach(clearTimeout); k.timers = [];
+    if (!skip) k.end.forEach(playCue);   // the line we just left still gets its punchline
+    k.end = [];
+    if (skip) return;
+    for (const c of st.sfx ?? []) {
+      if (c.at === 'end') k.end.push(c);
+      else if (c.delay > 0) {
+        k.timers.push(setTimeout(() => playCue(c), c.delay * 1000));
+        if (c.hold) k.until = Math.max(k.until, performance.now() + (c.delay + soundLength(sfxUrl(c.name))) * 1000);
+      } else playCue(c);
+    }
+  }, [st.sfx]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (skip) { const k = cues.current; k.timers.forEach(clearTimeout); k.timers = []; k.end = []; } }, [skip]);
+  useEffect(() => () => cues.current.timers.forEach(clearTimeout), []);
+  const lineDone = !!st.line && typed && voiceDone;
+  useEffect(() => { if (st.line) window.__vnDebug?.('line', text.slice(0, 40)); }, [lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {   // the line is done: its 'end' sounds
+    if (!lineDone || skip) return;
+    const k = cues.current;
+    k.end.forEach(playCue); k.end = [];
+  }, [lineDone]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (st.done && !ended.current) { ended.current = true; onEnd(st.flags); }
   }, [st.done, st.flags, onEnd]);
@@ -139,11 +180,16 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
     let ms = null;
     if (st.wait) ms = st.wait * 1000;
     else if (skip) ms = 70;
-    else if (auto && typed) ms = 900 + text.length * 28;
+    else if (auto && typed && voiceDone) {
+      // auto: after the voice, a short pause (the voice set the reading pace); unvoiced, time
+      // to read it — and never before this line's sounds have played out
+      const read = voiced ? 800 : 900 + text.length * 28;
+      ms = Math.max(read, cues.current.until - performance.now() + 350);
+    }
     if (ms == null) return;
     const id = setTimeout(() => setSt(prev => run(steps, prev.i + 1, { ...prev, log: prev.line ? [...prev.log, prev.line] : prev.log }, signedRef.current)), ms);
     return () => clearTimeout(id);
-  }, [st, skip, auto, typed, text, steps]);
+  }, [st, skip, auto, typed, voiceDone, voiced, text, steps]);
 
   // keyboard: Space / Enter = next, number keys pick a choice
   useEffect(() => {
