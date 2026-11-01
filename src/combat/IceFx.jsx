@@ -9,6 +9,7 @@
 //   IceEffect   one-off effects: iceburst, shatter, flashfreeze
 //   IceScreen   Absolute Zero: the burst cut-in, the frozen world, the storm
 // ─────────────────────────────────────────────────────────────────────────────
+import { ICE_INTRO } from './icePlatinum.js';
 const BASE = import.meta.env.BASE_URL;
 export const ICE_FIGURE_IMG = `${BASE}sprites/ice-platinum.png`;
 const clamp01 = v => Math.max(0, Math.min(1, v));
@@ -200,9 +201,36 @@ export function IceScreen({ s, mainCard, mobile }) {
       {az && !ic.cutin && <div className="ice-world" />}
       {az && !ic.cutin && <div className="ice-snow slow" />}
       {az && !ic.cutin && <div className="ice-az-tag" style={mobile ? { top: '24%' } : undefined}>ABSOLUTE ZERO · {Math.max(0, az.t).toFixed(1)}s</div>}
+      {ic.zero && ((az && !ic.cutin) || ic.storm) && <ZeroOrb s={s} ic={ic} az={az} />}
       {ic.cutin && <IceCutIn c={ic.cutin} card={mainCard} mobile={mobile} />}
       {ic.storm && <IceStorm st={ic.storm} />}
     </>
+  );
+}
+
+// The zero point: an ice orb (ParticleFX sprite sheet, public/fx/ice_zero.png: 8 columns of
+// 208px frames) forms where you cast Absolute Zero, hangs there pulsing while time is stopped,
+// then shatters as time comes back and the storm hits.
+const ZERO = { img: `${BASE}fx/ice_zero.png`, cols: 8, rows: 8, form: [0, 13], hold: [13, 22], shatter: [35, 22], formDur: 0.6, holdFps: 12, shatterDur: 1 };
+function ZeroOrb({ s, ic, az }) {
+  let f;
+  if (az) {
+    const e = az.dur - ICE_INTRO - az.t;   // seconds since the burst art cleared
+    if (e < ZERO.formDur) f = ZERO.form[0] + Math.min(ZERO.form[1] - 1, Math.floor(e / ZERO.formDur * ZERO.form[1]));
+    else {
+      const n = ZERO.hold[1], i = Math.floor((e - ZERO.formDur) * ZERO.holdFps) % (n * 2 - 2);
+      f = ZERO.hold[0] + (i < n ? i : n * 2 - 2 - i);   // back and forth: the loop doesn't jump
+    }
+  } else {
+    f = ZERO.shatter[0] + Math.min(ZERO.shatter[1] - 1, Math.floor(ic.storm.t / ZERO.shatterDur * ZERO.shatter[1]));
+  }
+  const F = Math.min(420 * s.k, Math.min(s.W, s.H) * 0.8);
+  const x = Math.min(Math.max(ic.zero.x, F * 0.35), s.W - F * 0.35), y = Math.min(Math.max(ic.zero.y, F * 0.35), s.H - F * 0.35);
+  return (
+    <div className="zero-orb" style={{ left: x - F / 2, top: y - F / 2, width: F, height: F }}>
+      <img src={ZERO.img} alt="" draggable={false}
+        style={{ width: F * ZERO.cols, height: F * ZERO.rows, transform: `translate3d(${-(f % ZERO.cols) * F}px, ${-Math.floor(f / ZERO.cols) * F}px, 0)` }} />
+    </div>
   );
 }
 
@@ -257,6 +285,8 @@ export const ICE_CSS = `
     opacity: 0.9; mix-blend-mode: normal; }
   .ice-fig.hit { filter: brightness(3) drop-shadow(0 0 12px #fff); }
   .ice-fig-hp { position:absolute; left:-30px; width:60px; top:10px; text-align:center; font-size:10px; color:#e0f2fe; text-shadow:0 0 4px #000; letter-spacing:1px; }
+  .zero-orb { position:absolute; z-index:11; overflow:hidden; pointer-events:none; }
+  .zero-orb img { position:absolute; left:0; top:0; max-width:none; }
   .ice-world { position:absolute; inset:0; z-index:10; pointer-events:none;
     background: radial-gradient(ellipse at center, rgba(224,242,254,0.05) 30%, rgba(186,230,253,0.42) 100%);
     box-shadow: inset 0 0 90px rgba(224,242,254,0.75); }

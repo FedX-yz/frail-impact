@@ -199,6 +199,8 @@ export function createIcePlatinum(ctx) {
     s.timeStop = CUTIN + u.dur;
     s.attacks.forEach(a => { if (a.phase === 'wait' || a.phase === 'tele') api.finishAttack(a); });
     ic.cutin = { t: 0, life: CUTIN };
+    const P0 = s.player.pos ?? { x: s.W / 2, y: s.H / 2 };
+    ic.zero = { x: P0.x, y: P0.y };   // the zero point: an ice orb forms here (IceFx → ZeroOrb)
     ic.qcd = 0;
     effect({ kind: 'flash', color: '#e0f2fe', life: 0.5 });
     shake(0.5); sfx('boom');
