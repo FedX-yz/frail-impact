@@ -44,7 +44,14 @@ const tapered = (n, early, late) => {
   return Math.pow(early, a) * Math.pow(late, b);
 };
 
+// Bosses: the RED GIANT every 10 stages; halfway between (5, 15, 25…) a mini-boss, the Hydra
+// and the Swarm King taking turns. The other stages end when the kill goal is reached — and
+// pay what a boss would have on top of the clear reward, so a run earns as much as before.
+export const bossForStage = n => (n % 10 === 0 ? 'redgiant' : n % 10 === 5 ? (Math.floor(n / 10) % 2 === 0 ? 'hydra' : 'swarmking') : null);
+
 export function makeEndlessStage(n) {
+  const boss = bossForStage(n);
+  const coinScale = Math.pow(BAL.COIN_GROWTH, n - 1), gemScale = 1 + BAL.GEM_GROWTH * (n - 1), xpScale = 1 + BAL.XP_GROWTH * (n - 1);
   return {
     n,
     name: `Stage ${n}`,
@@ -57,7 +64,8 @@ export function makeEndlessStage(n) {
     // stage 1: Xiao don't shoot yet; stage 2: half of them do; then all of them
     armedBasicChance: n < 2 ? 0 : n < 3 ? 0.5 : 1,
 
-    elites: n < 2 ? ['bonk'] : n < 3 ? ['bonk', 'rusher'] : n < 5 ? ['bonk', 'rusher', 'shielder'] : ['bonk', 'rusher', 'shielder', 'devourer'],
+    elites: n < 2 ? ['bonk'] : n < 3 ? ['bonk', 'rusher'] : n < 5 ? ['bonk', 'rusher', 'shielder'] : n < 6 ? ['bonk', 'rusher', 'shielder', 'devourer']
+      : ['bonk', 'rusher', 'shielder', 'devourer', 'wormElite'],   // the Worm crawls in from stage 6
     eliteCap: Math.min(3, 1 + Math.floor(n / 3)),
     eliteEvery: Math.max(8, 16 - n * 0.8),   // big ones come less often
 
@@ -66,16 +74,19 @@ export function makeEndlessStage(n) {
     hordeSize: Math.min(9, 4 + Math.floor(n / 2)),
     hordeArmedChance: Math.min(0.5, 0.15 + n * 0.04),
 
-    boss: ['worm', 'hydra', 'swarmking'][(n - 1) % 3],
+    boss, mini: n % 10 === 5,
     bossCooldownMult: Math.max(0.6, 1 - (n - 1) * 0.05),
+    // the Red Giant watches from behind the city: 1–3 in the stages before his (closer each
+    // time), 4 on his own stage until he rises
+    giantNear: n % 10 >= 7 ? n % 10 - 6 : n % 10 === 0 ? 4 : 0,
 
     hpScale: tapered(n, BAL.HP_GROWTH, BAL.HP_GROWTH_LATE),
     dmgScale: tapered(n, BAL.DMG_GROWTH, BAL.DMG_GROWTH_LATE),
-    xpScale: 1 + BAL.XP_GROWTH * (n - 1),
-    coinScale: Math.pow(BAL.COIN_GROWTH, n - 1),
-    gemScale: 1 + BAL.GEM_GROWTH * (n - 1),   // boss/treasure gems grow so later stages stay worth it
+    xpScale, coinScale,
+    gemScale,   // boss/treasure gems grow so later stages stay worth it
 
-    clearReward: { coins: 150 * n, gems: Math.round(1 + BAL.GEM_GROWTH * 2 * (n - 1)) },
+    clearReward: boss ? { coins: 150 * n, gems: Math.round(1 + BAL.GEM_GROWTH * 2 * (n - 1)) }
+      : { coins: 150 * n + Math.round(400 * coinScale), gems: Math.round(1 + BAL.GEM_GROWTH * 2 * (n - 1) + 10 * gemScale), xp: Math.round(1000 * xpScale) },
 
     // chance an elite spawns with an affix (enemies.js → AFFIXES)
     affixChance: n < BAL.AFFIX_FROM_STAGE ? 0

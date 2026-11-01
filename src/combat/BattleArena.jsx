@@ -1,7 +1,7 @@
 import { SHEET_FX } from './sheetFx.js';
-import { Children, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Children, Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
-import { AFFIXES, ENEMY_TYPES } from './enemies';
+import { AFFIXES, ENEMY_TYPES, GIANT_ART } from './enemies';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
@@ -59,6 +59,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   // enemy id → DOM node; positions are written straight to these every frame
   const nodes = useRef(new Map());
   const parallaxRefs = useRef([]);
+  const giantFarRef = useRef(null);   // the Red Giant watching from behind the city
   const parallax = useRef({ x: 0, y: 0 });
   const scroll = useRef({ off: [0, 0, 0], v: 1, last: 0, tile: [0, 0, 0], key: '', els: null });   // SCROLL: offsets, speed factor (0 = stopped), last frame time, tile widths
   const scrollRefs = useRef([]);   // SCROLL: the wide strip inside each layer that slides
@@ -189,7 +190,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
   const cctvOn = getSettings().cctv;
   const shakeX = shakeOn && s.shake > 0 ? (Math.random() - 0.5) * 22 * s.shake : 0;
   const shakeY = shakeOn && s.shake > 0 ? (Math.random() - 0.5) * 22 * s.shake : 0;
-  const bossParts = s.enemies.filter(e => e.tier === 'boss');
+  const bossParts = s.enemies.filter(e => e.tier === 'boss' && !e.type.noBar);   // (not the Red Giant's hands)
   // worm parts nearer the head draw on top of the ones behind them
   const hasWorm = s.enemies.some(e => e.move === 'worm');
   const drawList = hasWorm
@@ -246,6 +247,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           strip.style.width = `calc(100% + ${Math.ceil(sc.tile[i]) + 2}px)`;
         });
       }
+      if (giantFarRef.current) giantFarRef.current.style.transform = `translate3d(${(par.x * 9).toFixed(2)}px, ${(par.y * 9 * 0.4).toFixed(2)}px, 0)`;
       PARALLAX.forEach((l, i) => {
         const el = parallaxRefs.current[i];
         if (!el) return;
@@ -321,13 +323,14 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
         }}
       >
-        {!s.stage.bg && PARALLAX.map((l, i) => (
-          <div key={l.src} ref={el => { parallaxRefs.current[i] = el; }} style={{ position: 'absolute', inset: `-${l.depth + 4}px`, pointerEvents: 'none', overflow: 'hidden',
+        {!s.stage.bg && PARALLAX.map((l, i) => (<Fragment key={l.src}>
+          {i === 1 && <GiantFar s={s} giantRef={giantFarRef} />}
+          <div ref={el => { parallaxRefs.current[i] = el; }} style={{ position: 'absolute', inset: `-${l.depth + 4}px`, pointerEvents: 'none', overflow: 'hidden',
             backgroundImage: SCROLL ? undefined : `url(${l.src})`, backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center bottom', willChange: 'transform' }}>
             {SCROLL && <div ref={el => { scrollRefs.current[i] = el; }} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '300%',
               backgroundImage: `url(${l.loop})`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'left bottom', willChange: 'transform' }} />}
           </div>
-        ))}
+        </Fragment>))}
         <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX}px,${shakeY}px)` }}>
           <div style={{ position: 'absolute', inset: 0, background: s.stage.bg ? 'rgba(10,14,30,0.45)' : 'rgba(10,14,30,0.22)', pointerEvents: 'none' }} />
 
@@ -465,6 +468,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
           <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
+          {s.enemies.map(b => b.type.kind === 'giant' && b.gl ? <GiantBody key={`gb${b.id}`} b={b} hands={s.enemies.filter(h => h.owner === b.id)} /> : null)}
+          {s.giantFall && <GiantFall f={s.giantFall} />}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
@@ -822,6 +827,74 @@ function GasCloud({ g, k, time }) {
 }
 
 // A Swarm King swarm: a cloud of bats around its fixed hitbox (the ring), thinning out as the acid eats it
+// ── The Red Giant ───────────────────────────────────────────────────────────
+// His body (the engine lays it out: b.gl), his eyes (lit when he's open, flaring before the
+// bolts, red once he's mad) and the strands of flesh from his arms to his hands.
+function GiantBody({ b, hands }) {
+  const L = b.gl, [AW, AH] = GIANT_ART.size;
+  const open = !b.sealed && !b.hidden, warn = (b.gi?.warn ?? 0) > 0, mad = !!b.gi?.mad;
+  const eyeCls = `giant-eye${warn ? ' warn' : open ? ' open' : ''}${mad ? ' mad' : ''}${b.hurt > 0 ? ' hit' : ''}`;
+  return (
+    <>
+      <div className="giant" style={{ left: L.left, top: L.top, width: L.w, height: L.h }}>
+        <img src={b.type.img} alt="" draggable={false} />
+        <svg viewBox={`0 0 ${AW} ${AH}`} preserveAspectRatio="none">
+          <defs>
+            <radialGradient id="giantEye"><stop offset="0%" stopColor="#f7ffd6" stopOpacity="0.95" /><stop offset="45%" stopColor="#bef264" stopOpacity="0.55" /><stop offset="100%" stopColor="#84cc16" stopOpacity="0" /></radialGradient>
+            <radialGradient id="giantEyeMad"><stop offset="0%" stopColor="#fff1f2" stopOpacity="0.95" /><stop offset="45%" stopColor="#f43f5e" stopOpacity="0.6" /><stop offset="100%" stopColor="#be123c" stopOpacity="0" /></radialGradient>
+          </defs>
+          {GIANT_ART.eyes.map(([x, y], i) => <circle key={i} className={eyeCls} cx={x} cy={y} r={i < 2 ? 46 : 24} fill={`url(#${mad ? 'giantEyeMad' : 'giantEye'})`} />)}
+        </svg>
+      </div>
+      <svg className="giant-arms" width="100%" height="100%">
+        {hands.map(h => {
+          if (!h.wrist) return null;
+          const box = h.size * h.drawScale, [gx, gy] = GIANT_ART.hands[h.side].grip;
+          const pw = box * GIANT_ART.handBox[0] / GIANT_ART.handBox[1];
+          const ex = h.x - pw / 2 + gx * pw, ey = h.y - box / 2 + gy * box;
+          const d = Math.hypot(ex - h.wrist.x, ey - h.wrist.y);
+          if (d < box * 0.12) return null;   // resting in place: the picture's own arm shows
+          const mx = (ex + h.wrist.x) / 2, my = (ey + h.wrist.y) / 2 + Math.min(d * 0.18, box * 0.5);   // it sags
+          const path = `M${h.wrist.x},${h.wrist.y} Q${mx},${my} ${ex},${ey}`, w = box * 0.16, limp = h.down > 0;
+          return (
+            <g key={h.id} opacity={limp ? 0.75 : 1}>
+              <path d={path} stroke="#2a0a18" strokeWidth={w} strokeLinecap="round" fill="none" />
+              <path d={path} stroke={limp ? '#7c3a57' : '#a8476f'} strokeWidth={w * 0.72} strokeLinecap="round" fill="none" />
+              <path d={path} stroke="#f0a3c4" strokeOpacity={0.45} strokeWidth={w * 0.16} strokeLinecap="round" fill="none" transform={`translate(0 ${-w * 0.18})`} />
+            </g>
+          );
+        })}
+      </svg>
+    </>
+  );
+}
+// killed: he topples back down behind the city (the boss explosion plays over it)
+function GiantFall({ f }) {
+  const p = Math.min(1, f.t / 2.6), e = p * p;
+  return (
+    <div className="giant" style={{ left: f.left, top: f.top + e * f.h * 0.9, width: f.w, height: f.h, opacity: 1 - Math.max(0, (f.t - 1.9) / 1.1),
+      transform: `rotate(${(e * 6).toFixed(2)}deg)` }}>
+      <img src={ENEMY_TYPES.redgiant.img} alt="" draggable={false} style={{ filter: 'brightness(0.55)' }} />
+    </div>
+  );
+}
+// watching from behind the city in the stages before his (closer each time), and on his own
+// stage until he rises. Sits between the sky and the buildings, moving with the parallax.
+const GIANT_FAR = { 1: { h: 0.6, eye: 0.37 }, 2: { h: 0.85, eye: 0.31 }, 3: { h: 1.12, eye: 0.25 }, 4: { h: 1.35, eye: 0.2 } };
+function GiantFar({ s, giantRef }) {
+  const lv = s.stage.giantNear ?? 0, cfg = GIANT_FAR[lv];
+  if (!cfg || !s.H) return null;
+  const gone = s.enemies.some(e => e.type.kind === 'giant') || !!s.giantFall || s.phase === 'clear' && lv === 4;
+  const [AW, AH] = GIANT_ART.size, h = s.H * cfg.h, w = h * AW / AH;
+  const top = s.H * cfg.eye - h * (GIANT_ART.eyes[0][1] / AH);
+  return (
+    <div ref={giantRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', willChange: 'transform', opacity: gone ? 0 : 1, transition: 'opacity 1.6s' }}>
+      <img src={ENEMY_TYPES.redgiant.imgFar} alt="" draggable={false} className="giant-far"
+        style={{ left: s.W * 0.6 - w / 2, top, width: w, height: h }} />
+    </div>
+  );
+}
+
 // a sprite-sheet effect: the sheet slides behind a frame-sized window, one frame at a time
 function SheetFx({ f }) {
   const d = SHEET_FX[f.fx];
@@ -1329,7 +1402,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
   else if (frozen) filter = 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)';   // icy blue whatever colour it was
   else if (flashRed || pose) filter = 'none';
   else if (hurt) filter = `${tint ?? ''} brightness(2.2)`;
-  const showBar = tier !== 'boss' || role === 'hydra' || (grouped && role !== 'head');
+  const showBar = tier !== 'boss' || role === 'hydra' || role === 'hand' || (grouped && role !== 'head');
   return (
     <div ref={el => register(id, el)} style={{
       position: 'absolute', left: 0, top: 0, width: size, height: size, willChange: 'transform',
@@ -1345,7 +1418,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
           boxShadow: shieldPct > 0 ? 'inset 0 0 24px rgba(125,211,252,0.45)' : 'none',
         }} />
       )}
-      {tier === 'boss' && (role === 'hydra' || !grouped) && <div className="boss-shadow" style={{ top: `${50 + drawScale * 58}%` }} />}
+      {tier === 'boss' && shape !== 'hidden' && role !== 'hand' && (role === 'hydra' || !grouped) && <div className="boss-shadow" style={{ top: `${50 + drawScale * 58}%` }} />}
       {dashing && <div className="dash-trail" />}
       {ax && <div className="affix-aura" style={{ '--ac': ax.color }} />}
       {/* big ones' MIRROR: silver flicker while it's coming, a solid mirror while it reflects */}
@@ -1366,7 +1439,7 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       <div className={`squash${hurt ? ' hit' : ''}${mirror === 'on' ? ' mirrored' : ''}`}>
       <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})${looks ? ' scaleX(var(--face, 1))' : ''}`,
         transition: looks ? 'transform 0.14s ease-out' : undefined }}>
-      {shape === 'core' ? (
+      {shape === 'hidden' ? null : shape === 'core' ? (
         // the Devourer's weak spot: an eye on roots, eyeball on the spot, roots hanging below
         <img src={img} alt="" draggable={false} className={`weak-eye${hurt ? ' hit' : ''}`} />
       ) : shape === 'segment' ? (
@@ -1686,6 +1759,18 @@ ${ICE_CSS}
   @media (max-width: 560px) { .seal-tag { white-space:normal; width:max-content; max-width:56vw; text-align:center; line-height:1.25; } }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
   .storm-bat { position:absolute; left:0; top:0; z-index:9; pointer-events:none; object-fit:contain; }
+  .giant { position:absolute; z-index:5; pointer-events:none; transform-origin:50% 100%; }
+  .giant > img { position:absolute; inset:0; width:100%; height:100%; }
+  .giant > svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .giant-eye { opacity:0; transition: opacity 0.25s; }
+  .giant-eye.open { opacity:0.85; animation: giantEyePulse 0.9s ease-in-out infinite; }
+  .giant-eye.warn { opacity:1; animation: giantEyePulse 0.18s ease-in-out infinite; }
+  .giant-eye.mad:not(.open):not(.warn) { opacity:0.45; }
+  .giant-eye.hit { opacity:1; }
+  @keyframes giantEyePulse { 50% { opacity:0.45; } }
+  .giant-arms { position:absolute; inset:0; z-index:6; pointer-events:none; overflow:visible; }
+  .giant-far { position:absolute; animation: giantBreath 6s ease-in-out infinite; }
+  @keyframes giantBreath { 50% { transform: translateY(-1.2%); } }
   .sheet-fx { position:absolute; left:0; top:0; z-index:12; overflow:hidden; pointer-events:none; }
   .sheet-fx img { position:absolute; left:0; top:0; max-width:none; height:auto; }
   .swarm-bat { position:absolute; left:0; top:0; object-fit:contain; pointer-events:none; }   /* glow baked into the picture: no filter */

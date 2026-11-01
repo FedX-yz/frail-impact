@@ -181,6 +181,21 @@ export const ENEMY_TYPES = {
     img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2.55,
     hp: 54, coin: 7, xp: 28,   // 14 parts: same total HP/rewards as the old 10 × 75
   },
+  // The Worm as an elite in endless mode (stage 6+, one at a time): shorter, and it's one
+  // kill when the last part dies. ('worm' above stays a boss for story mode.)
+  wormElite: {
+    name: 'EATER OF FRAILS', tier: 'elite', kind: 'worm', noAffix: true, one: true,
+    img: `${BASE}enemies/worm_head.png`, size: 74, facing: 90, drawScale: 1.75,
+    hp: 90, coin: 0, xp: 40,
+    segments: 8, segmentType: 'wormSegElite', spacing: 40,
+    wormSpeed: 165, turnRate: 2.4,
+    groupReward: { coin: 160, gems: 2, xp: 400 },
+  },
+  wormSegElite: {
+    name: 'EATER OF FRAILS', tier: 'elite', kind: 'worm', noAffix: true,
+    img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2.55,
+    hp: 40, coin: 4, xp: 12,
+  },
   // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN
   // for 5s. Get all three down at the same time or the downed ones regrow
   // at half HP. The heads hang from long necks that come down from the top
@@ -197,6 +212,25 @@ export const ENEMY_TYPES = {
     heads: 3, downTime: 5, regrowPct: 0.5,
     attacks: ['shot', 'circle'], cooldown: [2.4, 3.6],
     groupReward: { coin: 450, gems: 10, xp: 1000 },
+  },
+  // ── THE RED GIANT: the real boss (endless: every 10 stages; engine.js → GIANT) ──
+  // Too big for the screen: he rises from behind the city and fills the arena from the bottom.
+  // His two hands are enemies of their own (like Skeletron's): they SLAM where you are, SWEEP
+  // across the floor and GRAB at you. While both hands are up he's GUARDED; break one and it
+  // hangs limp for a while (then grows back) — his eyes are open then: hit his head. Green
+  // bolts from his eyes; at half HP he roars and everything comes faster. In the 3 stages
+  // before his, he's watching from behind the buildings (imgFar), closer each time.
+  // His picture is drawn by BattleArena (GiantBody); this enemy is the hitbox on his head.
+  redgiant: {
+    name: 'RED GIANT', tier: 'boss', kind: 'giant', shape: 'hidden',
+    img: `${BASE}enemies/giant_body.png`, imgFar: `${BASE}enemies/giant_far.png`,
+    size: 120, hp: 1300, coin: 900, gems: 25, xp: 2500, speed: 0, cooldown: [9e9, 9e9], attacks: [],
+  },
+  giantHand: {
+    name: 'RED GIANT', tier: 'boss', kind: 'giantHand', noBar: true,
+    imgs: { l: `${BASE}enemies/giant_hand_l.png`, r: `${BASE}enemies/giant_hand_r.png` },
+    img: `${BASE}enemies/giant_hand_l.png`, size: 120, hp: 300, coin: 0, xp: 0, speed: 0,
+    downTime: 7, regrowPct: 0.6, cooldown: [9e9, 9e9], attacks: [],
   },
   treasure: {
     name: 'Treasure', tier: 'treasure',
@@ -222,6 +256,17 @@ export const AFFIXES = {
 export const DEBUFFS = { weak: { name: 'WEAKENED', color: '#c084fc', dur: 4, dmg: 0.7 } };
 
 // Base damage of each attack at stage 1 (before DEF / damage reduction)
+// The Red Giant's picture (giant_body.png, 1200×812): where things are in it, in its pixels.
+// The engine maps these onto the arena (giantLayout); BattleArena draws from the same numbers.
+export const GIANT_ART = {
+  size: [1200, 812],
+  head: [590, 168], headR: 125,                                   // his hitbox: the face and eyes
+  eyes: [[531, 172], [648, 172], [544, 95], [643, 92], [508, 128], [571, 127], [613, 123], [683, 140]],   // the two big ones first
+  hands: { l: { home: [155.5, 542.5], wrist: [255, 640], grip: [0.92, 0.8] },    // home: where it rests (its centre)
+           r: { home: [1044.5, 542.5], wrist: [945, 640], grip: [0.08, 0.8] } },   // wrist: the arm's end; grip: the strand's end on the hand (× its picture)
+  handBox: [311, 363],                                            // a hand picture's size
+};
+
 export const ATTACK_DMG = {
   poke: 6, circle: 14, slash: 16, shot: 10, dash: 20,
   pellet: 4, hex: 3,       // small fry: quick, weak shots
@@ -237,4 +282,8 @@ export const ATTACK_DMG = {
   acidShot: 11,   // one of its acid shots
   batShot: 8,     // a bat from a swarm storm
   gas: 5,         // its gas, per tick
+  giantSlam: 30,  // the Red Giant's hand slamming down
+  giantSweep: 22, // …sweeping across the floor
+  giantGrab: 20,  // …grabbing at you
+  giantEye: 10,   // a bolt from his eyes
 };

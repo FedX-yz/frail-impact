@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { sheetLife } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
-import { ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
+import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
 import { makeEndlessStage, MODIFIERS } from './stages';
 import { sfx } from '../utils/sfx';
 import { createKitRuntime } from './kitRuntime';
@@ -169,7 +169,23 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     return e;
   }
 
-  const countTier = tier => s.enemies.filter(e => e.tier === tier && !e.type.horde && !e.type.core).length;
+  // (a linked group — the elite Worm — counts once)
+  const countTier = tier => new Set(s.enemies.filter(e => e.tier === tier && !e.type.horde && !e.type.core).map(e => e.group ?? `e${e.id}`)).size;
+
+  // A worm (the boss, or the elite one): a head and its body parts, crawling in from the right
+  function spawnWorm(typeId) {
+    const t = ENEMY_TYPES[typeId], group = uid++, parts = [];
+    const start = { x: s.W * 0.92, y: s.H * 0.3 };
+    parts.push(spawnEnemy(typeId, { pos: start, role: 'head', group, segIndex: 0, angle: Math.PI }));
+    for (let i = 1; i <= t.segments; i++) {
+      parts.push(spawnEnemy(t.segmentType, { pos: { x: start.x + i * K(t.spacing) * 0.6, y: start.y }, role: 'seg', group, segIndex: i }));
+    }
+    // chain = which worm a part belongs to; killing a middle part splits
+    // the chain in two, like Terraria's Eater of Worlds
+    const chain = uid++;
+    parts.forEach(p => { p.groupType = typeId; p.chain = chain; });
+    return parts;
+  }
 
   // Bosses: the Devourer is one enemy; the Worm and Hydra are linked groups
   // (direct: this exact type, not its first phase)
@@ -180,15 +196,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const group = uid++;
     let parts = [];
     if (t.kind === 'worm') {
-      const start = { x: s.W * 0.92, y: s.H * 0.3 };
-      parts.push(spawnEnemy(typeId, { pos: start, role: 'head', group, segIndex: 0, angle: Math.PI }));
-      for (let i = 1; i <= t.segments; i++) {
-        parts.push(spawnEnemy(t.segmentType, { pos: { x: start.x + i * K(t.spacing) * 0.6, y: start.y }, role: 'seg', group, segIndex: i }));
-      }
-      // chain = which worm a part belongs to; killing a middle part splits
-      // the chain in two, like Terraria's Eater of Worlds
-      const chain = uid++;
-      parts.forEach(p => { p.groupType = typeId; p.chain = chain; });
+      parts = spawnWorm(typeId);
+    } else if (t.kind === 'giant') {
+      parts.push(spawnGiant(typeId));
     } else if (t.kind === 'hydra') {
       const cx = s.W * 0.55, cy = s.H * 0.5;
       for (let i = 0; i < t.heads; i++) {
@@ -202,10 +212,159 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     } else {
       parts.push(spawnEnemy(typeId));
     }
-    s.bossInfo = { name: t.barName ?? t.name, maxHp: parts.reduce((a, p) => a + p.maxHp, 0), group: parts[0]?.group };
+    s.bossInfo = { name: t.barName ?? t.name, maxHp: parts.reduce((a, p) => a + p.maxHp, 0), group: parts[0]?.group };   // (the giant's hands aren't on the bar)
     // most of the small fry clear out when a boss shows up (less clutter around it)
     const keep = Math.max(1, Math.floor(s.stage.basicCap / 4));
     s.enemies.filter(e => e.tier === 'basic' && !e.type.horde && e.life == null).slice(keep).forEach(e => { e.life = rand(0.4, 1.8); });
+  }
+
+  // ── THE RED GIANT ───────────────────────────────────────────────────────
+  // He's drawn from his picture (giant_body.png, 1200×812): every spot below is in its pixels,
+  // and giantLayout() maps them onto the arena. He fills the width, standing up from below the
+  // bottom edge; his head (the hitbox) is up top. His hands (giant_hand_l/r.png, cut from the
+  // same picture) rest where they are in it — he looks whole — and leave to attack, tied back
+  // to the arm by a strand of flesh (BattleArena → GiantArms).
+  const GIANT = {
+    ...GIANT_ART, art: GIANT_ART.size,
+    rise: 2.8,                                        // seconds to rise from behind the city
+    handEvery: [2.3, 3.3], handEveryMad: [1.5, 2.2],  // seconds between hand attacks
+    eyeEvery: [6, 8], eyeEveryMad: [3.8, 5.2], eyeWarn: 0.75,
+    slam: { r: 95, tele: 1.25 }, sweep: { w: 84, tele: 1.4 }, grab: { r: 68, tele: 0.8 },
+  };
+  function giantLayout(b) {
+    const [AW, AH] = GIANT.art;
+    const sc = Math.min(1.25, Math.max(s.W / AW, (s.H * 0.72) / AH));   // fill the width (taller arenas: bigger, arms off the sides)
+    const w = AW * sc, h = AH * sc;
+    const rise = b?.gi ? 1 - Math.pow(1 - Math.min(1, b.gi.rise), 3) : 1;
+    const left = (s.W - w) / 2, top = s.H - h * 0.95 + (1 - rise) * h * 0.95;   // stands up out of the bottom edge
+    return { sc, w, h, left, top, at: ([x, y]) => ({ x: left + x * sc, y: top + y * sc }) };
+  }
+  function spawnGiant(typeId) {
+    const t = ENEMY_TYPES[typeId];
+    const b = spawnEnemy(typeId, { pos: { x: s.W / 2, y: s.H } });
+    b.gi = { rise: 0, handT: GIANT.rise + 1.2, eyeT: GIANT.rise + 4, warn: 0, next: Math.random() < 0.5 ? 'l' : 'r', mad: false };
+    b.sealed = true; b.sealWord = 'GUARDED'; b.sealLabel = 'GUARDED · break a hand'; b.hidden = true;
+    b.hands = {};
+    for (const side of ['l', 'r']) {
+      const h = spawnEnemy(t.hand ?? 'giantHand', { pos: { x: s.W / 2, y: s.H } });
+      h.role = 'hand'; h.side = side; h.owner = b.id; h.img = h.type.imgs[side]; h.hidden = true;
+      b.hands[side] = h.id;
+    }
+    sfx('roar'); shake(0.6);
+    placeGiant(b, 0);
+    return b;
+  }
+  // every frame: his hitbox, his hands' size and resting spots follow the layout (the arena can resize)
+  function placeGiant(b, dt) {
+    const L = giantLayout(b); b.gl = L;
+    const head = L.at(GIANT.head);
+    b.x = head.x; b.y = head.y; b.size = GIANT.headR * L.sc / 0.55 / s.k;
+    for (const side of ['l', 'r']) {
+      const h = s.enemies.find(e => e.id === b.hands[side]);
+      if (!h) continue;
+      const hw = GIANT.handBox[1] * L.sc;                         // the picture is drawn this tall
+      h.size = hw * 0.62 / s.k; h.drawScale = hw / (h.size * s.k);
+      const home = L.at(GIANT.hands[side].home);
+      h.home = { x: clamp(home.x, hw * 0.3, s.W - hw * 0.3), y: home.y };   // (pulled in on narrow screens)
+      // never resting behind your portrait / HP frame (bottom-left): lifted above it
+      const r = s.reserved;
+      if (r && h.home.x + hw * 0.3 > r.x0 && h.home.x - hw * 0.3 < r.x1 && h.home.y + hw * 0.3 > r.y0) h.home.y = Math.max(s.H * 0.2, r.y0 - hw * 0.32);
+      h.wrist = L.at(GIANT.hands[side].wrist);
+      moveGiantHand(b, h, dt);
+    }
+  }
+  function moveGiantHand(b, h, dt) {
+    const act = h.act, P = aimPoint();
+    let tx = h.home.x, ty = h.home.y, rate = 4;
+    const bob = Math.sin(s.time * 1.3 + (h.side === 'l' ? 0 : 2)) * K(7);
+    if (h.down > 0) { ty += K(60); rate = 3; }                     // broken: hangs limp
+    else if (act) {
+      const a = act.a;
+      if (a.phase === 'done' && !act.hit) { h.act = null; }        // it fizzled (frozen mid-wind-up): back home
+      else if (a.phase === 'wait' || a.phase === 'tele') {
+        if (act.kind === 'slam') { tx = a.cx ?? P.x; ty = (a.cy ?? P.y) - K(140); rate = 5; }
+        else if (act.kind === 'grab') { tx = (a.cx ?? P.x) + (h.side === 'l' ? -1 : 1) * K(80); ty = (a.cy ?? P.y) - K(30); rate = 6; }
+        else { tx = act.x0; ty = act.y ?? P.y; rate = 6; }
+      } else {
+        if (!act.hit) {   // it lands
+          act.hit = true; act.t = 0;
+          if (act.kind === 'slam') { shake(0.45); sfx('boom'); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#d6c7a1', n: 16 }); effect({ kind: 'ring', x: a.cx, y: a.cy, r: a.r * 1.3, color: '#fca5a5', life: 0.5 }); }
+          else if (act.kind === 'grab') { sfx('howl'); effect({ kind: 'burst', x: a.cx, y: a.cy, r: a.r, color: '#f472b6' }); }
+          else { shake(0.25); sfx('worldslash'); }
+        }
+        act.t += dt;
+        if (act.kind === 'sweep') { tx = act.x1; ty = act.y; rate = 9; }
+        else { tx = a.cx; ty = a.cy; rate = 22; }
+        if (act.t > (act.kind === 'sweep' ? 0.7 : 0.55)) h.act = null;   // done: back home
+      }
+    }
+    const f = 1 - Math.exp(-dt * rate);
+    h.x += (tx - h.x) * f; h.y += (ty + (act ? 0 : bob) - h.y) * f;
+  }
+  function giantHandAttack(b, h) {
+    const P = aimPoint(), side = h.side;
+    const r = Math.random(), kind = r < 0.45 ? 'slam' : r < 0.75 ? 'sweep' : 'grab';
+    let a;
+    if (kind === 'slam') a = queueAttack(h, 'circle', { center: { x: P.x, y: P.y }, r: K(GIANT.slam.r), dmgKey: 'giantSlam', teleMult: GIANT.slam.tele });
+    else if (kind === 'grab') a = queueAttack(h, 'circle', { center: { x: P.x, y: P.y }, r: K(GIANT.grab.r), dmgKey: 'giantGrab', teleMult: GIANT.grab.tele });
+    else a = queueAttack(h, 'slash', { at: { x: s.W / 2, y: P.y }, angle: 0, width: GIANT.sweep.w, dmgKey: 'giantSweep', teleMult: GIANT.sweep.tele });
+    h.act = { kind, a, hit: false, t: 0, y: P.y, x0: side === 'l' ? s.W * 0.06 : s.W * 0.94, x1: side === 'l' ? s.W * 0.94 : s.W * 0.06 };
+    h.attackT = 0.4;
+  }
+  function giantEyes(b) {   // a fan of green bolts from his two big eyes at you
+    const P = aimPoint(), n = b.gi.mad ? 7 : 5, spread = 0.16;
+    for (const [i, eye] of [GIANT.eyes[0], GIANT.eyes[1]].entries()) {
+      const o = b.gl.at(eye), base = Math.atan2(P.y - o.y, P.x - o.x);
+      for (let j = 0; j < n; j++) if ((j + i) % 2 === 0) bolt('acid', o.x, o.y, base + (j - (n - 1) / 2) * spread, K(340), K(11), 'giantEye');
+    }
+    sfx('hiss');
+  }
+  function updateGiant(dt) {
+    for (const b of s.enemies) {
+      if (b.type.kind !== 'giant') continue;
+      const g = b.gi;
+      g.rise += dt / GIANT.rise;
+      placeGiant(b, dt);
+      const hands = ['l', 'r'].map(sd => s.enemies.find(e => e.id === b.hands[sd])).filter(Boolean);
+      if (g.rise < 1) continue;
+      if (b.hidden) { b.hidden = false; hands.forEach(h => { h.hidden = false; }); announce('THE RED GIANT', '#ef4444'); }
+      // guarded while both hands are up; a broken hand opens him up
+      const open = hands.some(h => h.down > 0);
+      if (open && b.sealed) b.sealed = false;   // (handDown announces it)
+      if (!open) b.sealed = true;
+      // half HP: he roars, and everything comes faster
+      if (!g.mad && b.hp < b.maxHp * 0.5) {
+        g.mad = true; shake(1); sfx('roar'); sfx('bigKill');
+        effect({ kind: 'flash', color: '#ef4444', life: 0.6 });
+        announce('THE RED GIANT ROARS', '#ef4444');
+      }
+      if (s.phase !== 'boss') continue;
+      // the hands take turns (once he's mad, the other one sometimes follows straight after)
+      g.handT -= dt;
+      if (g.handT <= 0) {
+        g.handT = rand(...(g.mad ? GIANT.handEveryMad : GIANT.handEvery));
+        const ready = h => h && !(h.down > 0) && !h.act && !(h.frozen > 0);
+        let h = hands.find(x => x.side === g.next);
+        if (!ready(h)) h = hands.find(ready);
+        if (h) {
+          giantHandAttack(b, h); g.next = h.side === 'l' ? 'r' : 'l';
+          const other = hands.find(x => x !== h);
+          if (g.mad && ready(other) && Math.random() < 0.35) { g.next = other.side; g.handT = Math.min(g.handT, 0.6); }   // mad: the other hand right after
+        }
+      }
+      // his eyes: they flare up, then the bolts
+      if (g.warn > 0) { g.warn -= dt; if (g.warn <= 0) giantEyes(b); }
+      else if ((g.eyeT -= dt) <= 0) { g.eyeT = rand(...(g.mad ? GIANT.eyeEveryMad : GIANT.eyeEvery)); g.warn = GIANT.eyeWarn; sfx('charge'); }
+    }
+  }
+  // a hand at 0 HP is broken: it hangs limp until it grows back (generic `down` / regrowPct)
+  function handDown(h) {
+    h.hp = 0; h.down = h.type.downTime; h.act = null;
+    s.attacks.forEach(a => { if (a.owner === h.id && (a.phase === 'wait' || a.phase === 'tele')) finishAttack(a); });
+    effect({ kind: 'shards', x: h.x, y: h.y, r: K(90), color: '#f9a8d4', n: 14 });
+    effect({ kind: 'burst', x: h.x, y: h.y, r: K(80), color: '#ec4899' });
+    shake(0.35); sfx('bigKill');
+    announce('HAND BROKEN · HIT HIS HEAD', '#bef264');
   }
 
   // ── The Devourer's seal ─────────────────────────────────────────────────
@@ -652,7 +811,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         T.elite = st.eliteEvery / M('eliteRate');
         // (one-of-a-kind elites, like the Devourer, only one at a time)
         const pool = st.elites.filter(id => !ENEMY_TYPES[id]?.one || !s.enemies.some(e => e.typeId === id));
-        if (pool.length && countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) spawnEnemy(pick(pool));
+        if (pool.length && countTier('elite') < st.eliteCap + M('eliteCapAdd', 0)) {
+          const id = pick(pool);
+          if (ENEMY_TYPES[id].kind === 'worm') spawnWorm(id); else spawnEnemy(id);
+        }
       }
     }
   }
@@ -745,6 +907,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.move === 'cross') { moveSwarm(e, dt); return; }
     if (e.move === 'worm') { moveWorm(e, dt); return; }
     if (e.role === 'hydra') { moveHydraHead(e, dt); return; }
+    if (e.role === 'hand') return;   // the Red Giant moves his own hands (updateGiant)
     if (e.dashing) return;
     // walking in from the edge of the screen
     if (e.entering) {
@@ -1077,6 +1240,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     chargeUlt(dmg, charge);
     if (e.hp <= 0) {
       if (e.role === 'hydra') headDown(e);
+      else if (e.role === 'hand') handDown(e);
       else killEnemy(e);
     }
     return dmg;
@@ -1151,12 +1315,18 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         cb('onReward', { coins: c, gems: g, xp: Math.round((r.xp ?? 0) * (s.stage.xpScale ?? 1) * (s.stats.xpMult ?? 1)), kill: true });
       }
       if (e.tier === 'boss') { bossBoom(e); s.hitStop = 0.28; shake(0.6); stageClear(); }
+      else if (s.phase === 'fight') {   // the elite Worm: one kill
+        s.kills++;
+        cb('onProgress', { stage: s.stageNum, kills: s.kills });
+        if (s.kills >= s.stage.killTarget) targetReached();
+      }
       return;
     }
 
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
     if (e.tier === 'boss' && t.nextPhase && s.phase !== 'clear' && s.phase !== 'defeat') { burstHost(e); return; }   // the Swarm King's phase 1
+    if (t.kind === 'giant' && e.gl) s.giantFall = { t: 0, left: e.gl.left, top: e.gl.top, w: e.gl.w, h: e.gl.h };
     if (e.tier === 'boss') { bossBoom(e); s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
@@ -1407,7 +1577,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.phase = 'bossIntro'; s.phaseT = 2.4;
     const bt = ENEMY_TYPES[s.stage.boss], first = ENEMY_TYPES[bt?.firstPhase] ?? bt;
     s.bossMusic = first?.music ?? null;   // its song starts with the BOSS INCOMING banner
-    s.banner = { text: '⚠ BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true };
+    s.banner = bt?.kind === 'giant' ? { text: '⚠ RED GIANT ⚠', sub: 'IT RISES', t: 2.4, boss: true }
+      : s.stage.mini ? { text: '⚠ MINI-BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true }
+      : { text: '⚠ BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true };
   }
   function stageClear() {
     s.phase = 'clear'; s.phaseT = 3;
@@ -1419,7 +1591,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const coins = Math.round((r?.coins ?? 0) * M('coin')), gems = Math.round((r?.gems ?? 0) * M('gem'));
     s.banner = { text: s.stage.story ? 'VICTORY!' : `${stageLabel()} CLEAR!`, t: 3, good: true,
       sub: coins || gems ? `+${fmt(coins)} coins · +${gems} gem${gems === 1 ? '' : 's'}` : null };
-    if (coins || gems) cb('onReward', { coins, gems, xp: 0, kill: false });
+    const xp = Math.round(r?.xp ?? 0);
+    if (coins || gems || xp) cb('onReward', { coins, gems, xp, kill: false });
   }
   function startDefeat() {
     s.phase = 'defeat'; s.phaseT = 2.6;
@@ -1430,7 +1603,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     cb('onDefeat', s.stageNum);
   }
   function loadStage(n) {
-    s.stageNum = n; s.stage = makeStage(n);
+    s.stageNum = n; s.stage = makeStage(n); s.giantFall = null;
     s.timeStop = 0;
     rt.reset('load');
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
@@ -1481,6 +1654,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.floaters.forEach(f => { f.t += dt; if (f.t >= 1.1) expired = true; });
     if (expired) { s.floaters = s.floaters.filter(f => f.t < 1.1); s.floaterVer++; }
     s.effects.forEach(f => { f.t += dt; });
+    if (s.giantFall) { s.giantFall.t += dt; if (s.giantFall.t > 3) s.giantFall = null; }
     s.effects = s.effects.filter(f => f.t < (f.life ?? 0.5));
     s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); if (e.attackT > 0) e.attackT -= dt; });
 
@@ -1635,6 +1809,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     updateSeals(dt);
     updateSwarmKing(dt);
+    updateGiant(dt);
   }
 
   function resize(W, H) {
@@ -1691,11 +1866,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (!t) return;
       if (t.tier === 'boss') { s.phase = 'boss'; spawnBoss(typeId, { direct }); return; }
       if (typeId === 'swarmling') { spawnHorde(); return; }
-      for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : spawnEnemy(typeId, { armed: true });
+      for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : t.kind === 'worm' ? spawnWorm(typeId) : spawnEnemy(typeId, { armed: true });
     },
     // story: skip straight to winning this level
     win: () => { s.enemies = []; s.attacks = []; stageClear(); s.phaseT = 0.6; },
-    summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; startBossIntro(); },
+    summonBoss: () => { s.enemies = s.enemies.filter(e => e.tier !== 'boss'); s.kills = s.stage.killTarget; if (!s.stage.boss) s.stage = { ...s.stage, boss: 'redgiant' }; startBossIntro(); },
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
     clearEnemies: () => {
       rt.reset('load');
