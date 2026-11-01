@@ -468,7 +468,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
           <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
-          {s.enemies.map(b => b.type.kind === 'giant' && b.gl ? <GiantBody key={`gb${b.id}`} b={b} hands={s.enemies.filter(h => h.owner === b.id)} /> : null)}
+          {s.enemies.map(b => b.type.kind === 'giant' && b.gl ? <GiantBody key={`gb${b.id}`} b={b} /> : null)}
           {s.giantFall && <GiantFall f={s.giantFall} />}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
@@ -828,9 +828,9 @@ function GasCloud({ g, k, time }) {
 
 // A Swarm King swarm: a cloud of bats around its fixed hitbox (the ring), thinning out as the acid eats it
 // ── The Red Giant ───────────────────────────────────────────────────────────
-// His body (the engine lays it out: b.gl), his eyes (lit when he's open, flaring before the
-// bolts, red once he's mad) and the strands of flesh from his arms to his hands.
-function GiantBody({ b, hands }) {
+// His body (the engine lays it out: b.gl) and his eyes (lit when he's open, flaring before the
+// bolts, red once he's mad). His hands float on their own (they're enemies: EnemySprite).
+function GiantBody({ b }) {
   const L = b.gl, [AW, AH] = GIANT_ART.size;
   const open = !b.sealed && !b.hidden, warn = (b.gi?.warn ?? 0) > 0, mad = !!b.gi?.mad;
   const eyeCls = `giant-eye${warn ? ' warn' : open ? ' open' : ''}${mad ? ' mad' : ''}${b.hurt > 0 ? ' hit' : ''}`;
@@ -846,25 +846,6 @@ function GiantBody({ b, hands }) {
           {GIANT_ART.eyes.map(([x, y], i) => <circle key={i} className={eyeCls} cx={x} cy={y} r={i < 2 ? 46 : 24} fill={`url(#${mad ? 'giantEyeMad' : 'giantEye'})`} />)}
         </svg>
       </div>
-      <svg className="giant-arms" width="100%" height="100%">
-        {hands.map(h => {
-          if (!h.wrist) return null;
-          const box = h.size * h.drawScale, [gx, gy] = GIANT_ART.hands[h.side].grip;
-          const pw = box * GIANT_ART.handBox[0] / GIANT_ART.handBox[1];
-          const ex = h.x - pw / 2 + gx * pw, ey = h.y - box / 2 + gy * box;
-          const d = Math.hypot(ex - h.wrist.x, ey - h.wrist.y);
-          if (d < box * 0.12) return null;   // resting in place: the picture's own arm shows
-          const mx = (ex + h.wrist.x) / 2, my = (ey + h.wrist.y) / 2 + Math.min(d * 0.18, box * 0.5);   // it sags
-          const path = `M${h.wrist.x},${h.wrist.y} Q${mx},${my} ${ex},${ey}`, w = box * 0.16, limp = h.down > 0;
-          return (
-            <g key={h.id} opacity={limp ? 0.75 : 1}>
-              <path d={path} stroke="#2a0a18" strokeWidth={w} strokeLinecap="round" fill="none" />
-              <path d={path} stroke={limp ? '#7c3a57' : '#a8476f'} strokeWidth={w * 0.72} strokeLinecap="round" fill="none" />
-              <path d={path} stroke="#f0a3c4" strokeOpacity={0.45} strokeWidth={w * 0.16} strokeLinecap="round" fill="none" transform={`translate(0 ${-w * 0.18})`} />
-            </g>
-          );
-        })}
-      </svg>
     </>
   );
 }
@@ -1768,8 +1749,7 @@ ${ICE_CSS}
   .giant-eye.mad:not(.open):not(.warn) { opacity:0.45; }
   .giant-eye.hit { opacity:1; }
   @keyframes giantEyePulse { 50% { opacity:0.45; } }
-  .giant-arms { position:absolute; inset:0; z-index:6; pointer-events:none; overflow:visible; }
-  .giant-far { position:absolute; animation: giantBreath 6s ease-in-out infinite; }
+  .giant-far { position:absolute; max-width:none; max-height:none; animation: giantBreath 6s ease-in-out infinite; }
   @keyframes giantBreath { 50% { transform: translateY(-1.2%); } }
   .sheet-fx { position:absolute; left:0; top:0; z-index:12; overflow:hidden; pointer-events:none; }
   .sheet-fx img { position:absolute; left:0; top:0; max-width:none; height:auto; }

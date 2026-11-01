@@ -222,8 +222,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // He's drawn from his picture (giant_body.png, 1200×812): every spot below is in its pixels,
   // and giantLayout() maps them onto the arena. He fills the width, standing up from below the
   // bottom edge; his head (the hitbox) is up top. His hands (giant_hand_l/r.png, cut from the
-  // same picture) rest where they are in it — he looks whole — and leave to attack, tied back
-  // to the arm by a strand of flesh (BattleArena → GiantArms).
+  // same picture) float: they rest where they are in it and fly off to attack.
   const GIANT = {
     ...GIANT_ART, art: GIANT_ART.size,
     rise: 2.8,                                        // seconds to rise from behind the city
