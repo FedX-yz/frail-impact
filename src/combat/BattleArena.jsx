@@ -460,7 +460,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             const isWormHead = e.move === 'worm' && e.role === 'head';
             return (
               <EnemySprite key={e.id} id={e.id} register={register}
-                img={e.shield && e.shield.hp <= 0 && e.type.imgBroken ? e.type.imgBroken : e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
+                img={e.shield && e.shield.hp <= 0 && e.type.imgBroken ? e.type.imgBroken : e.type.imgOpen && e.seal && !e.sealed ? e.type.imgOpen : e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
                 size={e.size * k} k={k} isWormHead={isWormHead} looks={!!e.type.looks}
                 frozen={e.frozen > 0} down={e.down > 0 ? Math.ceil(e.down * 10) / 10 : 0}
                 flashRed={e.flashRed} hurt={e.hurt > 0} dashing={!!e.dashing} paused={s.timeStop > 0}

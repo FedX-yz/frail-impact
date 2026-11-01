@@ -22,6 +22,7 @@
 //   poseFacing: which way the pose pictures look (180 = left, 0 = right); they
 //              then turn toward the attack (flipped instead of upside down)
 //   imgBroken: picture while its own shield is broken (Shield Bonk)
+//   imgOpen:   picture while its seal is broken and it can be hurt (the Devourer)
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -110,8 +111,8 @@ export const ENEMY_TYPES = {
   // around the arena (engine.js → seals). It stands still and throws the big attacks.
   devourer: {
     name: 'DEVOURER OF WORLDS', tier: 'elite', noAffix: true, one: true,
-    img: `${BASE}enemies/devourer.png`, size: 165, drawScale: 1.5,   // the grinning tree
-    poses: { warn: `${BASE}enemies/devourer_roar.png`, attack: `${BASE}enemies/devourer_roar.png` },   // eyes shut, roaring while it throws an attack
+    img: `${BASE}enemies/devourer.png`, size: 165, drawScale: 1.5,   // the grinning tree, while it's sealed
+    imgOpen: `${BASE}enemies/devourer_roar.png`,                       // eyes shut, mouth open: the seal is broken, hit it
     hp: 320, coin: 180, speed: 0,
     bossPatterns: ['crossSlash', 'barrage', 'slamRing'],
     cooldown: [3.4, 4.6],
