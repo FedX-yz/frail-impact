@@ -203,7 +203,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       for (let i = 0; i < t.heads; i++) {
         const h = spawnEnemy(typeId, { pos: { x: s.W / 2, y: s.H / 2 }, role: 'hydra', group, segIndex: i });
         hydraHead(h, i, i - (t.heads - 1) / 2);
-        h.cd = 1 + i * 0.9;          // stagger their first attacks
+        h.cd = Infinity;             // (they take turns: updateHydra decides who attacks)
         parts.push(h);
       }
       hydraLayout(parts, true);
@@ -222,6 +222,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // drags your cursor to its mouth and bites (pull away hard and it misses). Let a downed head
   // regrow and the Hydra grows a new one, up to maxHeads (enemies.js → hydra).
   const HYDRA = {
+    start: 1.6,                 // after it shows up, before the first attack
+    pause: [0.35, 0.6],         // between one head's attack ending and the next head's starting
+    chorusPause: 1.4,           // after the chorus
+    chorusGap: 0.45,            // between heads joining in during the chorus
+    chorusOrder: ['tongue', 'acid', 'sting'],   // reel you in, box you in with acid, stab
     sting:  { r: 46, tele: 0.7, gap: 0.85, cd: [2.6, 3.6] },
     acid:   { n: 3, windup: 0.55, spread: 190, pool: 4, cd: [3.4, 4.6] },
     tongue: { w: 30, tele: 1.15, reach: 640, pull: 360, hold: 1.4, biteR: 70, struggle: 850, cd: [5, 6.5] },
@@ -251,7 +256,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const [fx, fy] = t.headMouth?.[h.art] ?? [0.5, 0.8], asp = t.headAspect?.[h.art] ?? 1;
     return { x: h.x + (fx - 0.5) * box * Math.min(1, asp), y: h.y + (fy - 0.5) * box };
   }
-  const restCd = e => rand(...(e.cdRange ?? e.type.cooldown ?? [4, 6])) * (e.tier === 'boss' ? s.stage.bossCooldownMult : 1) * M('enemyCd') * (e.cdMult ?? 1);
+  const restCd = e => e.role === 'hydra' ? Infinity : rand(...(e.cdRange ?? e.type.cooldown ?? [4, 6])) * (e.tier === 'boss' ? s.stage.bossCooldownMult : 1) * M('enemyCd') * (e.cdMult ?? 1);
   function hydraAttack(h) {
     const H = HYDRA[h.head];
     if (h.head === 'sting') {
@@ -271,6 +276,48 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
     h.attackT = 0.4;
     sfx('hiss');
+  }
+  // The heads take TURNS, left to right, one attack at a time: the next one starts once the last
+  // one is over. After every head has had its turn they all strike together in a set order (the
+  // CHORUS: tongue, then acid, then the stinger), and the rounds start again. A head that's down
+  // misses its turn; more heads = longer rounds and a bigger chorus.
+  function updateHydra(dt) {
+    const heads = s.enemies.filter(e => e.role === 'hydra');
+    if (!heads.length) { s.hydraC = null; return; }
+    if (s.phase === 'clear' || s.phase === 'defeat') return;
+    const c = s.hydraC?.group === heads[0].group ? s.hydraC
+      : (s.hydraC = { group: heads[0].group, next: HYDRA.start, lastSlot: -Infinity, turns: 0, chorus: null });
+    const up = heads.filter(h => !(h.down > 0)).sort((a, b) => a.slot - b.slot);
+    const busy = heads.some(h => h.busy > 0 || h.spitT > 0) || !!s.player.caught;
+    const slow = s.stage.bossCooldownMult * M('enemyCd');
+    if (c.chorus) {
+      const ch = c.chorus;
+      if (!s.player.caught) ch.t += dt;           // (it waits while the tongue has you)
+      while (ch.steps.length && ch.steps[0].at <= ch.t) {
+        const id = ch.steps.shift().id, h = s.enemies.find(e => e.id === id);
+        if (h && !(h.down > 0) && !h.busy && !(h.spitT > 0)) hydraAttack(h);
+      }
+      if (!ch.steps.length && !heads.some(h => h.busy > 0 || h.spitT > 0) && !s.player.caught) { c.chorus = null; c.next = HYDRA.chorusPause * slow; }
+      return;
+    }
+    if (busy || !up.length) return;
+    c.next -= dt;
+    if (c.next > 0) return;
+    // a full round done → the chorus (needs 2+ heads up)
+    if (c.turns >= heads.length && up.length >= 2) {
+      c.turns = 0;
+      const order = [...up].sort((a, b) => HYDRA.chorusOrder.indexOf(a.head) - HYDRA.chorusOrder.indexOf(b.head) || a.slot - b.slot);
+      c.chorus = { t: 0, steps: order.map((h, i) => ({ id: h.id, at: i * HYDRA.chorusGap * slow })) };
+      const top = Math.min(...up.map(h => h.y));
+      floater('ALL HEADS!', s.W * 0.55, top - K(70), '#f87171', true);
+      sfx('roar'); shake(0.3);
+      return;
+    }
+    // the next head to the right (wrapping around)
+    const h = up.find(x => x.slot > c.lastSlot) ?? up[0];
+    c.lastSlot = h.slot; c.turns++;
+    hydraAttack(h);
+    c.next = rand(...HYDRA.pause) * slow;          // (counted once its attack is over)
   }
   // the tongue caught you: it drags your cursor toward its mouth (s.player.pull), then bites.
   // Struggle (move your pointer / finger around a lot) to break free, or be out of reach when it bites.
@@ -345,7 +392,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const n = spawnEnemy(from.groupType ?? 'hydra', { pos: { x: from.x, y: from.y }, role: 'hydra', group: from.group, segIndex: Math.max(...heads.map(h => h.segIndex)) + 1 });
     hydraHead(n, t.headKinds.indexOf(kind), slot);
     n.hp = Math.round(n.maxHp * t.regrowPct);
-    n.cd = 2.2;
+    n.cd = Infinity;
     const all = [...heads, n];
     hydraLayout(all);
     n.x = n.hx; n.y = n.hy;
@@ -1973,6 +2020,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     updateSeals(dt);
     updateSwarmKing(dt);
+    updateHydra(dt);
     updateGiant(dt);
   }
 
