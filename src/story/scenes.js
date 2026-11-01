@@ -59,7 +59,7 @@ export const SCENES = {
       '{em:Decades ago} a {green:virus} spread throughout the world, mutating humans and other life forms alike into terrifying and powerful creatures. Since then, those creatures have shifted society into chaos, massacring humans in mass to satisfy their hunger.',
       'Only a small percentage of the total human population remains today, {em:lowering with each passing day.}',
       'These creatures were called {havoc:"Havoc"}, and their claimed territories from humans are assigned as {zone:"Frail Environments"}.',
-      'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the {havoc:Havoc}. Thanks to those efforts, today fending off Havoc hordes became much more manageable, {em:but still on the edge.}',
+      'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the Havoc. Thanks to those efforts, today fending off Havoc hordes became much more manageable, {em:but still on the edge.}',
     ] },
     { crawl: ['{title:JUNE 9TH 2020}'] },
     { bg: null },
