@@ -1335,8 +1335,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
       <div style={{ width: '100%', height: '100%', transform: `${turns ? 'rotate(var(--rot, 0deg)) ' : ''}scale(${drawScale})${looks ? ' scaleX(var(--face, 1))' : ''}`,
         transition: looks ? 'transform 0.14s ease-out' : undefined }}>
       {shape === 'core' ? (
-        // the Devourer's weak spot: a pulsing eye of flesh
-        <div className={`weak-core${hurt ? ' hit' : ''}`}><i /></div>
+        // the Devourer's weak spot: an eye on roots, eyeball on the spot, roots hanging below
+        <img src={img} alt="" draggable={false} className={`weak-eye${hurt ? ' hit' : ''}`} />
       ) : shape === 'segment' ? (
         <div className="worm-seg" style={{ filter: frozen ? 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)' : hurt ? 'brightness(2)' : 'none' }} />
       ) : pose ? (
@@ -1634,6 +1634,10 @@ ${ICE_CSS}
   .dash-trail { position:absolute; inset:10%; border-radius:50%; box-shadow: 0 0 24px 12px rgba(255,40,40,0.55); }
   .lure { position:absolute; inset:-30%; border-radius:50%; pointer-events:none;
           background: radial-gradient(circle, rgba(255,215,90,0.35) 0%, transparent 65%); animation: lurePulse 1s ease-in-out infinite; }
+  .weak-eye { position:absolute; left:-12.5%; width:125%; top:-13%; height:250%; object-fit:contain; object-position:50% 0; pointer-events:none;
+    transform-origin:50% 25%; animation: eyeThrob 1.1s ease-in-out infinite; filter: drop-shadow(0 0 8px rgba(251,113,133,0.75)); }
+  .weak-eye.hit { filter: brightness(2.2) drop-shadow(0 0 8px rgba(251,113,133,0.75)); }
+  @keyframes eyeThrob { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07, 1.04); } }
   .weak-core { position:absolute; inset:6%; border-radius:50%; animation: corePulse 0.9s ease-in-out infinite;
     background: radial-gradient(circle at 50% 50%, #fff1f2 0 12%, #e11d48 13% 24%, #4c0519 25% 34%, #fb7185 35% 52%, #9f1239 53% 70%, rgba(76,5,25,0.85) 71%);
     box-shadow: 0 0 18px #f43f5e, 0 0 4px #fff inset; border:2px solid #fecdd3; }

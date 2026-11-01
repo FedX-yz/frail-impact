@@ -110,7 +110,8 @@ export const ENEMY_TYPES = {
   // around the arena (engine.js → seals). It stands still and throws the big attacks.
   devourer: {
     name: 'DEVOURER OF WORLDS', tier: 'elite', noAffix: true, one: true,
-    img: `${BASE}enemies/hoxboss.jpg`, size: 120,
+    img: `${BASE}enemies/devourer.png`, size: 165, drawScale: 1.5,   // the grinning tree
+    poses: { warn: `${BASE}enemies/devourer_roar.png`, attack: `${BASE}enemies/devourer_roar.png` },   // eyes shut, roaring while it throws an attack
     hp: 320, coin: 180, speed: 0,
     bossPatterns: ['crossSlash', 'barrage', 'slamRing'],
     cooldown: [3.4, 4.6],
@@ -158,6 +159,7 @@ export const ENEMY_TYPES = {
   // from the boss's (engine.js → SEAL); they don't attack, move or count as kills.
   weakspot: {
     name: 'WEAK SPOT', tier: 'elite', core: true, shape: 'core', move: 'still',
+    img: `${BASE}enemies/devourer_eye.png`,   // an eye on roots; drawn with the eyeball on its middle (BattleArena)
     size: 58, hp: 1, coin: 0, xp: 0, speed: 0, cooldown: [9e9, 9e9], attacks: [],
   },
   // Worm (like Terraria's Eater of Worlds): HP is split across body parts,
