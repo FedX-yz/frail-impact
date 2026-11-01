@@ -37,6 +37,8 @@ export const STORY_CSS = `
   .vn-shake { animation: vnShake 0.45s; }
   .vn-crawl { animation: vnFade 0.8s ease-out; transition: opacity 1.6s ease-in; }
   .vn-crawl.out { opacity: 0; }
+  .credits-roll { position:absolute; left:0; right:0; top:0; padding:0 24px; text-align:center; animation-name: creditsRoll; animation-timing-function: linear; animation-fill-mode: both; }
+  @keyframes creditsRoll { from { transform: translateY(100vh); } to { transform: translateY(-100%); } }
   .vn-crawl-p { animation: crawlIn 1.8s ease-out both; }
   /* intro crawl highlights ({style:words} in scenes.js): white first, then they light up */
   .cw { animation-duration: 1.4s; animation-delay: 1.1s; animation-fill-mode: both; animation-timing-function: ease-out; }

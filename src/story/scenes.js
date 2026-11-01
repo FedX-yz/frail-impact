@@ -34,6 +34,7 @@
 //   {manager} inside a line           becomes the player's name from the application
 //   { test: true }                    the interview test (InterviewTest.jsx): a nonsense maths page, then 3
 //                                       questions; 2+ wrong sets the flag failedTest
+//   { credits: true }                 the credits roll up the screen (story/credits.js); tap to skip
 //   { ending: { n: 1, title: 'BACK HOME' } }   a bad ending: its card, then back to the map (nothing saved)
 //
 // Everything below is SAMPLE content to show the format. Replace it freely.
@@ -127,13 +128,21 @@ export const SCENES = {
     ['astrec', '...Understood.'],
     { end: true },
 
-    // ENDING 1: you failed the test (2 of 3 wrong) and go home. The level isn't cleared, so they can try again.
+    // ENDING 1: you failed the test (2 of 3 wrong). He throws you out, the credits roll, and the
+    // level isn't cleared, so they can try again.
     { label: 'ending1' },
+    ['stranger', 'Hmmmmm.... No, that\'s not quite it.'],
+    { shake: true },
+    ['stranger', 'I\'m afraid our birthday party here is over. Out of here!!'],
     { hide: 'all' },
-    'You failed the interview.',
-    'You go home.',
+    { bg: null },   // [ ] a picture of you outside the hospital goes here
+    'You get out of the abandoned hospital.',
+    { choice: [{ text: 'What the fuck was his deal?' }] },
+    'You can\'t believe you bought some of the words that insane man said. Absolute maniac.',
+    'You return to your usual day-to-day life and forget about this event.',
     { music: null },
-    { ending: { n: 1, title: 'BACK HOME' } },
+    { credits: true },
+    { ending: { n: 1, title: 'INTERVIEW FAILURE' } },
   ],
 
   'c1-outskirts-in': [

@@ -8,6 +8,7 @@ import { playSFX, playPress, playMusic, stopMusic, playVoice, stopVoice } from '
 import { voiceFile } from './voice';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
+import { CREDITS } from './credits';
 import InterviewTest from './InterviewTest';
 
 const BASE = import.meta.env.BASE_URL;
@@ -17,7 +18,7 @@ const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90 };
 // Plays steps from `i` until one needs the player (a line, a choice, a wait)
 // and returns the new state. Nothing here touches the screen directly.
 function run(steps, from, prev, signed = false) {
-  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false, crawl: null, test: false, ending: null };
+  const s = { ...prev, actors: [...prev.actors], flags: { ...prev.flags }, sfx: [], application: false, crawl: null, test: false, ending: null, credits: false };
   const labelAt = (name) => steps.findIndex(x => x?.label === name);
   let i = from;
   for (let guard = 0; i < steps.length && guard < 2000; guard++) {
@@ -28,6 +29,7 @@ function run(steps, from, prev, signed = false) {
     if (step.end) break;
     if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl };   // intro text on black
     if (step.test) return { ...s, i, line: null, choice: null, wait: 0, test: true };   // the interview test (InterviewTest.jsx)
+    if (step.credits) return { ...s, i, line: null, choice: null, wait: 0, credits: true };   // the credits roll (credits.js)
     if (step.ending) return { ...s, i, line: null, choice: null, wait: 0, ending: step.ending };   // a bad ending: the card, then back to the map
     if (step.application && !signed) return { ...s, i, line: null, choice: null, wait: 0, application: true };   // the job application (JobApplication.jsx), once
     if (step.if !== undefined) {   // conditional jump
@@ -101,7 +103,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   }, [st.done, st.flags, onEnd]);
 
   const next = useCallback(() => {
-    if (st.done || st.choice || st.application || st.test || st.ending || showLog) return;
+    if (st.done || st.choice || st.application || st.test || st.ending || st.credits || showLog) return;
     if (st.crawl) { setCrawlTap(t => t + 1); return; }
     if (st.line && !typed) { finish(); return; }
     setSt(prev => {
@@ -122,7 +124,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
 
   // waits, auto-play and skip
   useEffect(() => {
-    if (st.done || st.choice || st.application || st.crawl || st.test || st.ending) { if (st.choice || st.application || st.test || st.ending) setSkip(false); return; }
+    if (st.done || st.choice || st.application || st.crawl || st.test || st.ending || st.credits) { if (st.choice || st.application || st.test || st.ending) setSkip(false); return; }
     let ms = null;
     if (st.wait) ms = st.wait * 1000;
     else if (skip) ms = 70;
@@ -242,6 +244,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
       {st.test && (
         <InterviewTest onDone={passed => setSt(prev => run(steps, prev.i + 1, { ...prev, flags: { ...prev.flags, failedTest: !passed } }, signedRef.current))} />
       )}
+      {st.credits && <CreditsRoll key={st.i} tall={tall} skip={skip} onDone={endCrawl} />}
       {st.ending && <EndingCard ending={st.ending} tall={tall} onDone={() => { if (!ended.current) { ended.current = true; onEnd({ ...st.flags, __ending: st.ending.n }); } }} />}
       {st.application && (
         <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)); }} />
@@ -296,6 +299,31 @@ function IntroCrawl({ paragraphs, tap, skip, onDone, tall }) {
             textAlign: 'center', opacity: i < n - 1 ? 0.62 : 1, transition: 'opacity 1.2s' }}>{marked(p)}</p>
         ))}
       </div>
+    </div>
+  );
+}
+
+// The credits: they roll up the screen on black, then the scene goes on. Tap to skip.
+function CreditsRoll({ onDone, skip, tall }) {
+  const done = useRef(false), t0 = useRef(performance.now());
+  const finish = useCallback(() => { if (!done.current) { done.current = true; onDone(); } }, [onDone]);
+  useEffect(() => { if (skip) finish(); }, [skip, finish]);
+  const lines = CREDITS.reduce((n, c) => n + (c.names?.length ?? 0) + 1, 0);
+  const dur = Math.max(14, lines * 1.3);   // seconds
+  return (
+    <div className="vn-crawl" onPointerDown={e => { e.stopPropagation(); if (performance.now() - t0.current > 1200) finish(); }}
+      style={{ position: 'absolute', inset: 0, zIndex: 9, background: '#000', overflow: 'hidden', cursor: 'default' }}>
+      <div className="credits-roll" style={{ animationDuration: `${dur}s` }} onAnimationEnd={finish}>
+        {CREDITS.map((c, i) => c.gap ? <div key={i} style={{ height: tall ? 70 : 110 }} /> : c.title ? (
+          <div key={i} style={{ color: '#f1f1f1', fontFamily: 'var(--font-dramatic)', fontSize: tall ? 30 : 46, letterSpacing: 4, margin: '0 0 28px' }}>{c.title}</div>
+        ) : (
+          <div key={i} style={{ margin: '0 0 30px' }}>
+            <div style={{ color: '#94a3b8', fontFamily: 'var(--font-narration)', fontSize: tall ? 14 : 17, letterSpacing: 5, textTransform: 'uppercase', marginBottom: 8 }}>{c.role}</div>
+            {c.names.map((nm, j) => <div key={j} style={{ color: '#e5e7eb', fontFamily: 'var(--font-narration)', fontSize: tall ? 18 : 23, lineHeight: 1.45 }}>{nm}</div>)}
+          </div>
+        ))}
+      </div>
+      <div style={{ position: 'absolute', right: 14, bottom: 10, color: '#475569', fontSize: 12, letterSpacing: 2 }}>TAP TO SKIP</div>
     </div>
   );
 }
