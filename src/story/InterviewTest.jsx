@@ -13,11 +13,16 @@ const NONSENSE = [
   { n: '2', q: 'Find the eigenvalues of the matrix below and determine whether it is diagonalizable:', math: <>[ 3 &nbsp;−2 &nbsp;i ; &nbsp;√2 &nbsp;0 &nbsp;e<sup>π</sup> ; &nbsp;5 &nbsp;7 &nbsp;¾ ]</> },
   { n: '3', q: 'Prove the following for every continuous f. Use the space below.', math: <>∀ε&gt;0 ∃δ&gt;0 : &nbsp;|x − a| &lt; δ &nbsp;⇒ &nbsp;| ∫<sub>a</sub><sup>x</sup> f(t) e<sup>−t²</sup> dt | &lt; ε</> },
 ];
-// Page 2: the real questions (about the opening). Edit freely: `a` is the index of the right answer.
+// Page 2: the real questions. `a` is the index of the right answer; 2+ wrong = ENDING 1.
 const QUESTIONS = [
-  { q: 'What are the creatures that overran the world called?', options: ['Frails', 'Havoc', 'Hollows', 'Mutants'], a: 1 },
-  { q: 'What are the territories they took from humans called?', options: ['Dead Zones', 'Red Zones', 'Frail Environments', 'Ground Zero'], a: 2 },
-  { q: 'As a manager, where do you watch the battlefield from?', options: ['The front line', 'Drones above', 'A bunker', 'On the field'], a: 1 },
+  { q: 'WOULD YOU BE WILLING TO SACRIFICE YOUR LIFE FOR THE MISSION?', options: ['Yes', 'No'], a: 0 },
+  { q: 'IF AN ALLY WERE TO BECOME INFECTED, WHAT WOULD YOU DO?', options: [
+    'Keep him alive to try to cure him, if we ever find a cure',
+    'Kill him before he turns into a formidable Havoc beast',
+    'Give him a gun and let the story play itself',
+  ], a: 1 },
+  // TODO: question 3 is a placeholder until the script has it
+  { q: 'QUESTION 3 (PLACEHOLDER)', options: ['Placeholder answer (right)', 'Placeholder answer (wrong)'], a: 0 },
 ];
 const INK = '#1d2a6b';
 
