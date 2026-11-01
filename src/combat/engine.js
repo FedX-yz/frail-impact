@@ -3,6 +3,7 @@
 // animation frame and draws `engine.state`. Positions are arena pixels; sizes
 // are design px × state.k so the same fight works on a phone and a PC.
 // ─────────────────────────────────────────────────────────────────────────────
+import { sheetLife } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
 import { makeEndlessStage, MODIFIERS } from './stages';
@@ -101,6 +102,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.floaterVer++;   // lets the renderer skip the floater layer when nothing changed
   }
   const effect = (e) => { s.effects.push({ id: uid++, t: 0, ...e }); if (s.effects.length > 60) s.effects.shift(); };
+  // a sprite-sheet effect (sheetFx.js), w = how wide it's drawn
+  const sheetFx = (fx, x, y, w) => effect({ kind: 'sheet', fx, x, y, w, life: sheetLife(fx) });
+  const bossBoom = (e) => sheetFx('boom', e.x, e.y, Math.max(e.size * s.k * (e.drawScale ?? 1) * 1.7, K(420)));
   const shake = (amt) => { s.shake = Math.max(s.shake, amt); };
 
   let api_asYou = (fn) => fn();
@@ -532,6 +536,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.globs = []; s.bolts = []; s.gas = null;
     s.enemies = s.enemies.filter(x => !(x.type.acidOnly && x.owner === e.id));
     effect({ kind: 'flash', color: '#a3e635', life: 0.5 });
+    sheetFx('boom', o.x, o.y, Math.max(R * 3, K(420)));
     effect({ kind: 'burst', x: o.x, y: o.y, r: R * 1.3, color: '#a3e635' });
     effect({ kind: 'ring', x: o.x, y: o.y, r: R * 1.8, color: '#d9f99d', life: 0.8 });
     effect({ kind: 'shards', x: o.x, y: o.y, r: R * 1.2, color: '#bef264', n: 26 });
@@ -1067,6 +1072,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     e.hp -= dmg; e.hurt = 0.12;
     rt.onDamage(e, dmg, linked);
+    if (crit && !quiet) sheetFx('crit', e.x + rand(-K(14), K(14)), e.y + rand(-K(14), K(14)), K(84));
     if (!quiet) floater(`${crit ? 'CRIT ' : ''}${label}-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, color ?? (crit ? '#ff4444' : '#ffd84a'), crit, null, crit ? 'crit' : null);
     chargeUlt(dmg, charge);
     if (e.hp <= 0) {
@@ -1144,14 +1150,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (g) floater(`+${g}`, e.x, e.y + K(34), '#7aa2ff', true, 'gem');
         cb('onReward', { coins: c, gems: g, xp: Math.round((r.xp ?? 0) * (s.stage.xpScale ?? 1) * (s.stats.xpMult ?? 1)), kill: true });
       }
-      if (e.tier === 'boss') { s.hitStop = 0.28; shake(0.6); stageClear(); }
+      if (e.tier === 'boss') { bossBoom(e); s.hitStop = 0.28; shake(0.6); stageClear(); }
       return;
     }
 
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
     if (e.tier === 'boss' && t.nextPhase && s.phase !== 'clear' && s.phase !== 'defeat') { burstHost(e); return; }   // the Swarm King's phase 1
-    if (e.tier === 'boss') { s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
+    if (e.tier === 'boss') { bossBoom(e); s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });

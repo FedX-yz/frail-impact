@@ -1,3 +1,4 @@
+import { SHEET_FX } from './sheetFx.js';
 import { Children, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES } from './enemies';
@@ -431,7 +432,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               return <polygon key={`in${e.id}`} points={`${x},${e.y - sz} ${x + d * sz * 1.3},${e.y} ${x},${e.y + sz}`}
                 fill={big ? '#ef4444' : '#fbbf24'} opacity={0.6 + 0.4 * Math.abs(Math.sin(s.time * 8))} style={{ filter: `drop-shadow(0 0 6px ${big ? '#ef4444' : '#fbbf24'})` }} />;
             })}
-            {s.effects.filter(f => !OVER.has(f.kind)).map(f => <EffectShape key={f.id} f={f} k={k} />)}
+            {s.effects.filter(f => !OVER.has(f.kind) && f.kind !== 'sheet').map(f => <EffectShape key={f.id} f={f} k={k} />)}
           </svg>
 
           {/* ── Allies (crawlers, shikigami) ─────────────────────────── */}
@@ -487,6 +488,9 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* the Swarm King's SWARM SHIELD: swarmlings crawling all over it, more circling */}
           {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : <ShieldSwarm key={`sw${b.id}`} b={b} k={k} time={s.time} img={ENEMY_TYPES.swarm.imgGlow} />)}
+
+          {/* sprite-sheet effects (boss explosions, crit markers) */}
+          {s.effects.map(f => f.kind === 'sheet' ? <SheetFx key={f.id} f={f} /> : null)}
 
           {/* the Swarm King's swarm storm: bats flying out in a spiral */}
           {s.bolts.map(b => b.kind !== 'bat' ? null : (
@@ -818,6 +822,19 @@ function GasCloud({ g, k, time }) {
 }
 
 // A Swarm King swarm: a cloud of bats around its fixed hitbox (the ring), thinning out as the acid eats it
+// a sprite-sheet effect: the sheet slides behind a frame-sized window, one frame at a time
+function SheetFx({ f }) {
+  const d = SHEET_FX[f.fx];
+  if (!d) return null;
+  const i = Math.min(d.n - 1, Math.floor(f.t * d.fps)), w = f.w, h = w * d.fh / d.fw;
+  return (
+    <div className="sheet-fx" style={{ width: w, height: h, transform: `translate3d(${f.x - w * d.anchor[0]}px, ${f.y - h * d.anchor[1]}px, 0)` }}>
+      <img src={d.img} alt="" draggable={false}
+        style={{ width: w * d.cols, transform: `translate3d(${-(i % d.cols) * w}px, ${-Math.floor(i / d.cols) * h}px, 0)` }} />
+    </div>
+  );
+}
+
 // the glow-baked swarmling pictures have a margin for the glow: draw them this much bigger
 const GLOW_PAD = 1.24;
 // a quick wingbeat for the (still) swarmling art: squash it a little, fast
@@ -1669,6 +1686,8 @@ ${ICE_CSS}
   @media (max-width: 560px) { .seal-tag { white-space:normal; width:max-content; max-width:56vw; text-align:center; line-height:1.25; } }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
   .storm-bat { position:absolute; left:0; top:0; z-index:9; pointer-events:none; object-fit:contain; }
+  .sheet-fx { position:absolute; left:0; top:0; z-index:12; overflow:hidden; pointer-events:none; }
+  .sheet-fx img { position:absolute; left:0; top:0; max-width:none; height:auto; }
   .swarm-bat { position:absolute; left:0; top:0; object-fit:contain; pointer-events:none; }   /* glow baked into the picture: no filter */
   .swarm-ring { position:absolute; border-radius:50%; border:2px dashed rgba(190,242,100,0.55); background: radial-gradient(circle, rgba(26,46,5,0.35), rgba(26,46,5,0.08) 70%, transparent 72%);
     animation: sealSpin 4s linear infinite; }
