@@ -209,33 +209,40 @@ export function IceScreen({ s, mainCard, mobile }) {
 }
 
 // The zero point: an ice clock (ParticleFX sprite sheet, public/fx/ice_zero.png: 9 columns of
-// 200px frames) around your cursor while time is stopped. It forms, then its hand makes one
-// full turn over the time stop and it shatters as time comes back (with the storm). The sheet
-// only sweeps the hand 12 → 6, so for 6 → 12 the last frame turns half a circle.
-const ZERO = { img: `${BASE}fx/ice_zero.png`, cols: 9, rows: 9, form: [0, 15], hold: [15, 41], shatter: [56, 22], formDur: 0.5, shatterDur: 1 };
+// 200px frames) around your cursor while time is stopped. It forms, its hand makes one full
+// turn over the time stop, and it shatters as time comes back (with the storm). In the sheet's
+// middle frames the hand has been painted out; the hand (ice_zero_hand.png, pointing at 12,
+// pivot in its middle) is drawn on top and turned, so only the hand moves.
+const ZERO = { img: `${BASE}fx/ice_zero.png`, hand: `${BASE}fx/ice_zero_hand.png`, cols: 9, rows: 9,
+  form: [0, 15], hold: [15, 41], shatter: [56, 22], formDur: 0.5, shimmerFps: 12, shatterDur: 1,
+  handSize: 224 / 576, pivot: [0.5, 289 / 576] };   // the hand picture's size and its pivot, × the frame
 function ZeroOrb({ s, ic, az }) {
-  let f, rot = 0;
+  let f, hand = null, rot = 0;
   if (az) {
     const e = az.dur - ICE_INTRO - az.t;                       // seconds since the burst art cleared
     const span = Math.max(0.1, az.dur - ICE_INTRO - ZERO.formDur);
     if (e < ZERO.formDur) f = ZERO.form[0] + Math.min(ZERO.form[1] - 1, Math.floor(e / ZERO.formDur * ZERO.form[1]));
     else {
-      const p = Math.min(1, (e - ZERO.formDur) / span);          // 0 … 1: one full turn of the hand
-      if (p < 0.5) f = ZERO.hold[0] + Math.min(ZERO.hold[1] - 1, Math.floor(p * 2 * ZERO.hold[1]));
-      else { f = ZERO.hold[0] + ZERO.hold[1] - 1; rot = (p - 0.5) * 360; }
+      const n = ZERO.hold[1], i = Math.floor((e - ZERO.formDur) * ZERO.shimmerFps) % (n * 2 - 2);
+      f = ZERO.hold[0] + (i < n ? i : n * 2 - 2 - i);          // the clock face shimmers back and forth…
+      hand = Math.min(1, (e - ZERO.formDur) / span) * 360;    // …while the hand goes once round, 12 → 12
     }
   } else {
     f = ZERO.shatter[0] + Math.min(ZERO.shatter[1] - 1, Math.floor(ic.storm.t / ZERO.shatterDur * ZERO.shatter[1]));
-    rot = 180;
+    rot = 180;   // (these frames still have their hand at 6: flipped, it's at 12 where ours stopped)
   }
   const P = s.player.pos ?? ic.zero;                           // your cursor sits in the middle of it
-  const F = Math.min(420 * s.k, Math.min(s.W, s.H) * 0.8);
+  const F = Math.min(420 * s.k, Math.min(s.W, s.H) * 0.8), hs = F * ZERO.handSize;
   return (
     <div className="zero-orb" style={{ width: F, height: F, transform: `translate3d(${P.x - F / 2}px, ${P.y - F / 2}px, 0)` }}>
-      <div className="zero-orb-clip" style={{ transform: rot ? `rotate(${rot.toFixed(1)}deg)` : undefined }}>
+      <div className="zero-orb-clip" style={{ transform: rot ? `rotate(${rot}deg)` : undefined }}>
         <img src={ZERO.img} alt="" draggable={false}
           style={{ width: F * ZERO.cols, height: F * ZERO.rows, transform: `translate3d(${-(f % ZERO.cols) * F}px, ${-Math.floor(f / ZERO.cols) * F}px, 0)` }} />
       </div>
+      {hand != null && (
+        <img src={ZERO.hand} alt="" draggable={false} className="zero-hand"
+          style={{ left: F * ZERO.pivot[0] - hs / 2, top: F * ZERO.pivot[1] - hs / 2, width: hs, height: hs, transform: `rotate(${hand.toFixed(1)}deg)` }} />
+      )}
     </div>
   );
 }
@@ -295,6 +302,7 @@ export const ICE_CSS = `
     filter: brightness(1.25) contrast(1.15) drop-shadow(0 0 10px rgba(125,211,252,0.95)) drop-shadow(0 0 22px rgba(56,189,248,0.6)); }
   .zero-orb-clip { position:absolute; inset:0; overflow:hidden; }
   .zero-orb-clip img { position:absolute; left:0; top:0; max-width:none; }
+  .zero-hand { position:absolute; max-width:none; }
   .ice-world { position:absolute; inset:0; z-index:10; pointer-events:none;
     background: radial-gradient(ellipse at center, rgba(224,242,254,0.05) 30%, rgba(186,230,253,0.42) 100%);
     box-shadow: inset 0 0 90px rgba(224,242,254,0.75); }
