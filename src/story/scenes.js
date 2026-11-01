@@ -106,26 +106,23 @@ export const SCENES = {
     'You take one of the papers...',
     { test: true },
     { if: 'failedTest', goto: 'ending1' },
-    { application: true },
-    ['stranger', 'Welcome to the Frail Initiative, Manager {manager}. Your handler will take it from here.'],
+
+    // You passed: it's your birthday, apparently.
+    ['stranger', 'Hmmmmm... well...'],
+    ['stranger', 'Con-gra..........tulations!!!!!!! You may now blow out the candle, Mr. Manager, it\'s your birthday!!!'],
+    { choice: [{ text: 'Do as he said' }] },
+    'You blow out the candle on the birthday cake. Didn\'t think to make a wish beforehand.',
+    ['stranger', 'Okay Mr. Manager, now sign this contract right here.'],
+    { application: true },   // type your name and sign by hand (skipped on replays once you've signed)
+    ['stranger', 'That settles it! The Frail Initiative welcomes you with open arms.'],
+    { shake: true },
+    ['stranger', 'Now get out of my clinic!!! Your first day will be tomorrow in the Z district at 6. I do hope you are prepared.'],
+    ['stranger', 'Oh, and you may take the cake.'],
+    { choice: [{ text: 'Ok, thanks!' }] },
     { hide: 'all' },
-    { bg: 'backgrounds/bg2.png' },
-    'Somewhere above the city, a signal comes through.',
-    { show: 'handler', at: 'right' },
-    ['handler', 'Can you hear me? Good. This is your handler.'],
-    ['handler', 'Something is waking up under the city. The small ones first, then whatever is leading them.'],
-    { show: 'astrec', at: 'left' },
-    ['astrec', 'Understood. Where do you want me?'],
-    ['handler', 'The outskirts. Watch for the red markings, that\'s where they\'ll strike.'],
-    { choice: [
-      { text: '"Let\'s go."',                  set: { eager: true } },
-      { text: '"What do we get out of this?"', set: { eager: false }, goto: 'pay' },
-    ] },
-    ['handler', 'Good. Move out.'],
-    { end: true },
-    { label: 'pay' },
-    ['handler', 'You\'ll be paid in full once the area is secure.'],
-    ['astrec', '...Understood.'],
+    { bg: null },   // [ ] outside the hospital, cake in hand (same picture slot as ending 1)
+    'You exit the abandoned hospital with your birthday cake!',
+    'Tomorrow is looking to be a promising day.',
     { end: true },
 
     // ENDING 1: you failed the test (2 of 3 wrong). He throws you out, the credits roll, and the
