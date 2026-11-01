@@ -5,7 +5,8 @@
 //      (the scene then jumps to ENDING 1).
 // onDone(passed, rightAnswers) when they hand it in.
 import { useEffect, useRef, useState } from 'react';
-import { playPress, playStamp, penStart } from '../utils/sfx';
+import { playPress, playStamp, penStart, playSFX } from '../utils/sfx';
+const PAGE_TURN = `${import.meta.env.BASE_URL}sounds/page_turn.mp3`;
 
 // Page 1: impossibly hard on purpose (it counts for nothing). Edit freely.
 const NONSENSE = [
@@ -59,7 +60,7 @@ export default function InterviewTest({ onDone }) {
               </div>
             ))}
             <Scratch />
-            <div className="it-buttons"><button className="it-btn" onClick={() => { playPress(); setPage(1); }}>Turn the page ▸</button></div>
+            <div className="it-buttons"><button className="it-btn" onClick={() => { playSFX(PAGE_TURN); setPage(1); }}>Turn the page ▸</button></div>
           </>
         ) : (
           <>
@@ -78,7 +79,7 @@ export default function InterviewTest({ onDone }) {
               </div>
             ))}
             <div className="it-buttons">
-              <button className="it-btn ghost" onClick={() => { playPress(); setPage(0); }} disabled={handed}>◂ Page 1</button>
+              <button className="it-btn ghost" onClick={() => { playSFX(PAGE_TURN); setPage(0); }} disabled={handed}>◂ Page 1</button>
               <button className="it-btn" onClick={hand} disabled={!all || handed}>Hand it in</button>
             </div>
             {handed && <div className={`it-grade${right >= QUESTIONS.length - 1 ? '' : ' fail'}`}>{right}/{QUESTIONS.length}</div>}

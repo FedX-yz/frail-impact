@@ -66,7 +66,7 @@ UI_SOUNDS.forEach(src => loadBuffer(src).catch(() => {}));
 
 // Browsers keep audio locked until the first tap/click/key; unlock it on the
 // very first one so that interaction's own sound isn't lost.
-const unlock = () => { if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {}); primeBoss(); };
+const unlock = () => { if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {}); primeBoss(); primeStory(); };
 window.addEventListener('pointerdown', unlock, { capture: true });
 window.addEventListener('keydown', unlock, { capture: true });
 
@@ -219,6 +219,63 @@ function playBoss(song, fadeIn, idx = null, from = 0) {
   b.el.currentTime = from;
   b.el.play().then(() => { if (b.on) fadeBoss(1, fadeIn); }).catch(() => {});
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// Story audio (VNPlayer → scenes.js { music } / { ambience }): two looping channels, 'music'
+// and 'ambience', each streamed by its own <audio> element (a decoded 3-minute song is ~50 MB
+// of memory) and played through Web Audio so the music volume setting applies. Starting a new
+// track fades the old one out first; null / stopStoryTrack fades it out.
+const story = {};
+function storyChannel(ch) {
+  if (story[ch]) return story[ch];
+  const el = new Audio();
+  el.preload = 'auto';
+  const gain = _audioCtx.createGain();
+  gain.gain.value = 0.0001;
+  gain.connect(musicBus);
+  try { _audioCtx.createMediaElementSource(el).connect(gain); } catch { /* no Web Audio for media: plays at element volume */ }
+  return (story[ch] = { el, gain, src: null, timer: 0 });
+}
+function rampStory(c, to, sec) {
+  const g = c.gain.gain, t = _audioCtx.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(Math.max(0.0001, g.value), t);
+  g.linearRampToValueAtTime(Math.max(0.0001, to), t + Math.max(0.01, sec));
+}
+// iPhones: play each element once from the first tap, so later plays are allowed
+let storyPrimed = false;
+function primeStory() {
+  if (storyPrimed) return;
+  storyPrimed = true;
+  for (const ch of ['music', 'ambience']) {
+    const c = storyChannel(ch);
+    if (c.src) continue;
+    c.el.src = SILENCE;
+    c.el.play().then(() => { if (!c.src) c.el.pause(); }).catch(() => {});
+  }
+}
+export function storyTrack(ch, src, { fadeIn = 1.5, gain = 0.8, loop = true } = {}) {
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  const c = storyChannel(ch);
+  clearTimeout(c.timer);
+  if (c.src === src && !c.el.paused) { rampStory(c, gain, 0.5); return; }   // already on
+  const start = () => {
+    c.src = src; c.el.src = src; c.el.loop = loop;
+    c.gain.gain.cancelScheduledValues(_audioCtx.currentTime);
+    c.gain.gain.setValueAtTime(0.0001, _audioCtx.currentTime);
+    c.el.play().then(() => { if (c.src === src) rampStory(c, gain, fadeIn); }).catch(() => {});
+  };
+  if (c.src && !c.el.paused) { rampStory(c, 0, 0.7); c.src = src; c.timer = setTimeout(start, 720); }
+  else start();
+}
+export function stopStoryTrack(ch, fade = 1.2) {
+  const c = story[ch];
+  if (!c || !c.src) return;
+  clearTimeout(c.timer);
+  rampStory(c, 0, fade);
+  c.src = null;
+  c.timer = setTimeout(() => { if (!c.src) c.el.pause(); }, fade * 1000 + 60);
+}
+
 const songKey = (song) => song?.src ?? 'general';
 // 'start': a new boss fight · 'switch': the boss changed songs mid-fight (the Swarm King's
 // phase 2) · 'resume': back on the battle screen mid-fight (same song, same spot) ·

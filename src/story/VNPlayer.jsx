@@ -4,7 +4,7 @@ import { CAST } from './cast';
 import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
-import { playSFX, playPress, playMusic, stopMusic, playVoice, stopVoice } from '../utils/sfx';
+import { playSFX, playPress, storyTrack, stopStoryTrack, playVoice, stopVoice, preloadSound } from '../utils/sfx';
 import { voiceFile } from './voice';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
@@ -55,6 +55,7 @@ function run(steps, from, prev, signed = false) {
     if (step.shake) s.shakeN = (s.shakeN ?? 0) + 1;
     if (step.sfx) s.sfx.push(step.sfx);
     if ('music' in step) s.music = { src: step.music, loop: step.loop ?? true, n: (s.music?.n ?? 0) + 1 };
+    if ('ambience' in step) s.ambience = { src: step.ambience, n: (s.ambience?.n ?? 0) + 1 };
     if (step.wait) return { ...s, i, line: null, choice: null, wait: step.wait };
     i++;
   }
@@ -78,13 +79,19 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const ended = useRef(false);
 
   // music from { music } steps (loops until the next one; null = fade out), stops when the scene ends
-  const musicN = st.music?.n ?? 0;
+  const musicN = st.music?.n ?? 0, ambN = st.ambience?.n ?? 0;
   useEffect(() => {
-    if (!musicN) return;
-    if (st.music.src) playMusic(asset(st.music.src), { fadeIn: 2, gain: 0.8, loop: st.music.loop });
-    else stopMusic(1.5);
+    if (!st.music) return;
+    if (st.music.src) storyTrack('music', asset(st.music.src), { fadeIn: 2, gain: 0.8, loop: st.music.loop });
+    else stopStoryTrack('music', 1.5);
   }, [musicN]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { if (musicN) stopMusic(1.2); }, [musicN === 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!st.ambience) return;
+    if (st.ambience.src) storyTrack('ambience', asset(st.ambience.src), { fadeIn: 2.5, gain: 0.9 });
+    else stopStoryTrack('ambience', 2);
+  }, [ambN]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the scene's over (or left): its music and ambience fade out
+  useEffect(() => () => { stopStoryTrack('music', 1.2); stopStoryTrack('ambience', 1.2); }, []);
   const [crawlTap, setCrawlTap] = useState(0);
   const endCrawl = useCallback(() => setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)), [steps]);
 
@@ -99,7 +106,9 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   useEffect(() => () => stopVoice(), []);
 
   // sounds from { sfx } steps
-  useEffect(() => { st.sfx?.forEach(n => playSFX(`${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`)); }, [st.sfx]);
+  const sfxUrl = (n) => `${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`;
+  useEffect(() => { steps.forEach(x => x?.sfx && preloadSound(sfxUrl(x.sfx))); }, [steps]);   // ready before they're needed
+  useEffect(() => { st.sfx?.forEach(n => playSFX(sfxUrl(n))); }, [st.sfx]);
   useEffect(() => {
     if (st.done && !ended.current) { ended.current = true; onEnd(st.flags); }
   }, [st.done, st.flags, onEnd]);

@@ -24,6 +24,7 @@
 //                                       {red:words} lights words up (red, havoc, gold, zone, green, title, em, dim, shake)
 //   { music: 'audio/story/x.mp3' }    music (path in public/), loops until the next { music };
 //                                       { music: null } fades it out. It also stops when the scene ends
+//   { ambience: 'audio/story/amb/x.mp3' }   a background loop (wind, crowd…) under the music, same rules
 //
 // Flags are saved with the story and can also hide/show map nodes and codec
 // lines (`if:` in chapters.js) — that's where "consequences" will hook in.
@@ -55,6 +56,9 @@ export const SCENES = {
     ] },
     { crawl: ['{title:JUNE 9TH 2020}'] },
     { bg: null },
+    { music: 'audio/story/drive.mp3' },
+    { ambience: 'audio/story/amb/wind.mp3' },
+    { sfx: 'car_drive' },
     'You are driving a car heading to the location of your job interview, it\'s a big one.',
     'It\'s a cold morning, the streets are empty as usual. But it\'s a good thing, it means peace, even if temporary.',
     'And you are part of the reason this peace came to be. As the manager of the Anti-Havoc Task Force you helped guide your team to victory in battle against the ferocious Havoc beasts in these very streets.',
@@ -62,8 +66,14 @@ export const SCENES = {
     'In fact you\'re crucial to the operation, to make sure your comrades don\'t die and to let them know exactly what\'s happening on the field.',
     'This interview you\'re going to is top secret. You\'re not even sure why you were selected, but your employer told you to go anyways, said it\'s a big opportunity.',
     '...',
+    { sfx: 'car_arrive' },
+    { music: 'audio/story/hospital.mp3' },
+    { ambience: 'audio/story/amb/night.mp3' },
     'You reach the location. It\'s a run-down hospital, how welcoming. There\'s a single window lit up.',
+    { sfx: 'door_creak' },
     'You enter the building and try to go to the lit up room. There\'s no electricity, so you stumble your way over there. Inside that room...',
+    { sfx: 'footsteps' },
+    { music: 'audio/story/birthday.mp3' },
     'You find balloons with rainbow letters spelling out "Happy Birthday!", and a birthday cake with a candle lit on a table.',
     ['stranger', 'Happy birthday, dear guest.'],
     { show: 'stranger', at: 'center' },
@@ -103,14 +113,19 @@ export const SCENES = {
     { choice: [{ text: 'Sounds good, I\'m in.' }] },
     ['stranger', 'I am delighted to hear that. However... you must pass a test to get the job.'],
     ['stranger', 'Look over the table next to you, the papers and pen should be at your disposal. Good luck.'],
+    { sfx: 'paper_take' },
     'You take one of the papers...',
+    { music: 'audio/story/test.mp3' },
     { test: true },
     { if: 'failedTest', goto: 'ending1' },
 
     // You passed: it's your birthday, apparently.
+    { music: 'audio/story/birthday.mp3' },
     ['stranger', 'Hmmmmm... well...'],
+    { sfx: 'party_horn' },
     ['stranger', 'Con-gra..........tulations!!!!!!! You may now blow out the candle, Mr. Manager, it\'s your birthday!!!'],
     { choice: [{ text: 'Do as he said' }] },
+    { sfx: 'candle_blow' },
     'You blow out the candle on the birthday cake. Didn\'t think to make a wish beforehand.',
     ['stranger', 'Okay Mr. Manager, now sign this contract right here.'],
     { application: true },   // type your name and sign by hand (skipped on replays once you've signed)
@@ -121,6 +136,9 @@ export const SCENES = {
     { choice: [{ text: 'Ok, thanks!' }] },
     { hide: 'all' },
     { bg: null },   // [ ] outside the hospital, cake in hand (same picture slot as ending 1)
+    { sfx: 'door_creak' },
+    { music: 'audio/story/cake.mp3' },
+    { ambience: null },
     'You exit the abandoned hospital with your birthday cake!',
     'Tomorrow is looking to be a promising day.',
     { end: true },
@@ -128,16 +146,21 @@ export const SCENES = {
     // ENDING 1: you failed the test (2 of 3 wrong). He throws you out, the credits roll, and the
     // level isn't cleared, so they can try again.
     { label: 'ending1' },
+    { music: null },
+    { sfx: 'paper_crumple' },
     ['stranger', 'Hmmmmm.... No, that\'s not quite it.'],
     { shake: true },
     ['stranger', 'I\'m afraid our birthday party here is over. Out of here!!'],
+    { sfx: 'door_slam' },
+    { ambience: 'audio/story/amb/wind.mp3' },
     { hide: 'all' },
     { bg: null },   // [ ] a picture of you outside the hospital goes here
     'You get out of the abandoned hospital.',
     { choice: [{ text: 'What the fuck was his deal?' }] },
     'You can\'t believe you bought some of the words that insane man said. Absolute maniac.',
     'You return to your usual day-to-day life and forget about this event.',
-    { music: null },
+    { ambience: null },
+    { music: 'audio/story/credits.mp3' },
     { credits: true },
     { ending: { n: 1, title: 'INTERVIEW FAILURE' } },
   ],
@@ -146,7 +169,10 @@ export const SCENES = {
   'c1-outskirts-in': [
     { crawl: ['{title:JUNE 10TH, 5:54}'] },
     { bg: null },   // [ ] Z district: the crowd, the bus, the car carrier (send the picture)
+    { music: 'audio/story/zdistrict.mp3' },
+    { ambience: 'audio/story/amb/crowd.mp3' },
     'You arrive at Z district.',
+    { sfx: 'bus_idle' },
     'It\'s pretty packed here, a bunch of people gathered around a bus. There\'s also a car carrier with a big vehicle under cover. You wonder what\'s hiding there.',
     'You look around and don\'t see anyone familiar. It\'s not like you could recognize the person that was behind the hospital screens anyway.',
     'Someone approaches you.',
@@ -162,23 +188,29 @@ export const SCENES = {
     ['bonk', 'Yo guys, I found the manager!!'],
     'But they don\'t listen.',
     ['bonk', 'Uh... what\'s y\'all doing??'],
+    { music: 'audio/story/squad.mp3' },
     'You come closer and see that they\'re opening a pack of cards.',
     ['bonk', 'Oh, that silly game of yours.'],
 
     // the pack opening (they haven't introduced themselves yet: ???)
     { hide: 'all' },
     { show: 'astrec', at: 'p1' }, { show: 'ice', at: 'p2' }, { show: 'reef', at: 'p3' }, { show: 'ramsf', at: 'p4' },
+    { sfx: 'pack_tear' },
     ['astrec', 'Another one!!!', '???'],
     ['ice', 'If we don\'t get it here I\'m gonna cut my ballsack off.', '???'],
     ['reef', 'Snip snip, buddy.', '???'],
     ['ramsf', '...', '???'],
+    { sfx: 'card_flip' },
     'Nothing.',
     { hide: 'all' },
     { show: 'ice', at: 'left' }, { show: 'reef', at: 'right' },
     ['ice', 'Dude.', '???'],
     ['reef', 'I\'m gonna hold you to that!!', '???'],
     ['ice', 'Shut your whore mouth!!! Alright, this is my last one...', '???'],
+    { sfx: 'pack_tear' },
     'They open another pack, and after a few cards...',
+    { sfx: 'card_flip' },
+    { sfx: 'gasp' },
     'They hit the jackpot!',
     { shake: true },
     { hide: 'all' },

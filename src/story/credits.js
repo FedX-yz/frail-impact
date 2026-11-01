@@ -7,6 +7,8 @@ export const CREDITS = [
   { role: 'Created by', names: ['FedX'] },
   { role: 'Icons', names: ['game-icons.net', 'Lorc, Delapouite and contributors (CC BY 3.0)'] },
   { role: 'Effects', names: ['ParticleFX Studio'] },
+  { role: 'Sound effects', names: ['freesound.org: bbrocer, kvv_audio, acheaa, thomas_weakley, razrox, saha213131,',
+    'nox_sound, silverdubloons, dr_skitz, rambler52, sinatra314, shinyobjects, ivolipa'] },
   { gap: true },
   { title: 'Thank you for playing.' },
 ];
