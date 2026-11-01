@@ -200,15 +200,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     } else if (t.kind === 'giant') {
       parts.push(spawnGiant(typeId));
     } else if (t.kind === 'hydra') {
-      const cx = s.W * 0.55, cy = s.H * 0.5;
       for (let i = 0; i < t.heads; i++) {
-        const off = i - (t.heads - 1) / 2;
-        const h = spawnEnemy(typeId, { pos: { x: cx + off * Math.min(K(200), s.W * 0.28), y: cy + (off === 0 ? -K(30) : K(10)) }, role: 'hydra', group, segIndex: i });
-        if (t.headImgs?.[i]) h.img = t.headImgs[i];   // each head has its own picture
+        const h = spawnEnemy(typeId, { pos: { x: s.W / 2, y: s.H / 2 }, role: 'hydra', group, segIndex: i });
+        hydraHead(h, i, i - (t.heads - 1) / 2);
         h.cd = 1 + i * 0.9;          // stagger their first attacks
-        h.groupType = typeId;
         parts.push(h);
       }
+      hydraLayout(parts, true);
     } else {
       parts.push(spawnEnemy(typeId));
     }
@@ -216,6 +214,147 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     // most of the small fry clear out when a boss shows up (less clutter around it)
     const keep = Math.max(1, Math.floor(s.stage.basicCap / 4));
     s.enemies.filter(e => e.tier === 'basic' && !e.type.horde && e.life == null).slice(keep).forEach(e => { e.life = rand(0.4, 1.8); });
+  }
+
+  // ── THE HYDRA ───────────────────────────────────────────────────────────
+  // Every head has its own attack: the STINGER jabs where you are (twice), the ACID head spits
+  // globs that leave burning pools, and the TONGUE head lashes at you and, if it catches you,
+  // drags your cursor to its mouth and bites (pull away hard and it misses). Let a downed head
+  // regrow and the Hydra grows a new one, up to maxHeads (enemies.js → hydra).
+  const HYDRA = {
+    sting:  { r: 46, tele: 0.7, gap: 0.85, cd: [2.6, 3.6] },
+    acid:   { n: 3, windup: 0.55, spread: 190, pool: 4, cd: [3.4, 4.6] },
+    tongue: { w: 30, tele: 1.15, reach: 640, pull: 360, hold: 1.4, biteR: 70, struggle: 850, cd: [5, 6.5] },
+  };
+  // make a hydra head one of the kinds (art: which picture; slot: its place in the row, 0 = middle)
+  function hydraHead(h, art, slot) {
+    const t = h.type;
+    h.art = art; h.head = t.headKinds[art]; h.slot = slot;
+    h.img = t.headImgs[art];
+    h.cdRange = HYDRA[h.head].cd;
+    h.groupType = 'hydra';
+  }
+  // where the heads hang: a row across the arena (more heads: closer together, the outer ones higher)
+  function hydraLayout(heads, snap = false) {
+    const n = heads.length, cx = s.W * 0.55, cy = s.H * 0.5;
+    const gap = n <= 3 ? Math.min(K(200), s.W * 0.28) : Math.min(K(165), (s.W * 0.78) / (n - 1));
+    for (const h of heads) {
+      const a = Math.abs(h.slot);
+      h.hx = clamp(cx + h.slot * gap, s.W * 0.1, s.W * 0.92);
+      h.hy = cy + (a === 0 ? -K(30) : a === 1 ? K(10) : -K(45));
+      if (snap) { h.x = h.hx; h.y = h.hy; }
+    }
+  }
+  // its stinger tip / mouth, where it is now (the picture is fitted into a square box)
+  function hydraMouth(h) {
+    const t = h.type, box = h.size * s.k * h.drawScale;
+    const [fx, fy] = t.headMouth?.[h.art] ?? [0.5, 0.8], asp = t.headAspect?.[h.art] ?? 1;
+    return { x: h.x + (fx - 0.5) * box * Math.min(1, asp), y: h.y + (fy - 0.5) * box };
+  }
+  const restCd = e => rand(...(e.cdRange ?? e.type.cooldown ?? [4, 6])) * (e.tier === 'boss' ? s.stage.bossCooldownMult : 1) * M('enemyCd') * (e.cdMult ?? 1);
+  function hydraAttack(h) {
+    const H = HYDRA[h.head];
+    if (h.head === 'sting') {
+      for (let i = 0; i < 2; i++) queueAttack(h, 'circle', { atCursor: true, r: K(H.r), dmgKey: 'hydraSting', teleMult: H.tele, lunge: true, delay: i * H.gap });
+    } else if (h.head === 'acid') {
+      h.spitT = H.windup;                       // rears back, then spits (moveHydraHead)
+      h.cd = restCd(h) + H.windup;
+    } else {
+      queueAttack(h, 'tongue', { dmgKey: 'hydraTongue', teleMult: H.tele });
+    }
+  }
+  function hydraSpit(h) {
+    const H = HYDRA.acid, P = aimPoint(), o = hydraMouth(h);
+    for (let i = 0; i < H.n; i++) {
+      const at = i === 0 ? { x: P.x + rand(-K(20), K(20)), y: P.y + rand(-K(20), K(20)) } : randomPoint(P, K(H.spread));
+      s.globs.push({ id: uid++, x0: o.x, y0: o.y, x: at.x, y: at.y, t: -i * 0.16, dur: 0.9, life: H.pool });
+    }
+    h.attackT = 0.4;
+    sfx('hiss');
+  }
+  // the tongue caught you: it drags your cursor toward its mouth (s.player.pull), then bites.
+  // Struggle (move your pointer / finger around a lot) to break free, or be out of reach when it bites.
+  function tongueCatch(h) {
+    const pl = s.player;
+    if (pl.caught) return;
+    pl.caught = { by: h.id, t: 0, dur: HYDRA.tongue.hold, struggle: 0, need: K(HYDRA.tongue.struggle) };
+    if (!pl.raw && pl.pos) pl.raw = { ...pl.pos };
+    h.busy++;                                    // holds on until it lets go
+    const P = pl.pos ?? h;
+    floater('CAUGHT! SHAKE FREE', P.x, P.y - K(50), '#f472b6', true);
+    sfx('tongue'); shake(0.2);
+  }
+  function tongueRelease(h) {
+    s.player.caught = null;
+    if (!h) return;
+    h.busy = Math.max(0, h.busy - 1);
+    if (h.busy === 0) h.cd = restCd(h);
+  }
+  // Where you are = your pointer + how far the tongue has dragged you
+  function setPos(x, y) {
+    const pl = s.player, d = pl.pull;
+    if (pl.caught && pl.raw) pl.caught.struggle += Math.hypot(x - pl.raw.x, y - pl.raw.y);   // fighting the tongue
+    pl.raw = { x, y };
+    pl.pos = d ? { x: clamp(x + d.x, 0, s.W), y: clamp(y + d.y, 0, s.H) } : { x, y };
+    return pl.pos;
+  }
+  function updatePull(dt) {
+    const pl = s.player, c = pl.caught;
+    if (c) {
+      const h = s.enemies.find(e => e.id === c.by);
+      if (!h || h.down > 0 || s.mahoraga || s.phase === 'clear' || s.phase === 'defeat' || !pl.pos) { tongueRelease(h); return; }
+      c.t += dt;
+      const m = hydraMouth(h), P = pl.pos, H = HYDRA.tongue;
+      c.mx = m.x; c.my = m.y;
+      const dx = m.x - P.x, dy = m.y - P.y, d = Math.hypot(dx, dy) || 1;
+      pl.pull = pl.pull ?? { x: 0, y: 0 };
+      const step = Math.min(Math.max(0, d - K(18)), K(H.pull) * dt);
+      pl.pull.x += dx / d * step; pl.pull.y += dy / d * step;
+      if (c.struggle >= K(H.struggle)) {          // shook it off
+        floater('BROKE FREE!', P.x, P.y - K(40), '#a7f3d0', true);
+        effect({ kind: 'burst', x: P.x, y: P.y, r: K(50), color: '#f472b6' });
+        tongueRelease(h);
+      } else if (c.t >= c.dur) {
+        const close = d <= K(H.biteR);
+        if (close) {
+          hurt(enemyDmg('hydraBite'), 'circle', h);
+          effect({ kind: 'burst', x: m.x, y: m.y, r: K(H.biteR), color: '#f472b6' });
+          effect({ kind: 'shards', x: m.x, y: m.y, r: K(H.biteR), color: '#fda4af', n: 10 });
+          shake(0.4); sfx('crit');
+        } else floater('MISSED!', P.x, P.y - K(40), '#a7f3d0', true);
+        h.attackT = 0.45;
+        tongueRelease(h);
+      }
+    } else if (pl.pull) {
+      const f = Math.exp(-dt * 5);                // let go: your cursor slides back to your pointer
+      pl.pull.x *= f; pl.pull.y *= f;
+      if (Math.hypot(pl.pull.x, pl.pull.y) < 1) pl.pull = null;
+    }
+    if (pl.raw) setPos(pl.raw.x, pl.raw.y);
+  }
+  // a head came back: the Hydra grows another (until it has maxHeads)
+  function hydraGrow(from) {
+    const t = from.type, heads = s.enemies.filter(x => x.group === from.group);
+    if (heads.length >= (t.maxHeads ?? heads.length)) return false;
+    // the kind it has fewest of; the free slot nearest the middle (left first)
+    const count = k => heads.filter(h => h.head === k).length;
+    const least = Math.min(...t.headKinds.map(count));
+    const kind = pick(t.headKinds.filter(k => count(k) === least));
+    let slot = null;
+    for (let a = 1; slot == null; a++) for (const sl of [-a, a]) if (slot == null && !heads.some(h => h.slot === sl)) slot = sl;
+    const n = spawnEnemy(from.groupType ?? 'hydra', { pos: { x: from.x, y: from.y }, role: 'hydra', group: from.group, segIndex: Math.max(...heads.map(h => h.segIndex)) + 1 });
+    hydraHead(n, t.headKinds.indexOf(kind), slot);
+    n.hp = Math.round(n.maxHp * t.regrowPct);
+    n.cd = 2.2;
+    const all = [...heads, n];
+    hydraLayout(all);
+    n.x = n.hx; n.y = n.hy;
+    if (s.bossInfo) s.bossInfo.maxHp += n.maxHp;
+    announce(`THE HYDRA GREW A HEAD · ${all.length}/${t.maxHeads}`, '#f87171');
+    effect({ kind: 'burst', x: n.x, y: n.y, r: K(110), color: '#a3e635' });
+    effect({ kind: 'shards', x: n.x, y: n.y, r: K(90), color: '#99f6e4', n: 12 });
+    shake(0.35); sfx('roar');
+    return true;
   }
 
   // ── THE RED GIANT ───────────────────────────────────────────────────────
@@ -863,14 +1002,24 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.hx == null) { e.hx = e.x; e.hy = e.y; }
     const t = s.time + e.segIndex * 1.7, P = s.player.pos;
     let tx = e.hx + Math.sin(t * 0.8) * K(16), ty = e.hy + Math.sin(t * 1.25 + 1) * K(9);
-    let tilt = 0;
+    let tilt = 0, rate = 3.2;
+    // the acid head spits once it has reared back
+    if (e.spitT > 0) { e.spitT -= dt; if (e.spitT <= 0) hydraSpit(e); }
+    const winding = e.spitT > 0 || s.attacks.some(a => a.owner === e.id && a.phase === 'tele');
+    if (e.lunge) { e.lunge.t -= dt; if (e.lunge.t <= 0) e.lunge = null; }
     if (e.down > 0) ty = e.hy + K(36);
-    else if (P) {
+    else if (e.lunge) {
+      // the stinger stabs: its tip goes where the jab landed
+      const m = hydraMouth(e);
+      tx = e.x + (e.lunge.x - m.x); ty = e.y + (e.lunge.y - m.y); rate = 22;
+    } else if (P) {
       const dx = P.x - e.hx, dy = P.y - e.hy, d = Math.hypot(dx, dy) || 1, reach = Math.min(K(48), d * 0.22);
       tx += dx / d * reach; ty += dy / d * reach;
+      if (winding) { tx -= dx / d * K(38); ty -= dy / d * K(38) + K(18); rate = 6; }   // rears back before it strikes
       tilt = clamp(-Math.atan2(P.x - e.x, Math.max(P.y - e.y, K(40))) * 57.3 * 0.6, -26, 26);
     }
-    const f = 1 - Math.exp(-dt * 3.2);
+    if (s.player.caught?.by === e.id) rate = 8;     // holds still-ish while it reels you in
+    const f = 1 - Math.exp(-dt * rate);
     e.x += (tx - e.x) * f; e.y += (ty - e.y) * f;
     e.tilt = (e.tilt ?? 0) + (tilt - (e.tilt ?? 0)) * (1 - Math.exp(-dt * 5));
   }
@@ -980,7 +1129,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function lockGeometry(a, owner) {
     const o = a.opts, P = o.at ?? aimPoint();
     if (a.kind === 'circle' || a.kind === 'poke') {
-      const c = o.center ?? { x: owner.x, y: owner.y };
+      const c = o.atCursor ? { x: P.x, y: P.y } : o.center ?? { x: owner.x, y: owner.y };
       a.cx = c.x; a.cy = c.y;
       a.r = o.r ?? (owner.size * s.k * 0.5 + K(o.rK ?? (a.kind === 'poke' ? 28 : 60)));
     } else if (a.kind === 'slash') {
@@ -994,6 +1143,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       a.sx = owner.x; a.sy = owner.y; a.ux = Math.cos(ang); a.uy = Math.sin(ang);
       owner.aim = ang;   // attack poses turn toward this
       a.x = a.sx; a.y = a.sy; a.r = K(o.small ? 7 : 12); a.speed = K(o.small ? 470 : 520);
+    } else if (a.kind === 'tongue') {
+      // the Hydra's tongue: from its mouth, through where you are
+      const m = hydraMouth(owner), d = dist(m.x, m.y, P.x, P.y) || 1, L = Math.min(K(HYDRA.tongue.reach), d + K(60));
+      a.x1 = m.x; a.y1 = m.y; a.x2 = m.x + (P.x - m.x) / d * L; a.y2 = m.y + (P.y - m.y) / d * L;
+      a.w = K(HYDRA.tongue.w);
     } else if (a.kind === 'dash') {
       const ang = Math.atan2(P.y - owner.y, P.x - owner.x);
       const d = dist(owner.x, owner.y, P.x, P.y) + K(o.overshoot ?? 110);
@@ -1008,6 +1162,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function startEnemyAttack(e) {
     const t = e.type;
     if (t.bossPatterns) { startBossPattern(e, pick(t.bossPatterns)); return; }
+    if (e.role === 'hydra' && e.head) { hydraAttack(e); return; }
     // armed basics use their armed list; everything else (incl. sandbox-spawned elites) its normal one
     const pool = e.armed && t.armedAttacks?.length ? t.armedAttacks : t.attacks;
     if (!pool?.length) return;
@@ -1038,7 +1193,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!owner) return;
     owner.busy = Math.max(0, owner.busy - 1);
     if (a.kind === 'dash') { owner.flashRed = false; owner.dashing = null; owner.target = null; }
-    if (owner.busy === 0) owner.cd = rand(...(owner.type.cooldown ?? [4, 6])) * (owner.tier === 'boss' ? s.stage.bossCooldownMult : 1) * M('enemyCd') * (owner.cdMult ?? 1);
+    if (owner.busy === 0) owner.cd = restCd(owner);
   }
 
   function updateAttacks(dt) {
@@ -1063,10 +1218,17 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (a.kind === 'circle' || a.kind === 'poke') {
             a.phase = 'strike';
             if (a.opts.boom) { sfx('boom'); shake(0.25); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#f97316', n: 14 }); }
+            if (a.opts.lunge && owner) { owner.lunge = { x: a.cx, y: a.cy, t: 0.3 }; sfx('leap'); }   // the Hydra's stinger
             if (T && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r) hurt(a.dmg, 'circle');
           } else if (a.kind === 'slash') {
             a.phase = 'strike';
             if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r) hurt(a.dmg, 'slash');
+          } else if (a.kind === 'tongue') {
+            a.phase = 'strike'; sfx('tongue');
+            if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r) {
+              const hit = hurt(a.dmg, 'slash', owner);
+              if ((hit || s.dev.god) && !s.mahoraga && owner && s.enemies.includes(owner)) tongueCatch(owner);
+            }
           } else if (a.kind === 'shot') {
             a.phase = 'fly';
           } else if (a.kind === 'dash') {
@@ -1248,9 +1410,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // Hydra: a head at 0 HP goes down; all heads down at once = dead
   function headDown(h) {
     const t = h.type;
-    h.hp = 0; h.down = t.downTime;
-    s.attacks.forEach(a => { if (a.owner === h.id && (a.phase === 'wait' || a.phase === 'tele')) finishAttack(a); });
     const heads = s.enemies.filter(x => x.group === h.group);
+    h.hp = 0; h.down = t.downTime + (t.downPerHead ?? 0) * Math.max(0, heads.length - t.heads);   // (more heads: a bit longer to get them all)
+    h.spitT = 0; h.lunge = null;
+    s.attacks.forEach(a => { if (a.owner === h.id && (a.phase === 'wait' || a.phase === 'tele')) finishAttack(a); });
     const up = heads.filter(x => !(x.down > 0)).length;
     // beheaded: a burst of scales where the neck was cut (BattleArena drops the head and shows the stump)
     const cut = { x: h.x - h.size * s.k * h.drawScale * 0.05, y: h.y - h.size * s.k * h.drawScale * 0.35 };
@@ -1372,7 +1535,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // allies, burns and shots already in the air don't.
   function asYou(fn) { s.direct = true; try { return fn(); } finally { s.direct = false; } }
   api_asYou = asYou;
-  function pointerMove(x, y) { s.player.pos = { x, y }; }
+  function pointerMove(x, y) { setPos(x, y); }
 
   function enemyAt(x, y) {
     // topmost first (later = drawn on top); generous hitbox for fingers
@@ -1429,7 +1592,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function pointerDown(x, y) { asYou(() => pointerDownNow(x, y)); }
   function pointerDownNow(x, y) {
     if (s.paused || s.choosing) return;
-    s.player.pos = { x, y };
+    ({ x, y } = setPos(x, y));   // (dragged by the Hydra's tongue: your click lands where it dragged you)
     pointerHold(true);
     if (s.phase === 'defeat' || s.phase === 'clear') return;
     if (rt.onPointerDown(x, y)) return;   // suspended (Mahoraga) / Tyran's slashes
@@ -1469,7 +1632,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function special(x, y) { return asYou(() => specialNow(x, y)); }
   function specialNow(x, y) {
     if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return false;
-    if (x != null) s.player.pos = { x, y };
+    if (x != null) setPos(x, y);
     const P = s.player.pos;
     if (!P) return false;
     s.player.m2 = { t0: s.time };
@@ -1479,7 +1642,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function skill2(x, y) {
     if (!rt.skill2Info()) return false;
     if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return true;
-    if (x != null) s.player.pos = { x, y };
+    if (x != null) setPos(x, y);
     const P = s.player.pos;
     if (P) asYou(() => rt.skill2(P.x, P.y));
     return true;
@@ -1645,6 +1808,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     pl.invuln = Math.max(0, pl.invuln - dt);
     for (const k of Object.keys(pl.debuffs)) { pl.debuffs[k] -= dt; if (pl.debuffs[k] <= 0) delete pl.debuffs[k]; }
+    if (pl.caught || pl.pull) updatePull(dt);   // the Hydra's tongue
     pl.hitT   = Math.max(0, pl.hitT - dt);
     s.shake   = Math.max(0, s.shake - dt);
     s.frenzy  = Math.max(0, s.frenzy - dt);
@@ -1735,6 +1899,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (e.down <= 0) {
           e.down = 0; e.hp = Math.round(e.maxHp * e.type.regrowPct);
           floater('REGROWN!', e.x, e.y - K(60), '#ff4444', true);
+          if (e.role === 'hydra') hydraGrow(e);   // too slow: it grows another head
           effect({ kind: 'burst', x: e.x, y: e.y - e.size * s.k * 0.4, r: K(80), color: '#a3e635' });
         }
         continue;
@@ -1817,6 +1982,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const fx = W / s.W, fy = H / s.H;
       s.enemies.forEach(e => { e.x *= fx; e.y *= fy; e.target = null; if (e.hx != null) { e.hx *= fx; e.hy *= fy; } if (e.entering) e.entering = { x: e.entering.x * fx, y: e.entering.y * fy }; });   // (walking in: to the same spot)
       if (s.player.pos) s.player.pos = { x: s.player.pos.x * fx, y: s.player.pos.y * fy };
+      if (s.player.raw) s.player.raw = { x: s.player.raw.x * fx, y: s.player.raw.y * fy };
     }
     const first = !s.W;
     s.W = W; s.H = H;

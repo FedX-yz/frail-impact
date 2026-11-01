@@ -196,21 +196,31 @@ export const ENEMY_TYPES = {
     img: `${BASE}enemies/worm_body.png`, size: 54, facing: -90, drawScale: 2.55,
     hp: 40, coin: 4, xp: 12,
   },
-  // Hydra: three heads with their own HP bars. A head at 0 HP goes DOWN
-  // for 5s. Get all three down at the same time or the downed ones regrow
-  // at half HP. The heads hang from long necks that come down from the top
-  // of the arena (drawn in BattleArena.jsx from stacked neckImg segments).
-  //   headImgs:   left, middle, right head
+  // Hydra: three heads with their own HP bars, each with its own attack (engine.js → HYDRA):
+  //   STINGER (left):  rears back and jabs where you are, twice
+  //   ACID (middle):   spits globs of acid at you that leave burning pools
+  //   TONGUE (right):  lashes its tongue at you; if it catches you it DRAGS YOUR CURSOR toward
+  //                    its mouth, then bites. Struggle (shake your mouse / finger) to break free.
+  // A head at 0 HP goes DOWN for a while. Get them all down at the same time or the downed
+  // ones regrow at half HP, and every time one regrows the Hydra GROWS A NEW HEAD
+  // (up to maxHeads). The heads hang from long necks that come down from the top of the
+  // arena (drawn in BattleArena.jsx from stacked neckImg segments).
+  //   headKinds/headImgs: the three kinds of head and their pictures (left, middle, right)
   //   neckAttach: where each head's neck meets it, as a fraction of its picture (x, y)
+  //   headMouth:  where its stinger tip / mouth is, as a fraction of its picture (x, y)
+  //   headAspect: its picture's width / height (it's drawn fitted into a square)
   hydra: {
     name: 'HYDRA', tier: 'boss', kind: 'hydra',
     img: `${BASE}enemies/hydra_head_front.png`, size: 112, drawScale: 1.75,
+    headKinds: ['sting', 'acid', 'tongue'],
     headImgs: [`${BASE}enemies/hydra_head_sting.png`, `${BASE}enemies/hydra_head_front.png`, `${BASE}enemies/hydra_head_eyes.png`],
     neckImg: `${BASE}enemies/hydra_neck.png`,
     neckAttach: [[0.4, 0.2], [0.5, 0.17], [0.47, 0.16]],
+    headMouth: [[0.42, 0.97], [0.5, 0.8], [0.42, 0.86]],
+    headAspect: [1332 / 2173, 1670 / 1930, 1466 / 1828],
     hp: 300, coin: 0, xp: 40, speed: 0,
-    heads: 3, downTime: 5, regrowPct: 0.5,
-    attacks: ['shot', 'circle'], cooldown: [2.4, 3.6],
+    heads: 3, maxHeads: 5, downTime: 5, downPerHead: 0.75, regrowPct: 0.5,
+    attacks: ['circle'], cooldown: [2.4, 3.6],
     groupReward: { coin: 450, gems: 10, xp: 1000 },
   },
   // ── THE RED GIANT: the real boss (endless: every 10 stages; engine.js → GIANT) ──
@@ -286,4 +296,7 @@ export const ATTACK_DMG = {
   giantSweep: 22, // …sweeping across the floor
   giantGrab: 20,  // …grabbing at you
   giantEye: 10,   // a bolt from his eyes
+  hydraSting: 16, // the Hydra's stinger jabbing you
+  hydraTongue: 6, // its tongue catching you
+  hydraBite: 22,  // …and the bite at the end, if it reels you in
 };

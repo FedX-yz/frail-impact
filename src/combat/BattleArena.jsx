@@ -174,7 +174,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     const [x, y] = toLocal(e);
     engine.pointerMove(x, y);
     if (e.pointerType === 'mouse') cursorIn.current = true;
-    if (cursorRef.current) cursorRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    const P = engine.state.player.pos ?? { x, y };   // (the Hydra's tongue can drag it away from the pointer)
+    if (cursorRef.current) cursorRef.current.style.transform = `translate3d(${P.x}px, ${P.y}px, 0)`;
   };
   const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
   const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); clickT.current = performance.now() / 1000; engine.special(x, y); } };   // M2: the card's special move
@@ -261,6 +262,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         }
       });
     }
+    // dragged by the Hydra's tongue: the cursor moves without the pointer moving
+    if (cursorRef.current && s.player.pull && s.player.pos) cursorRef.current.style.transform = `translate3d(${s.player.pos.x}px, ${s.player.pos.y}px, 0)`;
     for (const e of s.enemies) {
       const el = nodes.current.get(e.id);
       if (!el) continue;
@@ -689,6 +692,26 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             ))}
             {/* projectiles fly above everything on the field (enemy shots, your shots) */}
             {s.attacks.map(a => <AttackShape key={a.id} a={a} k={k} layer="air" />)}
+            {/* the Hydra's tongue has you: it reels your cursor in, and bites when the ring closes */}
+            {pl.caught?.mx != null && pl.pos && (() => {
+              const c = pl.caught, p = Math.min(1, c.t / c.dur), R = 70 * k;
+              const mx = (c.mx + pl.pos.x) / 2 + Math.sin(s.time * 18) * 6 * k, my = (c.my + pl.pos.y) / 2 + 14 * k;
+              const d = `M${c.mx},${c.my} Q${mx},${my} ${pl.pos.x},${pl.pos.y}`;
+              return (
+                <g>
+                  <circle cx={c.mx} cy={c.my} r={R} fill={`rgba(244,114,182,${0.08 + 0.22 * p})`} stroke="#f472b6" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
+                  <circle cx={c.mx} cy={c.my} r={R * (1 - p) + R * 0.08} fill="none" stroke="#ffe4e6" strokeWidth={2 * k} opacity={0.85} />
+                  <path d={d} fill="none" stroke="#831843" strokeWidth={17 * k} strokeLinecap="round" />
+                  <path d={d} fill="none" stroke="#f472b6" strokeWidth={12 * k} strokeLinecap="round" />
+                  <path d={d} fill="none" stroke="#fbcfe8" strokeWidth={3 * k} strokeLinecap="round" opacity={0.7} />
+                  <circle cx={pl.pos.x} cy={pl.pos.y} r={11 * k} fill="#ec4899" stroke="#831843" strokeWidth={3 * k} />
+                  {/* how close you are to shaking it off */}
+                  <circle cx={pl.pos.x} cy={pl.pos.y} r={30 * k} fill="none" stroke="#0008" strokeWidth={6 * k} />
+                  <circle cx={pl.pos.x} cy={pl.pos.y} r={30 * k} fill="none" stroke="#a7f3d0" strokeWidth={4 * k} strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 30 * k * Math.min(1, c.struggle / c.need)} 999`} transform={`rotate(-90 ${pl.pos.x} ${pl.pos.y})`} />
+                </g>
+              );
+            })()}
             {s.shots.filter(sh => !sh.maho).map(sh => (
               <circle key={sh.id} cx={sh.x} cy={sh.y} r={8 * k} fill={sh.color ? '#fff7ed' : '#e9d5ff'} stroke={sh.color ?? '#a855f7'} strokeWidth={3 * k} style={{ filter: `drop-shadow(0 0 6px ${sh.color ?? '#a855f7'})` }} />
             ))}
@@ -1187,6 +1210,21 @@ function AttackShape({ a, k, layer }) {
     }
     return <circle cx={a.x} cy={a.y} r={a.r} fill="#fff" stroke={col} strokeWidth={(a.opts?.small ? 3 : 4) * k} style={{ filter: `drop-shadow(0 0 8px ${col})` }} />;
   }
+  if (a.kind === 'tongue') {
+    // telegraph: a pink lane from its mouth through you; strike: the tongue whips out along it
+    if (a.phase === 'tele') return (
+      <g>
+        <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} stroke={`rgba(244,114,182,${0.2 + 0.35 * p})`} strokeWidth={a.w} strokeLinecap="round" />
+        <line x1={a.x1} y1={a.y1} x2={a.x1 + (a.x2 - a.x1) * p} y2={a.y1 + (a.y2 - a.y1) * p} stroke="#ff2a6a" strokeWidth={3 * k} strokeLinecap="round" strokeDasharray={`${12 * k} ${7 * k}`} />
+      </g>
+    );
+    return (
+      <g opacity={strikeFade}>
+        <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} stroke="#831843" strokeWidth={a.w * 0.62} strokeLinecap="round" />
+        <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} stroke="#f472b6" strokeWidth={a.w * 0.45} strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 8px #f472b6)' }} />
+      </g>
+    );
+  }
   if (a.kind === 'dash' && a.phase === 'tele') {
     return <line x1={a.fx} y1={a.fy} x2={a.tx} y2={a.ty} stroke={`rgba(255,0,0,${0.25 + 0.4 * p})`} strokeWidth={6 * k} strokeDasharray={`${10 * k} ${8 * k}`} />;
   }
@@ -1346,7 +1384,7 @@ function HydraNecks({ heads, k, time }) {
   // one shared shadow for all the neck pieces (a drop-shadow on each of ~20 pieces is slow on phones)
   return <div className="hydra-necks">{heads.flatMap(h => {
     const box = h.size * k * h.drawScale;
-    const [fx, fy] = t.neckAttach?.[h.segIndex] ?? [0.5, 0.2];
+    const [fx, fy] = t.neckAttach?.[h.art ?? h.segIndex] ?? [0.5, 0.2];
     const ax = h.x - box / 2 + fx * box, ay = h.y - box / 2 + fy * box;      // where the neck meets the head now
     const topX = (h.hx ?? h.x) - box / 2 + fx * box;                           // where it comes from (above its home spot)
     const bw = box * 0.6, bh = bw * 856 / 715, step = bh * 0.5;
