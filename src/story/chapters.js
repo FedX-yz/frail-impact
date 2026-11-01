@@ -53,7 +53,7 @@ export const CHAPTERS = [
         rewards: { gems: 5 },
       },
       {
-        id: 'c1-outskirts', name: 'Outskirts', desc: 'Clear the stragglers at the edge of town.',
+        id: 'c1-outskirts', name: 'Z District', desc: 'Meet the squad, then clear the stragglers at the edge of town.',
         x: 24, y: 52, after: ['c1-briefing'],
         intro: 'c1-outskirts-in', outro: 'c1-outskirts-out',
         battle: { level: 1, kills: 8, elites: [], hordes: false, goal: 'defeat 8 enemies' },

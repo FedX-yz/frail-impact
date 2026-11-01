@@ -13,7 +13,8 @@ import InterviewTest from './InterviewTest';
 
 const BASE = import.meta.env.BASE_URL;
 const NO_STEPS = [];
-const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90 };
+// spots for { show, at }. For four people at once, use p1…p4 (evenly spread)
+const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90, p1: 15, p2: 38, p3: 62, p4: 85 };
 
 // Plays steps from `i` until one needs the player (a line, a choice, a wait)
 // and returns the new state. Nothing here touches the screen directly.
@@ -24,7 +25,7 @@ function run(steps, from, prev, signed = false) {
   for (let guard = 0; i < steps.length && guard < 2000; guard++) {
     const step = steps[i];
     if (typeof step === 'string') return { ...s, i, line: { who: 'narrator', text: step, at: i }, choice: null, wait: 0 };
-    if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? ''), at: i }, choice: null, wait: 0 };
+    if (Array.isArray(step)) return { ...s, i, line: { who: step[0], text: String(step[1] ?? ''), at: i, as: step[2] ?? null }, choice: null, wait: 0 };   // [who, text, shown name]
     if (!step || typeof step !== 'object') { i++; continue; }
     if (step.end) break;
     if (step.crawl) return { ...s, i, line: null, choice: null, wait: 0, crawl: step.crawl };   // intro text on black
@@ -70,7 +71,8 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const [auto, setAuto] = useState(false);
   const [skip, setSkip] = useState(false);
   const [showLog, setShowLog] = useState(false);
-  const text = (st.line?.text ?? '').replaceAll('{manager}', profile?.name || 'Manager');
+  const mgr = profile?.name || 'Manager';
+  const text = (st.line?.text ?? '').replaceAll('{manager}', mgr);
   const [shown, finish] = useTypewriter(text, 44, skip);
   const typed = shown >= text.length;
   const ended = useRef(false);
@@ -146,7 +148,8 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const speaker = st.line ? CAST[st.line.who] ?? { name: st.line.who, color: CODEC.yellow } : null;
+  const cast0 = st.line ? CAST[st.line.who] ?? { name: st.line.who, color: CODEC.yellow } : null;
+  const speaker = cast0 && st.line.as ? { ...cast0, name: st.line.as } : cast0;   // ['ice', '…', '???'] hides the name
   const narr = st.line?.who === 'narrator';
   const bgUrl = st.bg ? asset(st.bg) : null;
   const tall = mobile && portrait;
@@ -214,7 +217,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
           background: 'rgba(3,6,12,0.55)', paddingBottom: st.line ? (tall ? 140 : 150) : 0 }}>
           {st.choice.map((c, n) => (
             <TapButton key={n} className="vn-choice" onClick={() => choose(c)} autoFocus={n === 0}>
-              <span style={{ opacity: 0.6, marginRight: 10 }}>{n + 1}</span>{c.text}
+              <span style={{ opacity: 0.6, marginRight: 10 }}>{n + 1}</span>{c.text.replaceAll('{manager}', mgr)}
             </TapButton>
           ))}
         </div>
@@ -232,7 +235,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
               const c = CAST[l.who];
               return (
                 <div key={n} style={{ color: l.who === 'choice' ? '#93c5fd' : l.who === 'narrator' ? '#94a3b8' : CODEC.text, fontSize: l.who === 'narrator' ? 19 : 15, lineHeight: 1.4, fontFamily: l.who === 'narrator' ? 'var(--font-narration)' : undefined }}>
-                  {c?.name && <b style={{ color: c.color, marginRight: 8, textTransform: 'uppercase' }}>{c.name}</b>}{l.text}
+                  {(l.as ?? c?.name) && <b style={{ color: c?.color, marginRight: 8, textTransform: 'uppercase' }}>{l.as ?? c.name}</b>}{l.text.replaceAll('{manager}', mgr)}
                 </div>
               );
             })}
