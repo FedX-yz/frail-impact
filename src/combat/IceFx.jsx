@@ -208,28 +208,34 @@ export function IceScreen({ s, mainCard, mobile }) {
   );
 }
 
-// The zero point: an ice orb (ParticleFX sprite sheet, public/fx/ice_zero.png: 8 columns of
-// 208px frames) forms where you cast Absolute Zero, hangs there pulsing while time is stopped,
-// then shatters as time comes back and the storm hits.
-const ZERO = { img: `${BASE}fx/ice_zero.png`, cols: 8, rows: 8, form: [0, 13], hold: [13, 22], shatter: [35, 22], formDur: 0.6, holdFps: 12, shatterDur: 1 };
+// The zero point: an ice clock (ParticleFX sprite sheet, public/fx/ice_zero.png: 9 columns of
+// 200px frames) around your cursor while time is stopped. It forms, then its hand makes one
+// full turn over the time stop and it shatters as time comes back (with the storm). The sheet
+// only sweeps the hand 12 → 6, so for 6 → 12 the last frame turns half a circle.
+const ZERO = { img: `${BASE}fx/ice_zero.png`, cols: 9, rows: 9, form: [0, 15], hold: [15, 41], shatter: [56, 22], formDur: 0.5, shatterDur: 1 };
 function ZeroOrb({ s, ic, az }) {
-  let f;
+  let f, rot = 0;
   if (az) {
-    const e = az.dur - ICE_INTRO - az.t;   // seconds since the burst art cleared
+    const e = az.dur - ICE_INTRO - az.t;                       // seconds since the burst art cleared
+    const span = Math.max(0.1, az.dur - ICE_INTRO - ZERO.formDur);
     if (e < ZERO.formDur) f = ZERO.form[0] + Math.min(ZERO.form[1] - 1, Math.floor(e / ZERO.formDur * ZERO.form[1]));
     else {
-      const n = ZERO.hold[1], i = Math.floor((e - ZERO.formDur) * ZERO.holdFps) % (n * 2 - 2);
-      f = ZERO.hold[0] + (i < n ? i : n * 2 - 2 - i);   // back and forth: the loop doesn't jump
+      const p = Math.min(1, (e - ZERO.formDur) / span);          // 0 … 1: one full turn of the hand
+      if (p < 0.5) f = ZERO.hold[0] + Math.min(ZERO.hold[1] - 1, Math.floor(p * 2 * ZERO.hold[1]));
+      else { f = ZERO.hold[0] + ZERO.hold[1] - 1; rot = (p - 0.5) * 360; }
     }
   } else {
     f = ZERO.shatter[0] + Math.min(ZERO.shatter[1] - 1, Math.floor(ic.storm.t / ZERO.shatterDur * ZERO.shatter[1]));
+    rot = 180;
   }
+  const P = s.player.pos ?? ic.zero;                           // your cursor sits in the middle of it
   const F = Math.min(420 * s.k, Math.min(s.W, s.H) * 0.8);
-  const x = Math.min(Math.max(ic.zero.x, F * 0.35), s.W - F * 0.35), y = Math.min(Math.max(ic.zero.y, F * 0.35), s.H - F * 0.35);
   return (
-    <div className="zero-orb" style={{ left: x - F / 2, top: y - F / 2, width: F, height: F }}>
-      <img src={ZERO.img} alt="" draggable={false}
-        style={{ width: F * ZERO.cols, height: F * ZERO.rows, transform: `translate3d(${-(f % ZERO.cols) * F}px, ${-Math.floor(f / ZERO.cols) * F}px, 0)` }} />
+    <div className="zero-orb" style={{ width: F, height: F, transform: `translate3d(${P.x - F / 2}px, ${P.y - F / 2}px, 0)` }}>
+      <div className="zero-orb-clip" style={{ transform: rot ? `rotate(${rot.toFixed(1)}deg)` : undefined }}>
+        <img src={ZERO.img} alt="" draggable={false}
+          style={{ width: F * ZERO.cols, height: F * ZERO.rows, transform: `translate3d(${-(f % ZERO.cols) * F}px, ${-Math.floor(f / ZERO.cols) * F}px, 0)` }} />
+      </div>
     </div>
   );
 }
@@ -285,8 +291,10 @@ export const ICE_CSS = `
     opacity: 0.9; mix-blend-mode: normal; }
   .ice-fig.hit { filter: brightness(3) drop-shadow(0 0 12px #fff); }
   .ice-fig-hp { position:absolute; left:-30px; width:60px; top:10px; text-align:center; font-size:10px; color:#e0f2fe; text-shadow:0 0 4px #000; letter-spacing:1px; }
-  .zero-orb { position:absolute; z-index:11; overflow:hidden; pointer-events:none; }
-  .zero-orb img { position:absolute; left:0; top:0; max-width:none; }
+  .zero-orb { position:absolute; left:0; top:0; z-index:11; pointer-events:none;
+    filter: brightness(1.25) contrast(1.15) drop-shadow(0 0 10px rgba(125,211,252,0.95)) drop-shadow(0 0 22px rgba(56,189,248,0.6)); }
+  .zero-orb-clip { position:absolute; inset:0; overflow:hidden; }
+  .zero-orb-clip img { position:absolute; left:0; top:0; max-width:none; }
   .ice-world { position:absolute; inset:0; z-index:10; pointer-events:none;
     background: radial-gradient(ellipse at center, rgba(224,242,254,0.05) 30%, rgba(186,230,253,0.42) 100%);
     box-shadow: inset 0 0 90px rgba(224,242,254,0.75); }
