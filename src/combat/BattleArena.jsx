@@ -263,6 +263,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
       if (!el) continue;
       const half = e.size * s.k / 2;
       el.style.transform = `translate3d(${e.x - half}px, ${e.y - half}px, 0)`;
+      // the SEALED / SWARM SHIELD label: slide it sideways to stay on screen near an edge
+      // (its width is measured once per text, so this doesn't force a layout every frame)
+      if (e.sealed) {
+        const tag = el.querySelector('.seal-tag');
+        if (tag) {
+          if (tag.dataset.txt !== tag.textContent) { tag.dataset.txt = tag.textContent; tag.dataset.w = tag.offsetWidth; }
+          const hw = (+tag.dataset.w || 0) / 2, pad = 4;
+          const nudge = Math.round(Math.max(0, pad + hw - e.x) - Math.max(0, e.x + hw + pad - s.W));
+          if (tag.dataset.nudge !== String(nudge)) { tag.dataset.nudge = nudge; tag.style.setProperty('--nudge', `${nudge}px`); }
+        }
+      }
       // art with a `facing` turns toward where it's going (worm parts)
       if (e.facing != null) el.style.setProperty('--rot', `${Math.round(e.angle * 57.2958 - e.facing)}deg`);
       // hydra heads turn to look at you
@@ -475,12 +486,12 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           })}
 
           {/* the Swarm King's SWARM SHIELD: swarmlings crawling all over it, more circling */}
-          {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : <ShieldSwarm key={`sw${b.id}`} b={b} k={k} time={s.time} img={ENEMY_TYPES.swarm.img} />)}
+          {s.enemies.map(b => !(b.type.swarmShield && b.sealed) ? null : <ShieldSwarm key={`sw${b.id}`} b={b} k={k} time={s.time} img={ENEMY_TYPES.swarm.imgGlow} />)}
 
           {/* the Swarm King's swarm storm: bats flying out in a spiral */}
           {s.bolts.map(b => b.kind !== 'bat' ? null : (
-            <img key={b.id} src={ENEMY_TYPES.swarm.img} alt="" draggable={false} className="storm-bat"
-              style={{ left: b.x - b.r * 1.5, top: b.y - b.r * 1.5, width: b.r * 3, height: b.r * 3, transform: `${Math.cos(b.ang) < 0 ? 'scaleX(-1) ' : ''}scaleY(${flap(s.time, b.id)})` }} />
+            <img key={b.id} src={ENEMY_TYPES.swarm.imgStorm} alt="" draggable={false} className="storm-bat"
+              style={{ width: b.r * 3 * GLOW_PAD, height: b.r * 3 * GLOW_PAD, transform: `translate3d(${b.x - b.r * 1.5 * GLOW_PAD}px, ${b.y - b.r * 1.5 * GLOW_PAD}px, 0)${Math.cos(b.ang) < 0 ? ' scaleX(-1)' : ''} scaleY(${flap(s.time, b.id)})` }} />
           ))}
 
           {/* ── Kit visuals above the enemies ───────────────────────── */}
@@ -807,6 +818,8 @@ function GasCloud({ g, k, time }) {
 }
 
 // A Swarm King swarm: a cloud of bats around its fixed hitbox (the ring), thinning out as the acid eats it
+// the glow-baked swarmling pictures have a margin for the glow: draw them this much bigger
+const GLOW_PAD = 1.24;
 // a quick wingbeat for the (still) swarmling art: squash it a little, fast
 const flap = (t, seed) => 0.86 + 0.14 * Math.abs(Math.sin(t * 14 + seed * 1.7));
 
@@ -824,11 +837,12 @@ const COVER = Array.from({ length: 26 }, (_, i) => {
 });
 function ShieldSwarm({ b, k, time, img }) {
   const D = b.size * k * (b.drawScale ?? 1), base = 30 * k * Math.max(1, (b.drawScale ?? 1) * 0.72);
-  const bat = (key, x, y, sz, faceLeft, z, ph) => (
-    <img key={key} src={img} alt="" draggable={false} className="swarm-bat"
-      style={{ left: b.x + x - sz / 2, top: b.y + y - sz / 2, width: sz, height: sz, zIndex: z, pointerEvents: 'none',
-        transform: `${faceLeft ? 'scaleX(-1) ' : ''}scaleY(${flap(time, ph)})` }} />
-  );
+  const bat = (key, x, y, sz, faceLeft, z, ph) => {
+    sz *= GLOW_PAD;
+    return <img key={key} src={img} alt="" draggable={false} className="swarm-bat"
+      style={{ width: sz, height: sz, zIndex: z,
+        transform: `translate3d(${b.x + x - sz / 2}px, ${b.y + y - sz / 2}px, 0)${faceLeft ? ' scaleX(-1)' : ''} scaleY(${flap(time, ph)})` }} />;
+  };
   return (
     <>
       {COVER.map((c, i) => {
@@ -857,10 +871,10 @@ function SwarmCloud({ e, k, time }) {
       {FLOCK.slice(0, n).map((b, i) => {
         const jx = Math.sin(time * 2.3 + b.ph + e.id) * 0.07, jy = Math.cos(time * 3.1 + b.ph * 1.3 + e.id) * 0.08;
         const lx = (left ? -1 : 1) * (b.x + jx) * R, ly = (b.y + jy) * R;
-        const x = lx * cs - ly * sn, y = lx * sn + ly * cs, sz = R * b.sz;
-        return <img key={i} src={e.type.img} alt="" draggable={false} className="swarm-bat"
-          style={{ left: x - sz / 2, top: y - sz / 2, width: sz, height: sz, zIndex: Math.round(200 + y),
-            transform: `${left ? 'scaleX(-1) ' : ''}rotate(${(left ? -tilt : tilt) * 57.3}deg) scaleY(${flap(time, b.ph + e.id)})` }} />;
+        const x = lx * cs - ly * sn, y = lx * sn + ly * cs, sz = R * b.sz * GLOW_PAD;
+        return <img key={i} src={e.type.imgGlow} alt="" draggable={false} className="swarm-bat"
+          style={{ width: sz, height: sz, zIndex: Math.round(200 + y),
+            transform: `translate3d(${x - sz / 2}px, ${y - sz / 2}px, 0)${left ? ' scaleX(-1)' : ''} rotate(${(left ? -tilt : tilt) * 57.3}deg) scaleY(${flap(time, b.ph + e.id)})` }} />;
       })}
       <div style={{ position: 'absolute', left: -R * 0.6, width: R * 1.2, top: -R - 10 * k, height: 5, background: '#1a2e05', borderRadius: 3 }}>
         <div style={{ width: `${frac * 100}%`, height: '100%', background: '#a3e635', borderRadius: 3 }} />
@@ -1258,7 +1272,8 @@ const StageBarView = memo(function StageBarView({ label, ratio, color, boss }) {
 function HydraNecks({ heads, k, time }) {
   if (!heads.length) return null;
   const t = heads[0].type;
-  return heads.flatMap(h => {
+  // one shared shadow for all the neck pieces (a drop-shadow on each of ~20 pieces is slow on phones)
+  return <div className="hydra-necks">{heads.flatMap(h => {
     const box = h.size * k * h.drawScale;
     const [fx, fy] = t.neckAttach?.[h.segIndex] ?? [0.5, 0.2];
     const ax = h.x - box / 2 + fx * box, ay = h.y - box / 2 + fy * box;      // where the neck meets the head now
@@ -1281,12 +1296,12 @@ function HydraNecks({ heads, k, time }) {
       const rot = Math.atan2(y - py, x - px) * 57.2958 - 90;
       out.push(
         <img key={`${h.id}-${i}`} src={t.neckImg} alt="" draggable={false} className="hydra-neck"
-          style={{ position: 'absolute', left: x - bw / 2, top: y - bh / 2, width: bw, height: bh, zIndex: 7, pointerEvents: 'none',
+          style={{ position: 'absolute', left: x - bw / 2, top: y - bh / 2, width: bw, height: bh, pointerEvents: 'none',
             transform: `rotate(${rot.toFixed(1)}deg)`, filter: h.down > 0 ? 'brightness(0.7) saturate(0.8)' : undefined }} />,
       );
     }
     return out;
-  });
+  })}</div>;
 }
 
 const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, tier, role, grouped, size, k, isWormHead,
@@ -1379,7 +1394,7 @@ const FloaterLayer = memo(function FloaterLayer({ floaters, k }) {
   return floaters.map(f => (
     <div key={f.id} className={`dmg-float${f.kind === 'crit' ? ' crit' : ''}`} style={{
       left: f.x, top: f.y, color: f.color, fontFamily: 'var(--font-hit)', fontWeight: 400,
-      fontSize: (f.kind === 'crit' ? 26 : f.big ? 22 : 17) * Math.max(0.8, k),
+      fontSize: (f.kind === 'crit' ? 26 : f.big ? 22 : 17) * Math.max(0.8, k) * (f.fit ?? 1),
     }}>
       {withIcons(f.text)}
       {f.icon === 'coin' && <img src={`${BASE}ui/ui_cucoin.png`} alt="" style={{ width: 18 * k, height: 18 * k, marginLeft: 3, imageRendering: 'pixelated', verticalAlign: 'middle' }} />}
@@ -1597,7 +1612,8 @@ ${ICE_CSS}
     filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45)); }
   .boss-shadow { position:absolute; left:12%; right:12%; height:16%; transform:translateY(-50%); z-index:-1; pointer-events:none;
     background: radial-gradient(ellipse at center, rgba(0,0,0,0.5), rgba(0,0,0,0.25) 45%, transparent 70%); }
-  .hydra-neck { image-rendering:auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
+  .hydra-neck { image-rendering:auto; }
+  .hydra-necks { position:absolute; inset:0; z-index:7; pointer-events:none; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
   .pose-aim { position:absolute; inset:0; transform: rotate(var(--aim-rot, 0deg)) scaleX(var(--aim-flip, 1)); transition: transform 0.08s ease-out; }
   .enemy-img.worm-head.turns { filter: drop-shadow(0 0 10px rgba(255,40,120,0.75)); }
   .enemy-img.pose { animation:none; image-rendering:auto; }
@@ -1647,13 +1663,13 @@ ${ICE_CSS}
   @keyframes coreLook { 0%,100% { transform: translate(-80%,-50%); } 50% { transform: translate(-20%,-50%); } }
   .seal-aura { position:absolute; inset:-14%; border-radius:50%; pointer-events:none; border:3px dashed rgba(251,113,133,0.9);
     box-shadow: 0 0 22px rgba(244,63,94,0.6), inset 0 0 30px rgba(244,63,94,0.35); animation: sealSpin 6s linear infinite; }
-  .seal-tag { position:absolute; left:50%; top:-10%; transform:translateX(-50%); color:#fecdd3; font-weight:900; letter-spacing:1px; pointer-events:none;
+  .seal-tag { position:absolute; left:50%; top:-10%; transform:translateX(calc(-50% + var(--nudge, 0px))); color:#fecdd3; font-weight:900; letter-spacing:1px; pointer-events:none;
     background:rgba(76,5,25,0.85); border:1px solid #fb7185; border-radius:4px; padding:1px 7px; white-space:nowrap; z-index:2; }
   /* phones: long seal labels wrap instead of running off the arena */
   @media (max-width: 560px) { .seal-tag { white-space:normal; width:max-content; max-width:56vw; text-align:center; line-height:1.25; } }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
-  .storm-bat { position:absolute; z-index:9; pointer-events:none; filter: drop-shadow(0 0 5px #a78bfa) drop-shadow(0 0 2px #000); }
-  .swarm-bat { position:absolute; object-fit:contain; filter: drop-shadow(0 0 4px rgba(132,204,22,0.75)) drop-shadow(0 0 1px #000); }
+  .storm-bat { position:absolute; left:0; top:0; z-index:9; pointer-events:none; object-fit:contain; }
+  .swarm-bat { position:absolute; left:0; top:0; object-fit:contain; pointer-events:none; }   /* glow baked into the picture: no filter */
   .swarm-ring { position:absolute; border-radius:50%; border:2px dashed rgba(190,242,100,0.55); background: radial-gradient(circle, rgba(26,46,5,0.35), rgba(26,46,5,0.08) 70%, transparent 72%);
     animation: sealSpin 4s linear infinite; }
   .seal-aura.swarm { border-color: rgba(163,230,53,0.9); box-shadow: 0 0 22px rgba(132,204,22,0.6), inset 0 0 30px rgba(132,204,22,0.35); }

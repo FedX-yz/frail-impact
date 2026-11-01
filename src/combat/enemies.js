@@ -154,7 +154,9 @@ export const ENEMY_TYPES = {
   // Drawn as a flock of swarmlings (BattleArena → SwarmCloud).
   swarm: {
     name: 'SWARM', tier: 'basic', acidOnly: true, move: 'cross',
-    img: `${BASE}enemies/swarmling.png`, size: 120, hp: 1, coin: 0, xp: 0, speed: 1, cooldown: [9e9, 9e9], attacks: [],
+    img: `${BASE}enemies/swarmling.png`, size: 120,
+    // the same swarmling with its glow baked in (drawn by the dozen: a CSS drop-shadow on each is too slow on phones)
+    imgGlow: `${BASE}enemies/swarmling_glow.png`, imgStorm: `${BASE}enemies/swarmling_storm.png`, hp: 1, coin: 0, xp: 0, speed: 1, cooldown: [9e9, 9e9], attacks: [],
   },
   // The Devourer's weak spots: they open up around the arena while it's sealed. Their HP is set
   // from the boss's (engine.js → SEAL); they don't attack, move or count as kills.

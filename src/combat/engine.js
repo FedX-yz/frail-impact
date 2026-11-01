@@ -87,13 +87,16 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Floaters & effects ──────────────────────────────────────────────────
   function floater(text, x, y, color = '#fff', big = false, icon = null, kind = null) {
     // keep the whole text inside the arena (enemies at the edges, CRUSHED against a wall…)
+    let fit = 1;
     if (s.W) {
-      const fs = (kind === 'crit' ? 24 : big ? 20 : 15) * Math.max(0.8, s.k);
-      const half = Math.min(s.W / 2, String(text).length * fs * 0.3 + (icon ? 12 : 0) + 4);
+      const fs = (kind === 'crit' ? 26 : big ? 22 : 17) * Math.max(0.8, s.k);   // (as BattleArena draws it)
+      const w = String(text).length * fs * 0.62 + (icon ? 22 : 0) + 8;           // a generous guess at its width
+      fit = Math.min(1, s.W * 0.94 / w);                                         // too wide for a phone: smaller text
+      const half = Math.min(s.W / 2, w * fit / 2);
       x = clamp(x, half, s.W - half);
       y = clamp(y, fs * 0.7, s.H - fs * 0.7);
     }
-    s.floaters.push({ id: uid++, text, x, y, color, big, icon, kind, t: 0 });
+    s.floaters.push({ id: uid++, text, x, y, color, big, icon, kind, t: 0, fit });
     if (s.floaters.length > 60) s.floaters.shift();
     s.floaterVer++;   // lets the renderer skip the floater layer when nothing changed
   }
@@ -121,6 +124,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const hp = Math.max(1, Math.round(type.hp * BAL.ENEMY_HP_MULT * hpScale * tierHp * M('enemyHp') * affixHp));
     // most enemies walk in from the left or right edge instead of popping in
     let p = opts.pos ?? (type.tier === 'boss' ? { x: s.W * (type.bossPos?.[0] ?? 0.62), y: s.H * (type.bossPos?.[1] ?? 0.42) } : randomPoint());
+    // big ones that stand still (the Devourer): far enough in that the whole picture fits on screen
+    if (!opts.pos && type.tier !== 'boss' && !type.enter && type.speed === 0 && s.W) {
+      const hx = Math.min(type.size * s.k * (type.drawScale ?? 1) * 0.42, s.W * 0.45), hy = Math.min(hx, s.H * 0.4);
+      p = { x: clamp(p.x, hx, s.W - hx), y: clamp(p.y, hy, s.H - hy) };
+    }
     let entering = null;
     if (type.enter && !opts.pos && s.W) {
       const left = Math.random() < 0.5, half = type.size * s.k * 0.6;
