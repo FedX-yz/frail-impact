@@ -22,6 +22,8 @@ import ffmpegPath from 'ffmpeg-static'
 // changed files get processed on the next build.
 // ─────────────────────────────────────────────────────────────────────────────
 const MAX_SIZE = { characters: 1100, cardart: 1600, ui: 2048, enemies: 512, backgrounds: 3400, story: 1920, sprites: 1100 }
+// (a deeper folder can have its own: the Red Giant's pieces are drawn big)
+const MAX_SIZE_DIR = { 'enemies/giant': 1100 }
 const KEEP_FORMAT = new Set(['ui/mouse.png', 'ui/frail.png'])   // cursor + favicon: PNG works everywhere
 const IMG = /\.(png|jpe?g|gif)$/i
 const CACHE_DIR = path.resolve('node_modules/.cache/frail-assets')
@@ -92,7 +94,7 @@ function optimizeAssets() {
       for (const file of all.filter(f => IMG.test(f) && !rel(f).startsWith('assets'))) {
         const r = rel(file), top = r.split('/')[0]
         const isGif = /\.gif$/i.test(r)
-        const max = isGif ? 600 : (MAX_SIZE[top] ?? 1600)
+        const max = isGif ? 600 : (MAX_SIZE_DIR[path.posix.dirname(r)] ?? MAX_SIZE[top] ?? 1600)
         const src = fs.readFileSync(file)
         before += src.length
         const resized = s => sharp(s, { animated: isGif }).resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true })

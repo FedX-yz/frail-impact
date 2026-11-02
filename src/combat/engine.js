@@ -405,10 +405,11 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── THE RED GIANT ───────────────────────────────────────────────────────
-  // He's drawn from his picture (giant_body.png, 1200×812): every spot below is in its pixels,
-  // and giantLayout() maps them onto the arena. He fills the width, standing up from below the
-  // bottom edge; his head (the hitbox) is up top. His hands (giant_hand_l/r.png, cut from the
-  // same picture) float: they rest where they are in it and fly off to attack.
+  // He's drawn in pieces (BattleArena → GiantRig, from giantRig.js): every spot below is in the
+  // rig's art units, and giantLayout() maps them onto the arena. He fills the width, standing up
+  // from below the bottom edge; his head (the hitbox) is up top. His hands are enemies of their
+  // own on the ends of his arms: they rest where the art has them and reach out to attack (as far
+  // as his arms go: the arms follow them).
   const GIANT = {
     ...GIANT_ART, art: GIANT_ART.size,
     rise: 2.8,                                        // seconds to rise from behind the city
@@ -432,7 +433,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     b.hands = {};
     for (const side of ['l', 'r']) {
       const h = spawnEnemy(t.hand ?? 'giantHand', { pos: { x: s.W / 2, y: s.H } });
-      h.role = 'hand'; h.side = side; h.owner = b.id; h.img = h.type.imgs[side]; h.hidden = true;
+      h.role = 'hand'; h.side = side; h.owner = b.id; h.hidden = true;
       b.hands[side] = h.id;
     }
     sfx('roar'); shake(0.6);
@@ -454,7 +455,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       // never resting behind your portrait / HP frame (bottom-left): lifted above it
       const r = s.reserved;
       if (r && h.home.x + hw * 0.3 > r.x0 && h.home.x - hw * 0.3 < r.x1 && h.home.y + hw * 0.3 > r.y0) h.home.y = Math.max(s.H * 0.2, r.y0 - hw * 0.32);
-      h.wrist = L.at(GIANT.hands[side].wrist);
+      h.shoulder = L.at(GIANT.hands[side].shoulder); h.reach = GIANT.hands[side].reach * L.sc;
       moveGiantHand(b, h, dt);
     }
   }
@@ -485,9 +486,16 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
     const f = 1 - Math.exp(-dt * rate);
     h.x += (tx - h.x) * f; h.y += (ty + (act ? 0 : bob) - h.y) * f;
+    // it's on the end of his arm: never further from the shoulder than the arm reaches
+    const S = h.shoulder, d = S ? Math.hypot(h.x - S.x, h.y - S.y) : 0;
+    if (S && d > h.reach) { h.x = S.x + (h.x - S.x) / d * h.reach; h.y = S.y + (h.y - S.y) / d * h.reach; }
   }
+  const canReach = (h, P) => !h.shoulder || Math.hypot(P.x - h.shoulder.x, P.y - h.shoulder.y) <= h.reach * 0.98;
   function giantHandAttack(b, h) {
-    const P = aimPoint(), side = h.side;
+    const side = h.side;
+    let P = aimPoint();
+    // out of its reach (rare: the other hand couldn't either): it hits as close to you as it gets
+    if (!canReach(h, P)) { const S = h.shoulder, d = Math.hypot(P.x - S.x, P.y - S.y), r = h.reach * 0.95; P = { x: S.x + (P.x - S.x) / d * r, y: S.y + (P.y - S.y) / d * r }; }
     const r = Math.random(), kind = r < 0.45 ? 'slam' : r < 0.75 ? 'sweep' : 'grab';
     let a;
     if (kind === 'slam') a = queueAttack(h, 'circle', { center: { x: P.x, y: P.y }, r: K(GIANT.slam.r), dmgKey: 'giantSlam', teleMult: GIANT.slam.tele });
@@ -531,6 +539,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         const ready = h => h && !(h.down > 0) && !h.act && !(h.frozen > 0);
         let h = hands.find(x => x.side === g.next);
         if (!ready(h)) h = hands.find(ready);
+        // the other hand if this one can't reach you (only an arm's length from its shoulder)
+        const P = aimPoint(), alt = hands.find(x => x !== h && ready(x));
+        if (h && alt && !canReach(h, P) && canReach(alt, P)) h = alt;
         if (h) {
           giantHandAttack(b, h); g.next = h.side === 'l' ? 'r' : 'l';
           const other = hands.find(x => x !== h);
@@ -1535,7 +1546,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
     if (e.tier === 'boss' && t.nextPhase && s.phase !== 'clear' && s.phase !== 'defeat') { burstHost(e); return; }   // the Swarm King's phase 1
-    if (t.kind === 'giant' && e.gl) s.giantFall = { t: 0, left: e.gl.left, top: e.gl.top, w: e.gl.w, h: e.gl.h };
+    if (t.kind === 'giant' && e.gl) s.giantFall = { t: 0, left: e.gl.left, top: e.gl.top, w: e.gl.w, h: e.gl.h, sc: e.gl.sc };
     if (e.tier === 'boss') { bossBoom(e); s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;

@@ -23,15 +23,15 @@ export const CAST = {
   // voice: lines get audio made by tools/make-voices.mjs (creepy = the distorted unknown caller)
   stranger: { name: '???',     color: '#9ca3af', portrait: null, sprite: null, voice: { dir: 'audio/voice/stranger', preset: 'creepy' } },
 
-  // Playable cards (using their card art until story sprites exist)
+  // Playable cards (story art where it exists: public/story/cast/; card art until then)
   // (sprite: the closest cut-out there is until a story sprite exists — a card in a cutscene looks wrong)
-  astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'characters/astrec.png',  sprite: 'sprites/astrec-hr.png' },
+  astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'story/cast/astrec-icon.png', sprite: 'story/cast/astrec.png' },
   bio:     { name: 'Bio',      color: '#a855f7', portrait: 'characters/bio.png',     sprite: 'characters/bio.png' },
   stephen: { name: 'Stephen',  color: '#60a5fa', portrait: 'characters/stephen.png', sprite: 'characters/stephen.png' },
-  ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'characters/iceduke.png', sprite: 'sprites/ice-platinum.png' },
+  ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'story/cast/ice-icon.png', sprite: 'sprites/ice-platinum.png' },
   reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png' },
-  bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'sprites/bonk-platinum.png',  sprite: 'sprites/bonk-platinum.png' },
-  ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'sprites/ramsf-platinum.png', sprite: 'sprites/ramsf-platinum.png' },
+  bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'story/cast/bonk-icon.png',  sprite: 'sprites/bonk-platinum.png' },
+  ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png' },
   // a few people talking at once (no picture)
   group:   { name: 'The Group', color: '#cbd5e1', portrait: null, sprite: null },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },

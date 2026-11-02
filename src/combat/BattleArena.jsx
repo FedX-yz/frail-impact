@@ -2,6 +2,7 @@ import { SHEET_FX } from './sheetFx.js';
 import { Children, Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES, GIANT_ART } from './enemies';
+import { GiantRig, GIANT_RIG_CSS } from './GiantRig';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
@@ -471,8 +472,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
           <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
-          {s.enemies.map(b => b.type.kind === 'giant' && b.gl ? <GiantBody key={`gb${b.id}`} b={b} /> : null)}
-          {s.giantFall && <GiantFall f={s.giantFall} />}
+          {s.enemies.map(b => b.type.kind === 'giant' && b.gl ? <GiantBody key={`gb${b.id}`} b={b} s={s} /> : null)}
+          {s.giantFall && <GiantFall f={s.giantFall} t={s.time} />}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
@@ -853,32 +854,22 @@ function GasCloud({ g, k, time }) {
 // ── The Red Giant ───────────────────────────────────────────────────────────
 // His body (the engine lays it out: b.gl) and his eyes (lit when he's open, flaring before the
 // bolts, red once he's mad). His hands float on their own (they're enemies: EnemySprite).
-function GiantBody({ b }) {
-  const L = b.gl, [AW, AH] = GIANT_ART.size;
-  const open = !b.sealed && !b.hidden, warn = (b.gi?.warn ?? 0) > 0, mad = !!b.gi?.mad;
-  const eyeCls = `giant-eye${warn ? ' warn' : open ? ' open' : ''}${mad ? ' mad' : ''}${b.hurt > 0 ? ' hit' : ''}`;
-  return (
-    <>
-      <div className="giant" style={{ left: L.left, top: L.top, width: L.w, height: L.h }}>
-        <img src={b.type.img} alt="" draggable={false} />
-        <svg viewBox={`0 0 ${AW} ${AH}`} preserveAspectRatio="none">
-          <defs>
-            <radialGradient id="giantEye"><stop offset="0%" stopColor="#f7ffd6" stopOpacity="0.95" /><stop offset="45%" stopColor="#bef264" stopOpacity="0.55" /><stop offset="100%" stopColor="#84cc16" stopOpacity="0" /></radialGradient>
-            <radialGradient id="giantEyeMad"><stop offset="0%" stopColor="#fff1f2" stopOpacity="0.95" /><stop offset="45%" stopColor="#f43f5e" stopOpacity="0.6" /><stop offset="100%" stopColor="#be123c" stopOpacity="0" /></radialGradient>
-          </defs>
-          {GIANT_ART.eyes.map(([x, y], i) => <circle key={i} className={eyeCls} cx={x} cy={y} r={i < 2 ? 46 : 24} fill={`url(#${mad ? 'giantEyeMad' : 'giantEye'})`} />)}
-        </svg>
-      </div>
-    </>
-  );
+function GiantBody({ b, s }) {
+  const hands = {};
+  for (const sd of ['l', 'r']) {
+    const h = s.enemies.find(e => e.id === b.hands?.[sd]);
+    if (h) hands[sd] = { at: { x: h.x, y: h.y }, down: h.down > 0, hurt: h.hurt > 0, frozen: h.frozen > 0 };
+  }
+  const state = { open: !b.sealed && !b.hidden, warn: (b.gi?.warn ?? 0) > 0, mad: !!b.gi?.mad, hit: b.hurt > 0 };
+  return <GiantRig L={b.gl} t={s.time} look={s.mahoraga ?? s.player.pos} hands={hands} state={state} />;
 }
 // killed: he topples back down behind the city (the boss explosion plays over it)
-function GiantFall({ f }) {
+function GiantFall({ f, t }) {
   const p = Math.min(1, f.t / 2.6), e = p * p;
   return (
-    <div className="giant" style={{ left: f.left, top: f.top + e * f.h * 0.9, width: f.w, height: f.h, opacity: 1 - Math.max(0, (f.t - 1.9) / 1.1),
-      transform: `rotate(${(e * 6).toFixed(2)}deg)` }}>
-      <img src={ENEMY_TYPES.redgiant.img} alt="" draggable={false} style={{ filter: 'brightness(0.55)' }} />
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5, opacity: 1 - Math.max(0, (f.t - 1.9) / 1.1),
+      transformOrigin: `${f.left + f.w / 2}px ${f.top + f.h}px`, transform: `rotate(${(e * 6).toFixed(2)}deg)` }}>
+      <GiantRig L={{ left: f.left, top: f.top + e * f.h * 0.9, sc: f.sc }} t={t} look={null} state={{}} dim="brightness(0.55)" />
     </div>
   );
 }
@@ -1778,9 +1769,7 @@ ${ICE_CSS}
   @media (max-width: 560px) { .seal-tag { white-space:normal; width:max-content; max-width:56vw; text-align:center; line-height:1.25; } }
   @keyframes sealSpin { to { transform: rotate(360deg); } }
   .storm-bat { position:absolute; left:0; top:0; z-index:9; pointer-events:none; object-fit:contain; }
-  .giant { position:absolute; z-index:5; pointer-events:none; transform-origin:50% 100%; }
-  .giant > img { position:absolute; inset:0; width:100%; height:100%; }
-  .giant > svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+${GIANT_RIG_CSS}
   .giant-eye { opacity:0; transition: opacity 0.25s; }
   .giant-eye.open { opacity:0.85; animation: giantEyePulse 0.9s ease-in-out infinite; }
   .giant-eye.warn { opacity:1; animation: giantEyePulse 0.18s ease-in-out infinite; }

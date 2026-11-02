@@ -24,6 +24,7 @@
 //   imgBroken: picture while its own shield is broken (Shield Bonk)
 //   imgOpen:   picture while its seal is broken and it can be hurt (the Devourer)
 
+import { GIANT_RIG } from './giantRig';
 const BASE = import.meta.env.BASE_URL;
 
 export const ENEMY_TYPES = {
@@ -233,13 +234,12 @@ export const ENEMY_TYPES = {
   // His picture is drawn by BattleArena (GiantBody); this enemy is the hitbox on his head.
   redgiant: {
     name: 'RED GIANT', tier: 'boss', kind: 'giant', shape: 'hidden',
-    img: `${BASE}enemies/giant_body.png`, imgFar: `${BASE}enemies/giant_far.png`,
+    img: `${BASE}enemies/giant/far.png`, imgFar: `${BASE}enemies/giant/far.png`,   // (he's drawn in pieces: BattleArena → GiantRig)
     size: 120, hp: 1300, coin: 900, gems: 25, xp: 2500, speed: 0, cooldown: [9e9, 9e9], attacks: [],
   },
   giantHand: {
-    name: 'RED GIANT', tier: 'boss', kind: 'giantHand', noBar: true,
-    imgs: { l: `${BASE}enemies/giant_hand_l.png`, r: `${BASE}enemies/giant_hand_r.png` },
-    img: `${BASE}enemies/giant_hand_l.png`, size: 120, hp: 300, coin: 0, xp: 0, speed: 0,
+    name: 'RED GIANT', tier: 'boss', kind: 'giantHand', noBar: true, shape: 'hidden',   // (drawn on his arm by GiantRig; this is its hitbox + HP bar)
+    img: null, size: 120, hp: 300, coin: 0, xp: 0, speed: 0,
     downTime: 7, regrowPct: 0.6, cooldown: [9e9, 9e9], attacks: [],
   },
   treasure: {
@@ -265,18 +265,24 @@ export const AFFIXES = {
 // Player debuffs from enemies (engine.js): weak = you deal 30% less damage
 export const DEBUFFS = { weak: { name: 'WEAKENED', color: '#c084fc', dur: 4, dmg: 0.7 } };
 
-// Base damage of each attack at stage 1 (before DEF / damage reduction)
-// The Red Giant's picture (giant_body.png, 1200×812): where things are in it, in its pixels.
-// The engine maps these onto the arena (giantLayout); BattleArena draws from the same numbers.
+// The Red Giant, in his rig's art units (giantRig.js, made by tools/build-giant.py from his layered
+// art): where things are when he stands at rest. The engine maps them onto the arena.
+const RARM = GIANT_RIG.arms;
+const dist2 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 export const GIANT_ART = {
-  size: [1200, 812],
-  head: [590, 168], headR: 125,                                   // his hitbox: the face and eyes
-  eyes: [[531, 172], [648, 172], [544, 95], [643, 92], [508, 128], [571, 127], [613, 123], [683, 140]],   // the two big ones first
-  hands: { l: { home: [155.5, 542.5], wrist: [255, 640], grip: [0.92, 0.8] },    // home: where it rests (its centre)
-           r: { home: [1044.5, 542.5], wrist: [945, 640], grip: [0.08, 0.8] } },   // wrist: the arm's end; grip: the strand's end on the hand (× its picture)
-  handBox: [311, 363],                                            // a hand picture's size
+  size: GIANT_RIG.size,
+  head: [385, 168], headR: 112,                                   // his hitbox: the face and eyes
+  eyes: GIANT_RIG.eyes.map(e => e.c),                             // the two big ones first
+  hands: Object.fromEntries(['l', 'r'].map(sd => [sd, {
+    home: RARM[sd].hand.c,                                        // where the hand rests (its centre)
+    shoulder: RARM[sd].S,
+    // how far from the shoulder the hand's centre can get with the arm straight
+    reach: dist2(RARM[sd].S, RARM[sd].E) + dist2(RARM[sd].E, RARM[sd].W) + dist2(RARM[sd].W, RARM[sd].hand.c) * 0.7,
+  }])),
+  handBox: [RARM.l.hand.w, RARM.l.hand.h],                        // a hand's size
 };
 
+// Base damage of each attack at stage 1 (before DEF / damage reduction)
 export const ATTACK_DMG = {
   poke: 6, circle: 14, slash: 16, shot: 10, dash: 20,
   pellet: 4, hex: 3,       // small fry: quick, weak shots
