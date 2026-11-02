@@ -80,18 +80,20 @@ function dart(i, t, rate) {
 // state: open (his head can be hit) / warn (eye bolts coming) / mad / hit; dim: a filter for all of him
 // far: he's far away behind the city (dark, eyes lit, nobody fighting him: his hands follow his idle poses)
 const FAR = 'brightness(0.4) saturate(1.15)';
-export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false }) {
+// still: he doesn't move at all (only his eyes can); noArms: just his body and head
+const REST = { l: R.arms.l.hand.c, r: R.arms.r.hand.c, twist: { l: 0, r: 0 }, head: [0, 0], tilt: 0, body: [0, 0] };
+export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false, still = false, noArms = false }) {
   const mem = useRef({ l: {}, r: {} }).current;   // which way each elbow is bent
   const toArt = p => [(p.x - L.left) / L.sc, (p.y - L.top) / L.sc];
-  const idle = giantIdlePose(t, state.mad);            // (the engine rests his hands on the same poses)
-  const breath = Math.sin(t * 1.5);
+  const idle = still ? REST : giantIdlePose(t, state.mad);   // (the engine rests his hands on the same poses)
+  const breath = still ? 0 : Math.sin(t * 1.5);
   const lift = breath * 5;                            // shoulders and head rise as he breathes in (with the chest)
   const [bx, by] = idle.body;
   const P = look ? toArt(look) : null;
   // the head: follows the body and the pose, sways, leans a little toward you
   const hd = R.head, pv = hd.pivot;
   const lean = P ? Math.max(-4, Math.min(4, (P[0] - pv[0]) / 60)) : 0;
-  const headRot = Math.sin(t * 0.9) * 1.2 + idle.tilt + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0);
+  const headRot = still ? 0 : Math.sin(t * 0.9) * 1.2 + idle.tilt + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0);
   const headDx = bx + idle.head[0], headDy = by + idle.head[1] - lift + (state.warn ? -3 : 0);
   // the arms
   const arms = {};
@@ -108,7 +110,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false 
       style={{ left: R.body.c[0] - R.body.w / 2 + bx, top: R.body.c[1] - R.body.h / 2 + by, width: R.body.w, height: R.body.h, filter: dimmed(),
         transformOrigin: '50% 100%', transform: `scale(${1 + breath * 0.006}, ${1 + breath * 0.012})` }} />,
   };
-  for (const sd of ['l', 'r']) {
+  for (const sd of noArms ? [] : ['l', 'r']) {
     const { pose, h } = arms[sd];
     parts[`${sd}upper`] = <Piece key={`${sd}u`} {...pose.upper} filter={armFilter(h)} />;
     parts[`${sd}lower`] = <Piece key={`${sd}l`} {...pose.lower} filter={armFilter(h)} />;
@@ -128,7 +130,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false 
         if (P) { const d = sub(P, e.c), n = Math.hypot(...d) || 1, k = Math.min(1, n / (far ? 120 : 260)); o = [d[0] / n * k, d[1] / n * k]; }
         // (far away he just stares at you: only a flicker of darting)
         const [kl, kd] = far ? [1, 0.2] : [0.55, 0.7];
-        if (!state.warn) { const j = dart(i, t, rate); o = [o[0] * kl + j[0] * kd, o[1] * kl + j[1] * kd]; }
+        if (!state.warn && !(still && !P)) { const j = dart(i, t, rate); o = [o[0] * kl + j[0] * kd, o[1] * kl + j[1] * kd]; }
         const m = Math.hypot(...o); if (m > 1) o = [o[0] / m, o[1] / m];
         const sc = state.warn ? 1.28 : state.mad ? 0.85 : 1;
         return (
@@ -153,7 +155,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false 
           <radialGradient id="giantEyeMad"><stop offset="0%" stopColor="#fff1f2" stopOpacity="0.95" /><stop offset="45%" stopColor="#f43f5e" stopOpacity="0.6" /><stop offset="100%" stopColor="#be123c" stopOpacity="0" /></radialGradient>
         </defs>
       </svg>
-      {R.order.map(k => parts[k])}
+      {R.order.map(k => parts[k] ?? null)}
     </div>
   );
 }

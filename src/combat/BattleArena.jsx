@@ -884,14 +884,15 @@ function GiantFar({ s, giantRef }) {
   const lv = s.stage.giantNear ?? 0, cfg = GIANT_FAR[lv];
   if (!cfg || !s.H) return null;
   const gone = s.enemies.some(e => e.type.kind === 'giant') || !!s.giantFall || s.phase === 'clear' && lv === 4;
-  // his rig, small and dark: still moving through his poses, and his eyes on your cursor
+  // his body and head, small and dark, standing still. Only his eyes move: from stage 9 (the
+  // last two before he rises), they follow your cursor.
   const [AW, AH] = GIANT_ART.size, sc = s.H * cfg.h / AH, w = AW * sc;
   const L = { left: s.W * 0.6 - w / 2, top: s.H * cfg.eye - GIANT_ART.eyes[0][1] * sc, sc };
   // (the parallax layer moves him: his eyes have to look from where he's actually drawn)
-  const par = giantRef.current?.dataset, look = s.player.pos && { x: s.player.pos.x - (+par?.px || 0), y: s.player.pos.y - (+par?.py || 0) };
+  const par = giantRef.current?.dataset, look = lv >= 3 && !gone && s.player.pos && { x: s.player.pos.x - (+par?.px || 0), y: s.player.pos.y - (+par?.py || 0) };
   return (
     <div ref={giantRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', willChange: 'transform', opacity: gone ? 0 : 1, transition: 'opacity 1.6s' }}>
-      <GiantRig L={L} t={s.time} look={gone ? null : look} far />
+      <GiantRig L={L} t={s.time} look={look || null} far still noArms />
     </div>
   );
 }
