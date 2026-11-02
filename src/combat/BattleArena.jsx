@@ -249,7 +249,11 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           strip.style.width = `calc(100% + ${Math.ceil(sc.tile[i]) + 2}px)`;
         });
       }
-      if (giantFarRef.current) giantFarRef.current.style.transform = `translate3d(${(par.x * 9).toFixed(2)}px, ${(par.y * 9 * 0.4).toFixed(2)}px, 0)`;
+      if (giantFarRef.current) {
+        const px = par.x * 9, py = par.y * 9 * 0.4, el = giantFarRef.current;
+        el.style.transform = `translate3d(${px.toFixed(2)}px, ${py.toFixed(2)}px, 0)`;
+        el.dataset.px = px.toFixed(1); el.dataset.py = py.toFixed(1);
+      }
       PARALLAX.forEach((l, i) => {
         const el = parallaxRefs.current[i];
         if (!el) return;
@@ -880,12 +884,14 @@ function GiantFar({ s, giantRef }) {
   const lv = s.stage.giantNear ?? 0, cfg = GIANT_FAR[lv];
   if (!cfg || !s.H) return null;
   const gone = s.enemies.some(e => e.type.kind === 'giant') || !!s.giantFall || s.phase === 'clear' && lv === 4;
-  const [AW, AH] = GIANT_ART.size, h = s.H * cfg.h, w = h * AW / AH;
-  const top = s.H * cfg.eye - h * (GIANT_ART.eyes[0][1] / AH);
+  // his rig, small and dark: still moving through his poses, and his eyes on your cursor
+  const [AW, AH] = GIANT_ART.size, sc = s.H * cfg.h / AH, w = AW * sc;
+  const L = { left: s.W * 0.6 - w / 2, top: s.H * cfg.eye - GIANT_ART.eyes[0][1] * sc, sc };
+  // (the parallax layer moves him: his eyes have to look from where he's actually drawn)
+  const par = giantRef.current?.dataset, look = s.player.pos && { x: s.player.pos.x - (+par?.px || 0), y: s.player.pos.y - (+par?.py || 0) };
   return (
     <div ref={giantRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', willChange: 'transform', opacity: gone ? 0 : 1, transition: 'opacity 1.6s' }}>
-      <img src={ENEMY_TYPES.redgiant.imgFar} alt="" draggable={false} className="giant-far"
-        style={{ left: s.W * 0.6 - w / 2, top, width: w, height: h }} />
+      <GiantRig L={L} t={s.time} look={gone ? null : look} far />
     </div>
   );
 }
@@ -1776,8 +1782,6 @@ ${GIANT_RIG_CSS}
   .giant-eye.mad:not(.open):not(.warn) { opacity:0.45; }
   .giant-eye.hit { opacity:1; }
   @keyframes giantEyePulse { 50% { opacity:0.45; } }
-  .giant-far { position:absolute; max-width:none; max-height:none; animation: giantBreath 6s ease-in-out infinite; }
-  @keyframes giantBreath { 50% { transform: translateY(-1.2%); } }
   .sheet-fx { position:absolute; left:0; top:0; z-index:12; overflow:hidden; pointer-events:none; }
   .sheet-fx img { position:absolute; left:0; top:0; max-width:none; height:auto; }
   .swarm-bat { position:absolute; left:0; top:0; object-fit:contain; pointer-events:none; }   /* glow baked into the picture: no filter */

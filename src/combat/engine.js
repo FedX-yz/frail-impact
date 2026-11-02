@@ -6,6 +6,7 @@
 import { sheetLife } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
+import { giantIdlePose } from './giantIdle';
 import { makeEndlessStage, MODIFIERS } from './stages';
 import { sfx } from '../utils/sfx';
 import { createKitRuntime } from './kitRuntime';
@@ -443,26 +444,27 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // every frame: his hitbox, his hands' size and resting spots follow the layout (the arena can resize)
   function placeGiant(b, dt) {
     const L = giantLayout(b); b.gl = L;
-    const head = L.at(GIANT.head);
+    const pose = giantIdlePose(s.time, b.gi?.mad);   // between attacks he goes through his idle poses (giantIdle.js)
+    const head = L.at([GIANT.head[0] + pose.body[0] + pose.head[0], GIANT.head[1] + pose.body[1] + pose.head[1]]);
     b.x = head.x; b.y = head.y; b.size = GIANT.headR * L.sc / 0.55 / s.k;
     for (const side of ['l', 'r']) {
       const h = s.enemies.find(e => e.id === b.hands[side]);
       if (!h) continue;
       const hw = GIANT.handBox[1] * L.sc;                         // the picture is drawn this tall
       h.size = hw * 0.62 / s.k; h.drawScale = hw / (h.size * s.k);
-      const home = L.at(GIANT.hands[side].home);
+      const home = L.at(pose[side]);
       h.home = { x: clamp(home.x, hw * 0.3, s.W - hw * 0.3), y: home.y };   // (pulled in on narrow screens)
       // never resting behind your portrait / HP frame (bottom-left): lifted above it
       const r = s.reserved;
       if (r && h.home.x + hw * 0.3 > r.x0 && h.home.x - hw * 0.3 < r.x1 && h.home.y + hw * 0.3 > r.y0) h.home.y = Math.max(s.H * 0.2, r.y0 - hw * 0.32);
-      h.shoulder = L.at(GIANT.hands[side].shoulder); h.reach = GIANT.hands[side].reach * L.sc;
+      const sh = GIANT.hands[side].shoulder;
+      h.shoulder = L.at([sh[0] + pose.body[0], sh[1] + pose.body[1]]); h.reach = GIANT.hands[side].reach * L.sc;
       moveGiantHand(b, h, dt);
     }
   }
   function moveGiantHand(b, h, dt) {
     const act = h.act, P = aimPoint();
     let tx = h.home.x, ty = h.home.y, rate = 4;
-    const bob = Math.sin(s.time * 1.3 + (h.side === 'l' ? 0 : 2)) * K(7);
     if (h.down > 0) { ty += K(60); rate = 3; }                     // broken: hangs limp
     else if (act) {
       const a = act.a;
@@ -485,7 +487,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       }
     }
     const f = 1 - Math.exp(-dt * rate);
-    h.x += (tx - h.x) * f; h.y += (ty + (act ? 0 : bob) - h.y) * f;
+    h.x += (tx - h.x) * f; h.y += (ty - h.y) * f;
     // it's on the end of his arm: never further from the shoulder than the arm reaches
     const S = h.shoulder, d = S ? Math.hypot(h.x - S.x, h.y - S.y) : 0;
     if (S && d > h.reach) { h.x = S.x + (h.x - S.x) / d * h.reach; h.y = S.y + (h.y - S.y) / d * h.reach; }
