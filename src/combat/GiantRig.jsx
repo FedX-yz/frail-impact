@@ -4,58 +4,25 @@
 // arena (the engine's giantLayout). The art's own pose is the starting point; from there he
 // moves through his idle poses (giantIdle.js) and reaches out to attack.
 //
-//   · his arms bend to reach his hands (two-bone IK: shoulder → elbow → wrist). The hands are
-//     enemies of their own (engine.js); each one is drawn here, on the end of its arm.
+//   · his arms bend to reach his hands (shoulder → elbow → wrist, within what real joints allow:
+//     giantArm.js). The hands are enemies of their own (engine.js); each one is drawn here, on
+//     the end of its arm.
 //   · he breathes; his head sways and leans toward you
 //   · every pupil looks around on its own, darting like in the reference, mostly at you; they
 //     all lock onto you and dilate before the eye bolts, and turn red once he's mad
 import { useRef } from 'react';
 import { GIANT_RIG as R } from './giantRig';
 import { giantIdlePose } from './giantIdle';
+import { ARMS, solveArm, armPieces, sub } from './giantArm';
 
 const BASE = import.meta.env.BASE_URL;
 const src = f => `${BASE}${f}`;   // (paths inside public/)
 const RAD = Math.PI / 180;
-const rot = ([x, y], a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
-const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
-const ang = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]);
-const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 
-// each arm at rest: its bones' lengths and angles, and which way the elbow bends
-const ARMS = Object.fromEntries(['l', 'r'].map(sd => {
-  const a = R.arms[sd], u = sub(a.E, a.S), w = sub(a.W, a.S);
-  return [sd, { ...a, L1: len(a.S, a.E), L2: len(a.E, a.W), up0: ang(a.S, a.E), lo0: ang(a.E, a.W), bend: Math.sign(u[0] * w[1] - u[1] * w[0]) }];
-}));
-
-const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
-const HAND_FOLLOW = 0.5;   // the hand turns half as much as the forearm (it stays more upright)
-// Pose an arm so its hand's centre lands on `target` (art units), from shoulder S. The elbow goes
-// on whichever side keeps it low and out from his body (staying on the side it was on unless the
-// other is clearly better, so it doesn't flip back and forth). Returns where its pieces go.
+// Pose an arm so its hand's centre lands on `target` (art units), from shoulder S, within what
+// his joints allow (giantArm.js). Returns where its pieces go.
 function poseArm(sd, S, target, mem, twist = 0) {
-  const A = ARMS[sd], handOff = sub(A.hand.c, A.W), out = sd === 'l' ? -1 : 1;
-  let dH = 0, dLo = 0, E = A.E, W = A.W, bend = mem.bend ?? A.bend;
-  for (let i = 0; i < 3; i++) {   // (the wrist depends on how the hand is turned: settle it)
-    const want = sub(target, rot(handOff, dH));
-    let d = len(S, want);
-    const maxD = A.L1 + A.L2 - 0.5, minD = Math.abs(A.L1 - A.L2) + 1;
-    const base = ang(S, want);
-    d = Math.min(maxD, Math.max(minD, d));
-    const k = Math.acos(Math.max(-1, Math.min(1, (A.L1 * A.L1 + d * d - A.L2 * A.L2) / (2 * A.L1 * d))));
-    let best = -Infinity;
-    for (const b of [1, -1]) {
-      const ua = base - b * k, e = [S[0] + Math.cos(ua) * A.L1, S[1] + Math.sin(ua) * A.L1];
-      const score = (e[1] - S[1]) + (e[0] - S[0]) * out * 0.3 + (b === A.bend ? 120 : 0) + (b === (mem.bend ?? A.bend) ? 60 : 0);
-      if (score > best) { best = score; E = e; bend = b; }
-    }
-    W = [S[0] + Math.cos(base) * d, S[1] + Math.sin(base) * d];
-    dLo = wrap(ang(E, W) - A.lo0); dH = dLo * HAND_FOLLOW + twist * RAD;
-  }
-  mem.bend = bend;
-  const dUp = wrap(ang(S, E) - A.up0);
-  const place = (p, origin0, origin, dA) => ({ p, c: add(origin, rot(sub(p.c, origin0), dA)), r: p.rot + dA / RAD });
-  return { upper: place(A.upper, A.S, S, dUp), lower: place(A.lower, A.E, E, dLo), hand: place(A.hand, A.W, W, dH) };
+  return armPieces(sd, solveArm(sd, S, target, twist, mem));
 }
 
 function Piece({ p, c, r, filter, extra = '' }) {
@@ -88,12 +55,13 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
   const idle = still ? REST : giantIdlePose(t, state.mad);   // (the engine rests his hands on the same poses)
   const breath = still ? 0 : Math.sin(t * 1.5);
   const lift = breath * 5;                            // shoulders and head rise as he breathes in (with the chest)
-  const [bx, by] = idle.body;
+  // (lean: he shifts his weight toward a hand that's attacking: engine.js → placeGiant)
+  const wl = state.lean ?? 0, bx = idle.body[0] + wl, by = idle.body[1] + Math.abs(wl) * 0.25;
   const P = look ? toArt(look) : null;
   // the head: follows the body and the pose, sways, leans a little toward you
   const hd = R.head, pv = hd.pivot;
   const lean = P ? Math.max(-4, Math.min(4, (P[0] - pv[0]) / 60)) : 0;
-  const headRot = still ? 0 : Math.sin(t * 0.9) * 1.2 + idle.tilt + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0);
+  const headRot = still ? 0 : Math.sin(t * 0.9) * 1.2 + idle.tilt + wl * 0.3 + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0);
   const headDx = bx + idle.head[0], headDy = by + idle.head[1] - lift + (state.warn ? -3 : 0);
   // the arms
   const arms = {};

@@ -864,7 +864,7 @@ function GiantBody({ b, s }) {
     const h = s.enemies.find(e => e.id === b.hands?.[sd]);
     if (h) hands[sd] = { at: { x: h.x, y: h.y }, down: h.down > 0, hurt: h.hurt > 0, frozen: h.frozen > 0 };
   }
-  const state = { open: !b.sealed && !b.hidden, warn: (b.gi?.warn ?? 0) > 0, mad: !!b.gi?.mad, hit: b.hurt > 0 };
+  const state = { open: !b.sealed && !b.hidden, warn: (b.gi?.warn ?? 0) > 0, mad: !!b.gi?.mad, hit: b.hurt > 0, lean: b.lean ?? 0 };
   return <GiantRig L={b.gl} t={s.time} look={s.mahoraga ?? s.player.pos} hands={hands} state={state} />;
 }
 // killed: he topples back down behind the city (the boss explosion plays over it)

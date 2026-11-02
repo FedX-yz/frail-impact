@@ -7,6 +7,7 @@ import { sheetLife } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
 import { giantIdlePose } from './giantIdle';
+import { solveArm } from './giantArm';
 import { makeEndlessStage, MODIFIERS } from './stages';
 import { sfx } from '../utils/sfx';
 import { createKitRuntime } from './kitRuntime';
@@ -445,6 +446,15 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function placeGiant(b, dt) {
     const L = giantLayout(b); b.gl = L;
     const pose = giantIdlePose(s.time, b.gi?.mad);   // between attacks he goes through his idle poses (giantIdle.js)
+    // his weight follows his hands: he leans toward one that's reaching out to hit you
+    if (b.gi) {
+      const reaching = ['l', 'r'].map(sd => s.enemies.find(e => e.id === b.hands[sd])).find(h => h?.act);
+      const want = reaching ? clamp(((reaching.x - L.left) / L.sc - GIANT.size[0] / 2) * 0.035, -16, 16) : 0;
+      b.gi.lean = (b.gi.lean ?? 0) + (want - (b.gi.lean ?? 0)) * (1 - Math.exp(-dt * 3));
+    }
+    const lean = b.gi?.lean ?? 0;
+    pose.body = [pose.body[0] + lean, pose.body[1] + Math.abs(lean) * 0.25];
+    b.lean = lean;   // (GiantRig draws it)
     const head = L.at([GIANT.head[0] + pose.body[0] + pose.head[0], GIANT.head[1] + pose.body[1] + pose.head[1]]);
     b.x = head.x; b.y = head.y; b.size = GIANT.headR * L.sc / 0.55 / s.k;
     for (const side of ['l', 'r']) {
@@ -458,7 +468,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       const r = s.reserved;
       if (r && h.home.x + hw * 0.3 > r.x0 && h.home.x - hw * 0.3 < r.x1 && h.home.y + hw * 0.3 > r.y0) h.home.y = Math.max(s.H * 0.2, r.y0 - hw * 0.32);
       const sh = GIANT.hands[side].shoulder;
-      h.shoulder = L.at([sh[0] + pose.body[0], sh[1] + pose.body[1]]); h.reach = GIANT.hands[side].reach * L.sc;
+      h.shoulderArt = [sh[0] + pose.body[0], sh[1] + pose.body[1]];
+      h.shoulder = L.at(h.shoulderArt); h.reach = GIANT.hands[side].reach * L.sc;
       moveGiantHand(b, h, dt);
     }
   }
@@ -486,18 +497,39 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         if (act.t > (act.kind === 'sweep' ? 0.7 : 0.55)) h.act = null;   // done: back home
       }
     }
-    const f = 1 - Math.exp(-dt * rate);
-    h.x += (tx - h.x) * f; h.y += (ty - h.y) * f;
-    // it's on the end of his arm: never further from the shoulder than the arm reaches
-    const S = h.shoulder, d = S ? Math.hypot(h.x - S.x, h.y - S.y) : 0;
-    if (S && d > h.reach) { h.x = S.x + (h.x - S.x) / d * h.reach; h.y = S.y + (h.y - S.y) / d * h.reach; }
+    // moves like a heavy limb: speeds up, then slows into place (a critically damped spring,
+    // instead of snapping off at full speed)
+    const w = rate * 1.6, n = Math.max(1, Math.ceil(w * dt / 0.25)), st = dt / n;
+    h.vx ??= 0; h.vy ??= 0;
+    for (let i = 0; i < n; i++) {
+      h.vx += (w * w * (tx - h.x) - 2 * w * h.vx) * st; h.vy += (w * w * (ty - h.y) - 2 * w * h.vy) * st;
+      h.x += h.vx * st; h.y += h.vy * st;
+    }
+    // it's on the end of his arm: only where his arm can actually put it (giantArm.js)
+    const L = b.gl;
+    if (L && h.shoulderArt) {
+      const j = solveArm(h.side, h.shoulderArt, [(h.x - L.left) / L.sc, (h.y - L.top) / L.sc], 0, h.armMem ??= {});
+      if (j.miss > 12) {   // (a little slack: the solver settles to within a few units)
+        const u = (j.miss - 12) / j.miss;
+        h.x += (L.left + j.hand[0] * L.sc - h.x) * u; h.y += (L.top + j.hand[1] * L.sc - h.y) * u;
+        h.vx *= 0.6; h.vy *= 0.6;
+      }
+    }
   }
-  const canReach = (h, P) => !h.shoulder || Math.hypot(P.x - h.shoulder.x, P.y - h.shoulder.y) <= h.reach * 0.98;
+  // can this hand get to P? (its arm, with his joints' limits)
+  const canReach = (h, P) => {
+    const L = h.owner != null && s.enemies.find(e => e.id === h.owner)?.gl;
+    if (!L || !h.shoulderArt) return true;
+    return solveArm(h.side, h.shoulderArt, [(P.x - L.left) / L.sc, (P.y - L.top) / L.sc]).miss * L.sc < K(30);
+  };
   function giantHandAttack(b, h) {
     const side = h.side;
     let P = aimPoint();
     // out of its reach (rare: the other hand couldn't either): it hits as close to you as it gets
-    if (!canReach(h, P)) { const S = h.shoulder, d = Math.hypot(P.x - S.x, P.y - S.y), r = h.reach * 0.95; P = { x: S.x + (P.x - S.x) / d * r, y: S.y + (P.y - S.y) / d * r }; }
+    if (!canReach(h, P)) {
+      const L = b.gl, j = solveArm(side, h.shoulderArt, [(P.x - L.left) / L.sc, (P.y - L.top) / L.sc]);
+      P = { x: L.left + j.hand[0] * L.sc, y: L.top + j.hand[1] * L.sc };
+    }
     const r = Math.random(), kind = r < 0.45 ? 'slam' : r < 0.75 ? 'sweep' : 'grab';
     let a;
     if (kind === 'slam') a = queueAttack(h, 'circle', { center: { x: P.x, y: P.y }, r: K(GIANT.slam.r), dmgKey: 'giantSlam', teleMult: GIANT.slam.tele });
