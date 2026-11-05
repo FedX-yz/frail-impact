@@ -1,246 +1,246 @@
 {
- "flow": "aOWkKa9D3EAYFSTeS6V1",
- "note": "ElevenLabs takes made through the connector for the Z District scene (c1-outskirts-in); each goes to \"file\" (then levelled like make-voices.mjs; reef: pitch 0.93)",
+ "flow": "Bgy39s2kJUspjOzmq69s",
+ "note": "ElevenLabs takes (designed voices, 2026-11-05) for the Z District scene (c1-outskirts-in); each goes to \"file\", then levelled like make-voices.mjs (no extra fx)",
  "lines": [
   {
    "n": 1,
    "who": "bonk",
    "file": "public/audio/voice/bonk/1471a705.mp3",
    "text": "Yo! Are ya with us?",
-   "session": "vULHw1q5NDRxMU6Y7Wjj",
-   "generation": "ACFXk3AKBl0KZv7Igbrw"
+   "session": "MOtJAUWIr67S1sGQT3My",
+   "generation": "QvmieTAHoNaLEmt4snFo"
   },
   {
    "n": 2,
    "who": "bonk",
    "file": "public/audio/voice/bonk/f945a6f6.mp3",
    "text": "Sure am. Call me Bonk, what's yer name?",
-   "session": "ln4rVIjTqqZAq2z9BD7D",
-   "generation": "XRcuenzIClxPVbI9LNI3"
+   "session": "OnwEOFBw95sXtvggQ6Xz",
+   "generation": "V4cqeYAWxeNNtOlNRVFm"
   },
   {
    "n": 3,
    "who": "bonk",
    "file": "public/audio/voice/bonk/2c84d2cc.mp3",
    "text": "Oh for real? Well nice to meet ya, Mr. {manager}! Ya should meet the rest of the squad, come follow me.",
-   "session": "8Ty9EhcB2vueUbKSgr08",
-   "generation": "W246YA4xqlohR8ckkfaN"
+   "session": "yirsK497EW4QZIrn7DvY",
+   "generation": "7SpFk4lJJcISd9844YIZ"
   },
   {
    "n": 4,
    "who": "bonk",
    "file": "public/audio/voice/bonk/a045e840.mp3",
    "text": "Yo guys, I found the manager!!",
-   "session": "n2fKUG2zuvf5XEnsaPUH",
-   "generation": "jQmNGLJ8izPpUPf4fBWk"
+   "session": "LaJn9jjt7i02fLu5oRxg",
+   "generation": "OQ0U01QBgGTJYps6YH6z"
   },
   {
    "n": 5,
    "who": "bonk",
    "file": "public/audio/voice/bonk/b2f4d054.mp3",
    "text": "Uh... what's y'all doing??",
-   "session": "cG94I8csQjIKZjiTsZy6",
-   "generation": "aTCrphuhWiMUWcIQl4Zd"
+   "session": "xYszkdDO2FYGjY8zPU30",
+   "generation": "JOuB2eiIRgD8muHBvuTV"
   },
   {
    "n": 6,
    "who": "bonk",
    "file": "public/audio/voice/bonk/a01b8de7.mp3",
    "text": "Oh, that silly game of yours.",
-   "session": "ymPzzfidxyhVd8GEQTyj",
-   "generation": "V1KXYCy9SAXHScWsB2gg"
+   "session": "1HToZ1EXg2QdjOQBAi73",
+   "generation": "MqnAwTH8S025lJ9bJLpH"
   },
   {
    "n": 7,
    "who": "astrec",
    "file": "public/audio/voice/astrec/be1cfe35.mp3",
    "text": "Another one!!!",
-   "session": "5pIPfkoaXyRqxb9ME5eF",
-   "generation": "Gna5D0aSjz3RNY2IoYmN"
+   "session": "jDxUYsJSzdTNxKfdd31Y",
+   "generation": "IRgKzQXUOxiFewQvoMV9"
   },
   {
    "n": 8,
    "who": "ice",
    "file": "public/audio/voice/ice/b65211b7.mp3",
    "text": "If we don't get it here I'm gonna cut my ballsack off.",
-   "session": "ki8hyLUqmfsvikTZH2JA",
-   "generation": "W8mwQZ5thixPEyMqorQU"
+   "session": "JX9cKeZDZUruimHhyQOB",
+   "generation": "99IGS3ek61uSC6GCylMQ"
   },
   {
    "n": 9,
    "who": "reef",
    "file": "public/audio/voice/reef/cf12c4d5.mp3",
    "text": "Snip snip, buddy.",
-   "session": "S0LPohOhg07ZgmZc8s2Z",
-   "generation": "KMPk02ckexjhQaoGfWFa"
+   "session": "9ku9fnPJPjO5uRw0xeKr",
+   "generation": "VCFCivQ15yGYMvJbaNRT"
   },
   {
    "n": 10,
    "who": "ice",
    "file": "public/audio/voice/ice/c1d52a11.mp3",
    "text": "Dude.",
-   "session": "JCaXe4I7701gxiigyhJL",
-   "generation": "qPVVyfQgrrbmprlxCNo2"
+   "session": "cYTqbURZMJl3xUvw8ewu",
+   "generation": "HECXs798ctBUZDCKebyw"
   },
   {
    "n": 11,
    "who": "reef",
    "file": "public/audio/voice/reef/8e3840f9.mp3",
    "text": "I'm gonna hold you to that!!",
-   "session": "zCWMZZbjm1t9GISLL7ia",
-   "generation": "D8LptwfaDGz6ZZitKUok"
+   "session": "57aZFXC9vsBFeYMMKmHP",
+   "generation": "1NGQ55FEFiuDeNKUqB0H"
   },
   {
    "n": 12,
    "who": "ice",
    "file": "public/audio/voice/ice/09ea22c0.mp3",
    "text": "Shut your whore mouth!!! Alright, this is my last one...",
-   "session": "Zci4AAi4AZYtpk2kWsN3",
-   "generation": "rwxNusmk86JPMlkIBBGq"
+   "session": "Z3NqCTusHarDIREK6sgi",
+   "generation": "rRP76x38UMw3GWUMb3xO"
   },
   {
    "n": 13,
    "who": "ice",
    "file": "public/audio/voice/ice/ed65249b.mp3",
    "text": "HOLY FUCK!!!",
-   "session": "wFI2a2WzDZlGPdXreVxz",
-   "generation": "K5fExq0nz2dIhCN9tw0T"
+   "session": "1RpYgh4UI6nbP7YSBWyi",
+   "generation": "j8ap6X7c8HsDnkjp2Lij"
   },
   {
    "n": 14,
    "who": "astrec",
    "file": "public/audio/voice/astrec/8ddf6d0c.mp3",
    "text": "WHAT THE FUCK?!?",
-   "session": "23Hsy07dAzoxazqpkIW9",
-   "generation": "pFaG0tGwiynwooKm3Yvh"
+   "session": "dewwzzGPVgGMROFVx3ka",
+   "generation": "VWWAu4ySZwA1oiyQMec2"
   },
   {
    "n": 15,
    "who": "reef",
    "file": "public/audio/voice/reef/42116cc1.mp3",
    "text": "YO",
-   "session": "GcwON1w1SAbQiz2OdI6F",
-   "generation": "dtACvGfBT7W3P8oAJCvh"
+   "session": "E6MSMvm91WZ3CTZZdaW3",
+   "generation": "UjAApi73Mx4mNFlW7tT8"
   },
   {
    "n": 16,
    "who": "ramsf",
    "file": "public/audio/voice/ramsf/0230c284.mp3",
    "text": "So is that good?",
-   "session": "z90Cq5W6VHqI36rkfub8",
-   "generation": "L9fn7LDBgd2GqJCF7YgE"
+   "session": "Mz3W8JmmNkw5ByUmQgBn",
+   "generation": "vBtZCGW6zuL5Lhp2DXl6"
   },
   {
    "n": 17,
    "who": "ice",
    "file": "public/audio/voice/ice/b0aeab5f.mp3",
    "text": "Dude, this card is worth a fuck ton, this is insane!",
-   "session": "2nddQOJ8pPX3PJ46JdyB",
-   "generation": "b5PFtu06hBEmys8DLuKi"
+   "session": "rUqGWXH8Y2Kl3MNkiESQ",
+   "generation": "IeNiDrGyt1csj4u00UUA"
   },
   {
    "n": 18,
    "who": "ramsf",
    "file": "public/audio/voice/ramsf/8c0ef7c1.mp3",
    "text": "No way.",
-   "session": "lJL7LTVThRAnoGM82bwf",
-   "generation": "nBMuOynYI7BHCh7YDorb"
+   "session": "cvOiS844Y0JSC7pfJ1Ie",
+   "generation": "BriSuGT7ssAu78wBaAiG"
   },
   {
    "n": 19,
    "who": "ramsf",
    "file": "public/audio/voice/ramsf/20cacd3f.mp3",
    "text": "Random kid?",
-   "session": "ZqLNWeZRkZoc1kdw9npj",
-   "generation": "H8HfiTefgVbwip0KzxxG"
+   "session": "SOwGkbfrWFCW4c6KoWP1",
+   "generation": "bChUjNWpgzZUxNZ0nDyA"
   },
   {
    "n": 20,
    "who": "bonk",
    "file": "public/audio/voice/bonk/a2c7564f.mp3",
    "text": "Guys, no, this is our manager.",
-   "session": "xZ9p3oZ59P9sWQzSfPsK",
-   "generation": "oQpleWlONwQoAKAXhp0h"
+   "session": "rPR3Z60HBkcabYdanFbm",
+   "generation": "A73IH7zDpqd5Nk2swWDs"
   },
   {
    "n": 21,
    "who": "ice",
    "file": "public/audio/voice/ice/4013bc0b.mp3",
    "text": "Ouuu shit.",
-   "session": "hCvHga3ijBst3a7Dkl4S",
-   "generation": "Gi8xrC9DnlPQOoDKQ0GD"
+   "session": "7JXi5KBrAZmP6ZPIeck7",
+   "generation": "FT1yGvTe7o4YViGgzl7a"
   },
   {
    "n": 22,
    "who": "ice",
    "file": "public/audio/voice/ice/f48aa8f6.mp3",
    "text": "Uhhhh...",
-   "session": "OPoCAPIJBM5piZXrMYJO",
-   "generation": "SV6WdWOnMg71wCd3gkVJ"
+   "session": "3hDjJYJAZfCGtQL07tM7",
+   "generation": "5DisK8o8ZVGmPjmR9Ihc"
   },
   {
    "n": 23,
    "who": "ice",
    "file": "public/audio/voice/ice/46747dbd.mp3",
    "text": "Nice to meet you, I'm Ice.",
-   "session": "xZ1i0nREdSvAByUyKvex",
-   "generation": "zo75kzdJkdRXkc5ZLxd0"
+   "session": "SIeP04SOx4s9D6OqzKTD",
+   "generation": "Wk1fviUAhqy34aOTc7mR"
   },
   {
    "n": 24,
    "who": "bonk",
    "file": "public/audio/voice/bonk/2c251af2.mp3",
    "text": "By the way...",
-   "session": "7DK2ocD0vxD8uNQiPvg8",
-   "generation": "Ew9AfMZX65nzlbgVEMzH"
+   "session": "rmjldulF4NrfJIrABRNz",
+   "generation": "mQXo58UNwDAbReNEkWvj"
   },
   {
    "n": 25,
    "who": "bonk",
    "file": "public/audio/voice/bonk/de56ec66.mp3",
    "text": "...these clowns are Reef, Ramsf and Astrec. Just so you know.",
-   "session": "qcOY7DA5iNnHuvsJJIVz",
-   "generation": "KOi2WNfV4DaumNLtXUOq"
+   "session": "IXz4ID9uouVplBetEBAQ",
+   "generation": "GqBDQpn0xougJYmJqmLT"
   },
   {
    "n": 26,
    "who": "astrec",
    "file": "public/audio/voice/astrec/a77c44b7.mp3",
    "text": "The fuck did you just call me?!",
-   "session": "ZUR55fjwrZZhwoEvuete",
-   "generation": "rQ2KFbs4dHFXlEOq6CXG"
+   "session": "CHdAmp0oASHi4kH7YG2C",
+   "generation": "akuFgXTkVyP8cYFED550"
   },
   {
    "n": 27,
    "who": "bonk",
    "file": "public/audio/voice/bonk/d4a95e6b.mp3",
    "text": "Lalala, clown.",
-   "session": "MygIyu5C0P6SYeQXojDd",
-   "generation": "VZshr9ntAUm6a49o5rYz"
+   "session": "yBu7fQ6HEnoCnGazoIDi",
+   "generation": "3MA1h39ZBEtY9zNAmPWE"
   },
   {
    "n": 28,
    "who": "astrec",
    "file": "public/audio/voice/astrec/ee8ed5b0.mp3",
    "text": "Oh yeah? This clown here was in your momma's bed last night. She was sooo good.",
-   "session": "ARAOKYya6mnErBz1BV6f",
-   "generation": "GzooNCCwLiXDmlsqYljE"
+   "session": "pDDaWkw5rGmrTOWF08TY",
+   "generation": "UJzWuai51NgEq0qQexkA"
   },
   {
    "n": 29,
    "who": "reef",
    "file": "public/audio/voice/reef/2bf2de07.mp3",
    "text": "Hello manager, I hope we get along well!",
-   "session": "Spu1aIo81wxJuvxYrp8X",
-   "generation": "i1gWt4tau3gH1xVQVCSx"
+   "session": "DUxtInYYQMdNa78dJ7ba",
+   "generation": "a6JyC2T2wJ74RAlkpg3t"
   },
   {
    "n": 30,
    "who": "ice",
    "file": "public/audio/voice/ice/74c8ba58.mp3",
    "text": "There's two more in this group, but I don't know where they are.",
-   "session": "YR6Hq2Z6zfaatUlCERnb",
-   "generation": "EiSRfWpQMaMmKH3Easvq"
+   "session": "o8a951AOxfPfbo3gTNlE",
+   "generation": "SNemltGz5cVAYOFTX6c9"
   }
  ]
 }
