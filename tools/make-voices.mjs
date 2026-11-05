@@ -87,7 +87,7 @@ for (const [scene, steps] of Object.entries(SCENES)) {
       await eleven(v, say, raw);
       chars += say.length;
       if (!hasFfmpeg) { fs.copyFileSync(raw, out); console.log(`${scene}  ${who}: ${say.slice(0, 60)}  →  ${out}`); made++; continue; }
-      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', raw, ...(v.fx ? ['-af', v.fx] : []), '-ar', '44100', '-ac', '1', fx]);
+      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', raw, ...(v.fx ? [v.fx.includes('[') ? '-filter_complex' : '-af', v.fx] : []), '-ar', '44100', '-ac', '1', fx]);   // (a fx with [labels] is a filter graph)
     } else {
       const p = PRESETS[v.preset ?? 'creepy'];
       const wav = path.join(tmp, 'line.wav');

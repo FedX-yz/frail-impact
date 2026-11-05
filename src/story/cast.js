@@ -23,9 +23,13 @@
 export const CAST = {
   // The guy with the hat from the codec mockup — placeholder until the art is in
   handler: { name: 'Handler',  color: '#facc15', portrait: null, sprite: null, voice: { dir: 'audio/voice/handler', engine: 'elevenlabs', id: null } },
-  // The anonymous figure who hires you in the intro — placeholder
-  // voice: lines get audio made by tools/make-voices.mjs (creepy = the distorted unknown caller)
-  stranger: { name: '???',     color: '#9ca3af', portrait: null, sprite: null, voice: { dir: 'audio/voice/stranger', preset: 'creepy' } },
+  // The anonymous figure who hires you in the intro (Dr. Reef, hidden behind the hospital screens):
+  // Reef's own voice (same German accent), made strange by a filter: pitched down with a faint
+  // octave-under shadow, a little grit and wobble, and the echo of the empty ward.
+  // (preset: 'creepy' instead = the old espeak robot voice, made on this computer)
+  stranger: { name: '???',     color: '#9ca3af', portrait: null, sprite: null, voice: { dir: 'audio/voice/stranger', engine: 'elevenlabs', id: 'vLzdnvUdGP8OvYq89hc0', model: 'eleven_v4',
+    fx: '[0:a]aresample=44100,asplit=2[a][b];[a]rubberband=pitch=0.9:formant=preserved[a1];[b]rubberband=pitch=0.5:formant=preserved,volume=0.32[b1];' +
+        '[a1][b1]amix=inputs=2:normalize=0,highpass=f=170,lowpass=f=5200,acrusher=bits=12:mix=0.12:mode=log,vibrato=f=4.5:d=0.03,aecho=0.8:0.5:40|95:0.2|0.1' } },
 
   // Playable cards (story art where it exists: public/story/cast/; card art until then)
   // (sprite: the closest cut-out there is until a story sprite exists — a card in a cutscene looks wrong)
