@@ -1,9 +1,9 @@
 // ── DADDY HAIRY LEGS ────────────────────────────────────────────────────────
 // A big, fast spider. No shield: the whole fight is dodging him.
-//   · he skitters around the arena between attacks (fast), legs stepping under him
+//   · between attacks he stalks your cursor, darting from spot to spot around it (fast)
 //   · his eight legs have HP (the knee is the spot to hit): each one you break makes him attack
 //     less often and move slower (they don't grow back)
-//   · STAB: a front leg rears up and stabs where you are
+//   · STAB: a flurry: his front legs take turns rearing up and stabbing where you are
 //   · SPIT: web globs: where they land a WEB PATCH slows your cursor down
 //   · TRAPS: small WEB TRAPS around you: touch one and your cursor is stuck (click 3× to escape)
 //   · LUNGE: he charges straight through you
@@ -18,8 +18,8 @@ import { makeSpiderRig, poseSpider, legReach, handReach, spiderAt, JAW_AT } from
 
 export const SPIDER = {
   speed: 1.35,                                  // × arena width per second, flat out
-  cd: [1.3, 2.1], cdMad: [0.95, 1.6],           // seconds between attacks
-  stab: { r: 52, tele: 0.6 },
+  cd: [0.45, 0.85], cdMad: [0.3, 0.6],          // seconds between attacks (frantic)
+  stab: { r: 50, tele: 0.44, reps: [3, 5], repsMad: [4, 6] },   // a flurry: several stabs in a row, legs taking turns
   spit: { wind: 0.4, r: 80, life: 8, spread: 150 },
   traps: { n: 3, r: 30, life: 10, ring: [95, 175] },
   lunge: { tele: 0.72, width: 92 },
@@ -69,13 +69,10 @@ export function createSpider(c) {
     return d;
   }
   const clampTo = (r, p) => { const B = bounds(r); return { x: clamp(p.x, B.x0, B.x1), y: clamp(p.y, B.y0, B.y1) }; };
-  function newSpot(r) {
-    const B = bounds(r);
-    for (let i = 0; i < 12; i++) {
-      const p = { x: rand(B.x0, B.x1), y: rand(B.y0, B.y1) };
-      if (Math.hypot(p.x - r.x, p.y - r.y) > s.W * 0.22 || i === 11) return p;
-    }
-    return { x: r.x, y: r.y };
+  // between attacks he stalks you: darting to spots around your cursor, never far from it
+  function stalkSpot(r) {
+    const P = aimPoint(), a = rand(0, Math.PI * 2), d = rand(0.12, 0.3) * s.W;
+    return clampTo(r, { x: P.x + Math.cos(a) * d, y: P.y - Math.abs(Math.sin(a)) * d - s.H * 0.15 });
   }
 
   function update(dt) {
@@ -117,10 +114,10 @@ export function createSpider(c) {
         if (sp.atk) runAttack(b, dt);
         else {
           sp.cd -= dt; sp.maimT -= dt; sp.eggT -= dt;
-          if (!sp.target) sp.target = newSpot(r);
+          if (!sp.target) sp.target = stalkSpot(r);
           if (Math.hypot(sp.target.x - r.x, sp.target.y - r.y) < K(12)) {
-            sp.wait = (sp.wait ?? rand(0.2, 0.65)) - dt;
-            if (sp.wait <= 0) { sp.target = newSpot(r); sp.wait = null; }
+            sp.wait = (sp.wait ?? rand(0.08, 0.3)) - dt;
+            if (sp.wait <= 0) { sp.target = stalkSpot(r); sp.wait = null; }
           }
           if (sp.cd <= 0) startAttack(b);
         }
@@ -157,12 +154,13 @@ export function createSpider(c) {
   }
   function startAttack(b) {
     const sp = b.sp, alive = sp.rig.legs.filter(l => !l.broken);
-    const opts = [['stab', alive.length ? 3 : 0], ['spit', 2], ['traps', 1.4], ['lunge', 1.5]];
+    const opts = [['stab', alive.length ? 6 : 0], ['spit', 1.4], ['traps', 1], ['lunge', 2.5]];
     if (sp.maimT <= 0 && sp.rig.legs.filter(l => l.idx === 0 && !l.broken).length) opts.push(['maim', 7]);
     if (sp.eggT <= 0 && s.eggs.length < SP.eggs.max) opts.push(['eggs', 4]);
     let tot = opts.reduce((a, o) => a + o[1], 0), x = Math.random() * tot, kind = 'spit';
     for (const [k, w] of opts) { if ((x -= w) <= 0) { kind = k; break; } }
-    sp.atk = { kind, t: 0, phase: 'start', reps: kind === 'stab' && sp.mad ? 2 : 1 };
+    const [r0, r1] = sp.mad ? SP.stab.repsMad : SP.stab.reps;
+    sp.atk = { kind, t: 0, phase: 'start', reps: kind === 'stab' ? Math.floor(rand(r0, r1 + 1)) : 1 };
   }
   const T0 = () => c.target();
 
@@ -184,7 +182,7 @@ export function createSpider(c) {
       const reach = legReach(r, leg);
       if (A.phase === 'approach') {
         const d = dist(leg.hip.x, leg.hip.y, P.x, P.y);
-        if (d > reach * 0.78 && A.t < 0.8) sp.target = clampTo(r, { x: P.x - (leg.hip.x - r.x) - leg.side * reach * 0.4, y: P.y - (leg.hip.y - r.y) - reach * 0.3 });
+        if (d > reach * 0.78 && A.t < 0.45) sp.target = clampTo(r, { x: P.x - (leg.hip.x - r.x) - leg.side * reach * 0.4, y: P.y - (leg.hip.y - r.y) - reach * 0.3 });
         else {
           A.phase = 'tele'; A.t = 0; A.hold = true;
           A.a = queueAttack(b, 'circle', { center: { x: P.x, y: P.y }, r: K(SP.stab.r), dmgKey: 'spiderStab', teleMult: SP.stab.tele, debuff: sp.mad ? SP.poison : null });
@@ -201,7 +199,7 @@ export function createSpider(c) {
           sfx('leap'); shake(0.15);
           A.phase = 'stab'; A.t = 0;
         }
-      } else if (A.phase === 'stab' && A.t > 0.3) {
+      } else if (A.phase === 'stab' && A.t > 0.16) {
         leg.reach = null; A.last = leg;
         if (--A.reps > 0) { A.phase = 'start'; A.rear = 0; } else { A.hold = false; endAttack(b); }
       }
