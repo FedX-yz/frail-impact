@@ -100,10 +100,12 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   // (keyed by the line itself: a choice coming up under it mustn't play it again).
   // voiceDone: the line's voice has finished (auto mode and 'end' sounds wait for it)
   const lineKey = st.line ? `${st.line.at}:${st.line.who}` : null;
-  const voiced = !!(st.line && CAST[st.line.who]?.voice);
+  // (an ElevenLabs voice with no ID picked yet: silent)
+  const voiceOf = who => { const v = CAST[who]?.voice; return v && (v.engine !== 'elevenlabs' || v.id) ? v : null; };
+  const voiced = !!(st.line && voiceOf(st.line.who));
   const [voiceDone, setVoiceDone] = useState(true);
   useEffect(() => {
-    const v = st.line && CAST[st.line.who]?.voice;
+    const v = st.line && voiceOf(st.line.who);
     if (!v || skip) { stopVoice(); setVoiceDone(true); return; }
     let alive = true;
     setVoiceDone(false);

@@ -1,8 +1,19 @@
 // Makes the audio for voiced story lines (cast.js → voice) — run it after changing
-// any line a voiced character says:   node tools/make-voices.mjs   (--force redoes all)
+// any line a voiced character says:   node tools/make-voices.mjs
+//   --force        redo every line (not just new / changed ones)
+//   --only bonk    just this character (or several: --only bonk,ice)
+//   --dry          list what would be made and how many characters it costs, make nothing
 //
-// Needs espeak-ng with the MBROLA us2 voice, and ffmpeg built with rubberband:
-//   Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us2 ffmpeg
+// Two kinds of voice (cast.js → voice):
+//   { engine: 'elevenlabs', id: '<voice ID>' }  an ElevenLabs voice. Needs your API key:
+//        ELEVENLABS_API_KEY=sk_...  node tools/make-voices.mjs
+//      (Windows PowerShell:  $env:ELEVENLABS_API_KEY="sk_..."; node tools/make-voices.mjs)
+//      Optional: model (default eleven_multilingual_v2), settings (ElevenLabs voice_settings:
+//      stability, similarity_boost, style, use_speaker_boost, speed).
+//   { preset: 'creepy' }  made on this computer with espeak-ng (the unknown caller). Needs
+//      espeak-ng with the MBROLA us2 voice, and ffmpeg built with rubberband:
+//        Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us2 ffmpeg
+// Every line is then levelled with ffmpeg (so every voice sits at the same loudness).
 // The files go to public/<voice.dir>/<hash>.mp3 (see src/story/voice.js).
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -12,7 +23,12 @@ import { SCENES } from '../src/story/scenes.js';
 import { CAST } from '../src/story/cast.js';
 import { voiceFile } from '../src/story/voice.js';
 
-const force = process.argv.includes('--force');
+const argv = process.argv.slice(2);
+const force = argv.includes('--force'), dry = argv.includes('--dry');
+const onlyAt = argv.indexOf('--only'), only = onlyAt >= 0 ? new Set(argv[onlyAt + 1].split(',')) : null;
+const KEY = process.env.ELEVENLABS_API_KEY;
+const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+if (!hasFfmpeg) console.warn('ffmpeg not found: ElevenLabs lines are saved as they come (not levelled), espeak lines are skipped');
 // voice presets: espeak voice/speed/pitch, then ffmpeg effects
 const PRESETS = {
   // the unknown caller: low, doubled an octave down, phone-band, slightly crushed, wavering, echoing
@@ -33,25 +49,50 @@ function loudestMoment(file) {
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'voices-'));
-let made = 0, kept = 0;
+// an ElevenLabs line → an mp3 file
+async function eleven(v, text, file) {
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${v.id}?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': KEY, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+    body: JSON.stringify({ text, model_id: v.model ?? 'eleven_multilingual_v2', ...(v.settings ? { voice_settings: v.settings } : {}) }),
+  });
+  if (!res.ok) throw new Error(`ElevenLabs said ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+}
+
+let made = 0, kept = 0, chars = 0;
+const waiting = new Set();   // characters set to ElevenLabs with no voice ID yet
 for (const [scene, steps] of Object.entries(SCENES)) {
   for (const step of steps) {
     if (!Array.isArray(step)) continue;
     const [who, text] = step;
     const v = CAST[who]?.voice;
-    if (!v || !text) continue;
+    if (!v || !text || (only && !only.has(who))) continue;
+    const el = v.engine === 'elevenlabs';
+    if (el && !v.id) { waiting.add(who); continue; }
     const out = path.join('public', voiceFile(v.dir, text));
     if (fs.existsSync(out) && !force) { kept++; continue; }
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    const p = PRESETS[v.preset ?? 'creepy'];
     const say = text.replaceAll('Manager {manager}', 'Manager').replaceAll('{manager}', 'Manager');   // the voice can't know the player's name
-    const wav = path.join(tmp, 'line.wav');
-    execFileSync('espeak-ng', [...p.espeak, '-w', wav, say]);
-    // the voice effect, then levelled by its loudest moment (so short lines aren't quieter
-    // than long ones — the average of a short line is mostly the silence around it), then a
-    // true-peak limit and a little silence after it (tools/master-audio.py has the whole mix)
+    if (dry) { console.log(`would make  ${scene}  ${who}: ${say.slice(0, 60)}`); chars += say.length; made++; continue; }
+    if (el && !KEY) { console.error('Set ELEVENLABS_API_KEY first (see the top of this file).'); process.exit(1); }
+    if (!el && !hasFfmpeg) continue;
+    fs.mkdirSync(path.dirname(out), { recursive: true });
     const fx = path.join(tmp, 'fx.wav');
-    execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', wav, '-filter_complex', p.filter, '-ar', '44100', '-ac', '1', fx]);
+    if (el) {
+      const raw = path.join(tmp, 'line.mp3');
+      await eleven(v, say, raw);
+      chars += say.length;
+      if (!hasFfmpeg) { fs.copyFileSync(raw, out); console.log(`${scene}  ${who}: ${say.slice(0, 60)}  →  ${out}`); made++; continue; }
+      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', raw, '-ar', '44100', '-ac', '1', fx]);
+    } else {
+      const p = PRESETS[v.preset ?? 'creepy'];
+      const wav = path.join(tmp, 'line.wav');
+      execFileSync('espeak-ng', [...p.espeak, '-w', wav, say]);
+      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', wav, '-filter_complex', p.filter, '-ar', '44100', '-ac', '1', fx]);
+    }
+    // levelled by its loudest moment (so short lines aren't quieter than long ones — the
+    // average of a short line is mostly the silence around it), then a true-peak limit and a
+    // little silence after it (tools/master-audio.py has the whole mix)
     const gain = DIALOGUE_M - loudestMoment(fx);
     execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', fx, '-af', `volume=${gain.toFixed(2)}dB,aresample=176400,alimiter=limit=0.82:attack=3:release=60:level=0:latency=1,aresample=44100,apad=pad_dur=0.3`,
       '-ar', '44100', '-ac', '1', '-b:a', '96k', out]);
@@ -60,4 +101,6 @@ for (const [scene, steps] of Object.entries(SCENES)) {
   }
 }
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log(`done: ${made} made, ${kept} already there`);
+if (waiting.size) console.log(`no ElevenLabs voice ID yet (cast.js) for: ${[...waiting].join(', ')}`);
+console.log(dry ? `would make ${made} lines, ${chars} characters of ElevenLabs credit at most (${kept} already there)`
+  : `done: ${made} made, ${kept} already there${chars ? `, ${chars} characters sent to ElevenLabs` : ''}`);

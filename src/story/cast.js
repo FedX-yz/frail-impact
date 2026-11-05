@@ -9,6 +9,10 @@
 //     sprite:   standing picture for cutscenes (path inside public/)
 //     focus:    optional [x %, y %, zoom] — where the face is in `portrait`, for
 //               full-size art (the codec zooms onto it)
+//     voice:    optional: every line they say gets spoken. Made ahead of time by
+//               tools/make-voices.mjs into public/<dir>/. ElevenLabs voices:
+//               { dir, engine: 'elevenlabs', id: '<voice ID from ElevenLabs>' } (id null = not
+//               picked yet: their lines stay silent). Optional settings: see make-voices.mjs.
 //     moods:    optional extra sprites, e.g. { angry: 'story/cast/astrec-angry.png' }
 //               — use them with { show: 'astrec', mood: 'angry' } in a scene
 //   }
@@ -18,20 +22,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 export const CAST = {
   // The guy with the hat from the codec mockup — placeholder until the art is in
-  handler: { name: 'Handler',  color: '#facc15', portrait: null, sprite: null },
+  handler: { name: 'Handler',  color: '#facc15', portrait: null, sprite: null, voice: { dir: 'audio/voice/handler', engine: 'elevenlabs', id: null } },
   // The anonymous figure who hires you in the intro — placeholder
   // voice: lines get audio made by tools/make-voices.mjs (creepy = the distorted unknown caller)
   stranger: { name: '???',     color: '#9ca3af', portrait: null, sprite: null, voice: { dir: 'audio/voice/stranger', preset: 'creepy' } },
 
   // Playable cards (story art where it exists: public/story/cast/; card art until then)
   // (sprite: the closest cut-out there is until a story sprite exists — a card in a cutscene looks wrong)
-  astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'story/cast/astrec-icon.png', sprite: 'story/cast/astrec.png' },
-  bio:     { name: 'Bio',      color: '#a855f7', portrait: 'characters/bio.png',     sprite: 'characters/bio.png' },
-  stephen: { name: 'Stephen',  color: '#60a5fa', portrait: 'characters/stephen.png', sprite: 'characters/stephen.png' },
-  ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'story/cast/ice-icon.png', sprite: 'sprites/ice-platinum.png' },
-  reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png' },
-  bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'story/cast/bonk-icon.png',  sprite: 'sprites/bonk-platinum.png' },
-  ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png' },
+  astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'story/cast/astrec-icon.png', sprite: 'story/cast/astrec.png', voice: { dir: 'audio/voice/astrec', engine: 'elevenlabs', id: null } },
+  bio:     { name: 'Bio',      color: '#a855f7', portrait: 'characters/bio.png',     sprite: 'characters/bio.png', voice: { dir: 'audio/voice/bio', engine: 'elevenlabs', id: null } },
+  stephen: { name: 'Stephen',  color: '#60a5fa', portrait: 'characters/stephen.png', sprite: 'characters/stephen.png', voice: { dir: 'audio/voice/stephen', engine: 'elevenlabs', id: null } },
+  ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'story/cast/ice-icon.png', sprite: 'sprites/ice-platinum.png', voice: { dir: 'audio/voice/ice', engine: 'elevenlabs', id: null } },
+  reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png', voice: { dir: 'audio/voice/reef', engine: 'elevenlabs', id: null } },
+  bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'story/cast/bonk-icon.png',  sprite: 'sprites/bonk-platinum.png', voice: { dir: 'audio/voice/bonk', engine: 'elevenlabs', id: null } },
+  ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png', voice: { dir: 'audio/voice/ramsf', engine: 'elevenlabs', id: null } },
   // a few people talking at once (no picture)
   group:   { name: 'The Group', color: '#cbd5e1', portrait: null, sprite: null },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
