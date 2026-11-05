@@ -2,6 +2,7 @@
 // any line a voiced character says:   node tools/make-voices.mjs
 //   --force        redo every line (not just new / changed ones)
 //   --only bonk    just this character (or several: --only bonk,ice)
+//   --scene c1-outskirts-in   just this scene (or several, comma-separated)
 //   --dry          list what would be made and how many characters it costs, make nothing
 //
 // Two kinds of voice (cast.js → voice):
@@ -9,7 +10,8 @@
 //        ELEVENLABS_API_KEY=sk_...  node tools/make-voices.mjs
 //      (Windows PowerShell:  $env:ELEVENLABS_API_KEY="sk_..."; node tools/make-voices.mjs)
 //      Optional: model (default eleven_multilingual_v2), settings (ElevenLabs voice_settings:
-//      stability, similarity_boost, style, use_speaker_boost, speed).
+//      stability, similarity_boost, style, use_speaker_boost, speed), fx (an ffmpeg filter run on
+//      every line, e.g. a slight pitch drop).
 //   { preset: 'creepy' }  made on this computer with espeak-ng (the unknown caller). Needs
 //      espeak-ng with the MBROLA us2 voice, and ffmpeg built with rubberband:
 //        Ubuntu/Debian:  sudo apt install espeak-ng mbrola mbrola-us2 ffmpeg
@@ -26,6 +28,7 @@ import { voiceFile } from '../src/story/voice.js';
 const argv = process.argv.slice(2);
 const force = argv.includes('--force'), dry = argv.includes('--dry');
 const onlyAt = argv.indexOf('--only'), only = onlyAt >= 0 ? new Set(argv[onlyAt + 1].split(',')) : null;
+const sceneAt = argv.indexOf('--scene'), scenes = sceneAt >= 0 ? new Set(argv[sceneAt + 1].split(',')) : null;
 const KEY = process.env.ELEVENLABS_API_KEY;
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 if (!hasFfmpeg) console.warn('ffmpeg not found: ElevenLabs lines are saved as they come (not levelled), espeak lines are skipped');
@@ -63,11 +66,12 @@ async function eleven(v, text, file) {
 let made = 0, kept = 0, chars = 0;
 const waiting = new Set();   // characters set to ElevenLabs with no voice ID yet
 for (const [scene, steps] of Object.entries(SCENES)) {
+  if (scenes && !scenes.has(scene)) continue;
   for (const step of steps) {
     if (!Array.isArray(step)) continue;
     const [who, text] = step;
     const v = CAST[who]?.voice;
-    if (!v || !text || (only && !only.has(who))) continue;
+    if (!v || !text || !/[a-z0-9]/i.test(text) || (only && !only.has(who))) continue;   // (no words: "..." stays silent)
     const el = v.engine === 'elevenlabs';
     if (el && !v.id) { waiting.add(who); continue; }
     const out = path.join('public', voiceFile(v.dir, text));
@@ -83,7 +87,7 @@ for (const [scene, steps] of Object.entries(SCENES)) {
       await eleven(v, say, raw);
       chars += say.length;
       if (!hasFfmpeg) { fs.copyFileSync(raw, out); console.log(`${scene}  ${who}: ${say.slice(0, 60)}  →  ${out}`); made++; continue; }
-      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', raw, '-ar', '44100', '-ac', '1', fx]);
+      execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', raw, ...(v.fx ? ['-af', v.fx] : []), '-ar', '44100', '-ac', '1', fx]);
     } else {
       const p = PRESETS[v.preset ?? 'creepy'];
       const wav = path.join(tmp, 'line.wav');

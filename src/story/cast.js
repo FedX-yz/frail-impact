@@ -29,13 +29,19 @@ export const CAST = {
 
   // Playable cards (story art where it exists: public/story/cast/; card art until then)
   // (sprite: the closest cut-out there is until a story sprite exists — a card in a cutscene looks wrong)
-  astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'story/cast/astrec-icon.png', sprite: 'story/cast/astrec.png', voice: { dir: 'audio/voice/astrec', engine: 'elevenlabs', id: null } },
+  // ElevenLabs voices (picked 2026-11-05):
+  //   bonk: Cooper: young American, a bit of a southern drawl
+  //   ice: Lukas: excitable young guy
+  //   astrec: Max: loud, cartoonish trash-talker
+  //   reef: Hao: calm, sincere, a little low (he's the caller: a faint trace of that voice)
+  //   ramsf: Will: chill, deadpan
+  astrec:  { name: 'Astrec',   color: '#F59E0B', portrait: 'story/cast/astrec-icon.png', sprite: 'story/cast/astrec.png', voice: { dir: 'audio/voice/astrec', engine: 'elevenlabs', id: '467tX2b9Bky3cD6jXpNa', model: 'eleven_v4' } },
   bio:     { name: 'Bio',      color: '#a855f7', portrait: 'characters/bio.png',     sprite: 'characters/bio.png', voice: { dir: 'audio/voice/bio', engine: 'elevenlabs', id: null } },
   stephen: { name: 'Stephen',  color: '#60a5fa', portrait: 'characters/stephen.png', sprite: 'characters/stephen.png', voice: { dir: 'audio/voice/stephen', engine: 'elevenlabs', id: null } },
-  ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'story/cast/ice-icon.png', sprite: 'sprites/ice-platinum.png', voice: { dir: 'audio/voice/ice', engine: 'elevenlabs', id: null } },
-  reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png', voice: { dir: 'audio/voice/reef', engine: 'elevenlabs', id: null } },
-  bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'story/cast/bonk-icon.png',  sprite: 'sprites/bonk-platinum.png', voice: { dir: 'audio/voice/bonk', engine: 'elevenlabs', id: null } },
-  ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png', voice: { dir: 'audio/voice/ramsf', engine: 'elevenlabs', id: null } },
+  ice:     { name: 'Ice',      color: '#67e8f9', portrait: 'story/cast/ice-icon.png', sprite: 'sprites/ice-platinum.png', voice: { dir: 'audio/voice/ice', engine: 'elevenlabs', id: 'wSqOdjeNqDrHcoK0zorF', model: 'eleven_v4' } },
+  reef:    { name: 'refabiba', color: '#38bdf8', portrait: 'characters/reef.png',    sprite: 'characters/reef.png', voice: { dir: 'audio/voice/reef', engine: 'elevenlabs', id: '1FL96bmt83q3hze5NIyS', model: 'eleven_v4', fx: 'rubberband=pitch=0.93:formant=preserved' } },
+  bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'story/cast/bonk-icon.png',  sprite: 'sprites/bonk-platinum.png', voice: { dir: 'audio/voice/bonk', engine: 'elevenlabs', id: 'BcJMy2AClTYRAgDaPpgz', model: 'eleven_v4' } },
+  ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png', voice: { dir: 'audio/voice/ramsf', engine: 'elevenlabs', id: 'bIHbv24MWmeRgasZH58o', model: 'eleven_v4' } },
   // a few people talking at once (no picture)
   group:   { name: 'The Group', color: '#cbd5e1', portrait: null, sprite: null },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
