@@ -49,7 +49,9 @@ function BodyBox({ r, parts, filter, opacity }) {
     <div className="spider-body" style={{ left: r.x, top: r.y + lift, transform: `scale(${r.sc})`, filter, opacity }}>
       {parts.map(k => {
         const p = PC[k], c = BODY[k], [w, h] = p.art;
-        const jaw = k === 'jaw' ? `translateY(${(r.jaw * 70).toFixed(1)}px) scaleY(${(1 + r.jaw * 0.12).toFixed(3)})` : undefined;
+        // the jaw: shut when he's idle (raised 100 art units into his face: the art is drawn open),
+        // dropping open to bite, spit and chew (r.jaw 0 → 1, a little past the art's own gape)
+        const jaw = k === 'jaw' ? `translateY(${(-100 + r.jaw * 130).toFixed(1)}px) scaleY(${(1 + r.jaw * 0.08).toFixed(3)})` : undefined;
         return <img key={k} src={`${BASE}${p.src}`} alt="" draggable={false} className="spider-piece"
           style={{ left: c[0] - w / 2, top: c[1] - h / 2, width: w, height: h, transformOrigin: '50% 0', transform: jaw }} />;
       })}
@@ -71,7 +73,7 @@ export function SpiderRig({ r, hurt = false, dim, opacity = 1, thread = false, z
       )}
       <BodyBox r={r} parts={['abdomen', 'bulb']} filter={bodyF} />
       {order.map(l => <Leg key={`${l.side}${l.idx}`} r={r} leg={l} filter={dim} />)}
-      <BodyBox r={r} parts={['head', 'jaw']} filter={bodyF} />
+      <BodyBox r={r} parts={['jaw', 'head']} filter={bodyF} />
     </div>
   );
 }
