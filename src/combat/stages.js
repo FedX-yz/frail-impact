@@ -44,10 +44,14 @@ const tapered = (n, early, late) => {
   return Math.pow(early, a) * Math.pow(late, b);
 };
 
-// Bosses: the RED GIANT every 10 stages; halfway between (5, 15, 25…) a mini-boss, the Hydra
-// and the Swarm King taking turns. The other stages end when the kill goal is reached — and
-// pay what a boss would have on top of the clear reward, so a run earns as much as before.
-export const bossForStage = n => (n % 10 === 0 ? 'redgiant' : n % 10 === 5 ? (Math.floor(n / 10) % 2 === 0 ? 'hydra' : 'swarmking') : null);
+// Bosses: the RED GIANT every 10 stages; halfway between (5, 15, 25…) DADDY HAIRY LEGS, then
+// the Hydra and the Swarm King (mini-bosses), taking turns. The other stages end when the kill
+// goal is reached — and pay what a boss would have on top of the clear reward, so a run earns
+// as much as before.
+const HALFWAY = ['spider', 'hydra', 'swarmking'];
+export const bossForStage = n => (n % 10 === 0 ? 'redgiant' : n % 10 === 5 ? HALFWAY[Math.floor(n / 10) % HALFWAY.length] : null);
+// the spider ambushes you in the three stages before his
+const spiderSoon = n => n % 10 >= 2 && n % 10 <= 4 && bossForStage(n - (n % 10) + 5) === 'spider';
 
 export function makeEndlessStage(n) {
   const boss = bossForStage(n);
@@ -74,7 +78,8 @@ export function makeEndlessStage(n) {
     hordeSize: Math.min(9, 4 + Math.floor(n / 2)),
     hordeArmedChance: Math.min(0.5, 0.15 + n * 0.04),
 
-    boss, mini: n % 10 === 5,
+    boss, mini: boss === 'hydra' || boss === 'swarmking',
+    spiderNear: spiderSoon(n),
     bossCooldownMult: Math.max(0.6, 1 - (n - 1) * 0.05),
     // the Red Giant watches from behind the city: 1–3 in the stages before his (closer each
     // time), 4 on his own stage until he rises

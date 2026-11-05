@@ -224,6 +224,23 @@ export const ENEMY_TYPES = {
     attacks: ['circle'], cooldown: [2.4, 3.6],
     groupReward: { coin: 450, gems: 10, xp: 1000 },
   },
+  // ── DADDY HAIRY LEGS: a big, fast spider (engine: spider.js; drawn by SpiderRig from his
+  // pieces, enemies/spider/). This enemy is his head and body (the hitbox); his eight legs are
+  // spiderLeg enemies (hit their knees), and his eggs hatch spiderlings.
+  spider: {
+    name: 'DADDY HAIRY LEGS', tier: 'boss', kind: 'spider', shape: 'hidden',
+    img: null, size: 120, hp: 700, coin: 650, gems: 14, xp: 1600, speed: 0, cooldown: [9e9, 9e9], attacks: [],
+  },
+  spiderLeg: {
+    name: 'DADDY HAIRY LEGS', tier: 'boss', kind: 'spiderLeg', noBar: true, shape: 'hidden',
+    img: null, size: 30, hp: 60, coin: 0, xp: 0, speed: 0, cooldown: [9e9, 9e9], attacks: [],
+  },
+  // doesn't hurt you: spits webs that drag your cursor back to it
+  spiderling: {
+    name: 'Spiderling', tier: 'basic', kind: 'spiderling', shape: 'hidden', alwaysArmed: true, move: 'spiderling',
+    img: null, size: 34, hp: 8, coin: 1, xp: 3, speed: 0.5,
+    attacks: [], armedAttacks: [{ kind: 'shot', web: true, small: true, dmgKey: 'webShot', teleMult: 0.8 }], cooldown: [3.8, 5.2],
+  },
   // ── THE RED GIANT: the real boss (endless: every 10 stages; engine.js → GIANT) ──
   // Too big for the screen: he rises from behind the city and fills the arena from the bottom.
   // His two hands are enemies of their own (like Skeletron's): they SLAM where you are, SWEEP
@@ -263,7 +280,8 @@ export const AFFIXES = {
 };
 
 // Player debuffs from enemies (engine.js): weak = you deal 30% less damage
-export const DEBUFFS = { weak: { name: 'WEAKENED', color: '#c084fc', dur: 4, dmg: 0.7 } };
+// poison = lose dps × your max HP every second (Daddy Hairy Legs, once he's venomous)
+export const DEBUFFS = { weak: { name: 'WEAKENED', color: '#c084fc', dur: 4, dmg: 0.7 }, poison: { name: 'POISONED', color: '#84cc16', dur: 4, dps: 0.025 } };
 
 // The Red Giant, in his rig's art units (giantRig.js, made by tools/build-giant.py from his layered
 // art): where things are when he stands at rest. The engine maps them onto the arena.
@@ -305,4 +323,7 @@ export const ATTACK_DMG = {
   hydraSting: 16, // the Hydra's stinger jabbing you
   hydraTongue: 6, // its tongue catching you
   hydraBite: 22,  // …and the bite at the end, if it reels you in
+  spiderStab: 18,  // Daddy Hairy Legs stabbing you with a leg
+  spiderLunge: 24, // …charging through you
+  webShot: 0,      // a spiderling's web (it only drags you)
 };

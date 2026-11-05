@@ -3,6 +3,7 @@ import { Children, Fragment, memo, useCallback, useEffect, useLayoutEffect, useR
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES, GIANT_ART } from './enemies';
 import { GiantRig, GIANT_RIG_CSS } from './GiantRig';
+import { SpiderRig, SpiderGround, MaimRing, SPIDER_CSS } from './SpiderRig';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
@@ -477,14 +478,23 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           {/* ── Hydra necks: behind its heads, in front of small enemies ─ */}
           <HydraNecks heads={s.enemies.filter(e => e.role === 'hydra')} k={k} time={s.time} />
           {s.enemies.map(b => b.type.kind === 'giant' && b.gl ? <GiantBody key={`gb${b.id}`} b={b} s={s} /> : null)}
+          {/* Daddy Hairy Legs: his webs and eggs, him (and his spiderlings below), the one that ambushes you */}
+          <SpiderGround s={s} k={k} />
+          {s.enemies.map(b => b.type.kind === 'spider' && b.sp ? <SpiderRig key={`sp${b.id}`} r={b.sp.rig} hurt={b.hurt > 0} thread={b.sp.mode === 'enter'} /> : null)}
+          {s.spiderFall && <SpiderRig r={s.spiderFall.rig} dim="brightness(0.5)" opacity={Math.max(0, 1 - Math.max(0, s.spiderFall.t - 1.4))} />}
+          {s.ambush && <SpiderRig r={s.ambush.rig} z={7} />}
+          <MaimRing m={s.spiderMaim} k={k} />
           {s.giantFall && <GiantFall f={s.giantFall} t={s.time} />}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
             if (e.type.acidOnly) return <SwarmCloud key={e.id} e={e} k={k} time={s.time} />;   // the Swarm King's swarms
+            const spiderling = e.type.kind === 'spiderling' && e.rig ? <SpiderRig key={`sl${e.id}`} r={e.rig} hurt={e.hurt > 0} z={6}
+              dim={e.frozen > 0 ? 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)' : undefined} /> : null;
             const isWormHead = e.move === 'worm' && e.role === 'head';
-            return (
-              <EnemySprite key={e.id} id={e.id} register={register}
+            if (e.role === 'leg' && e.hidden) return null;   // (a broken leg: nothing to hit)
+            return (<Fragment key={e.id}>{spiderling}
+              <EnemySprite id={e.id} register={register}
                 img={e.shield && e.shield.hp <= 0 && e.type.imgBroken ? e.type.imgBroken : e.type.imgOpen && e.seal && !e.sealed ? e.type.imgOpen : e.img} shape={e.shape} tint={e.tint} tier={e.tier} role={e.role} grouped={!!e.group}
                 size={e.size * k} k={k} isWormHead={isWormHead} looks={!!e.type.looks}
                 frozen={e.frozen > 0} down={e.down > 0 ? Math.ceil(e.down * 10) / 10 : 0}
@@ -496,7 +506,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
                 shieldPct={e.shield ? Math.round(e.shield.hp / e.shield.max * 100) : 0}
                 mirror={e.refl && e.refl.state !== 'idle' ? e.refl.state : null} fort={e.fortT > 0} badge={e.type.badge} mad={e.mad ?? 0}
                 sealed={e.sealed ? (e.sealLabel ?? 'SEALED · break its weak spots') : null} sealKind={e.type.swarmShield ? 'swarm' : null} />
-            );
+            </Fragment>);
           })}
 
           {/* the Swarm King's SWARM SHIELD: swarmlings crawling all over it, more circling */}
@@ -670,6 +680,13 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               const p = Math.min(1, g.t / g.dur), R = g.r ?? 62 * k;
               // (rain falls straight down; the rest arcs out of its mouth)
               const x = g.x0 + (g.x - g.x0) * p, y = g.rain ? g.y0 + (g.y - g.y0) * p * p : g.y0 + (g.y - g.y0) * p - Math.sin(p * Math.PI) * 160 * k;
+              // Daddy Hairy Legs: web, a web trap, an egg sac (white) or venom (green)
+              if ((g.web || g.egg) && !g.venom) return (
+                <g key={g.id}>
+                  <circle cx={g.x} cy={g.y} r={R} fill={`rgba(248,250,252,${0.06 + 0.16 * p})`} stroke={g.trap ? '#fde047' : '#f1f5f9'} strokeWidth={2 * k} strokeDasharray={`${7 * k} ${6 * k}`} />
+                  <circle cx={x} cy={y} r={(g.egg ? 14 : 9 + 4 * p) * k} fill="#f8fafc" stroke="#94a3b8" strokeWidth={2 * k} style={{ filter: 'drop-shadow(0 0 6px #e2e8f0)' }} />
+                </g>
+              );
               return (
                 <g key={g.id}>
                   <circle cx={g.x} cy={g.y} r={R} fill={`rgba(163,230,53,${0.08 + 0.2 * p})`} stroke="#a3e635" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
@@ -704,12 +721,21 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               const d = `M${c.mx},${c.my} Q${mx},${my} ${pl.pos.x},${pl.pos.y}`;
               return (
                 <g>
-                  <circle cx={c.mx} cy={c.my} r={R} fill={`rgba(244,114,182,${0.08 + 0.22 * p})`} stroke="#f472b6" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
-                  <circle cx={c.mx} cy={c.my} r={R * (1 - p) + R * 0.08} fill="none" stroke="#ffe4e6" strokeWidth={2 * k} opacity={0.85} />
-                  <path d={d} fill="none" stroke="#831843" strokeWidth={17 * k} strokeLinecap="round" />
-                  <path d={d} fill="none" stroke="#f472b6" strokeWidth={12 * k} strokeLinecap="round" />
-                  <path d={d} fill="none" stroke="#fbcfe8" strokeWidth={3 * k} strokeLinecap="round" opacity={0.7} />
-                  <circle cx={pl.pos.x} cy={pl.pos.y} r={11 * k} fill="#ec4899" stroke="#831843" strokeWidth={3 * k} />
+                  {c.kind === 'tongue' && (<>
+                    <circle cx={c.mx} cy={c.my} r={R} fill={`rgba(244,114,182,${0.08 + 0.22 * p})`} stroke="#f472b6" strokeWidth={2.5 * k} strokeDasharray={`${9 * k} ${6 * k}`} />
+                    <circle cx={c.mx} cy={c.my} r={R * (1 - p) + R * 0.08} fill="none" stroke="#ffe4e6" strokeWidth={2 * k} opacity={0.85} />
+                    <path d={d} fill="none" stroke="#831843" strokeWidth={17 * k} strokeLinecap="round" />
+                    <path d={d} fill="none" stroke="#f472b6" strokeWidth={12 * k} strokeLinecap="round" />
+                    <path d={d} fill="none" stroke="#fbcfe8" strokeWidth={3 * k} strokeLinecap="round" opacity={0.7} />
+                    <circle cx={pl.pos.x} cy={pl.pos.y} r={11 * k} fill="#ec4899" stroke="#831843" strokeWidth={3 * k} />
+                  </>)}
+                  {/* a spiderling's web: a strand of silk reeling you in */}
+                  {c.kind === 'web' && (<>
+                    <line x1={c.mx} y1={c.my} x2={pl.pos.x} y2={pl.pos.y} stroke="#f8fafc" strokeWidth={2.5 * k} opacity={0.9} />
+                    <line x1={c.mx} y1={c.my} x2={pl.pos.x} y2={pl.pos.y} stroke="#94a3b8" strokeWidth={1 * k} strokeDasharray={`${3 * k} ${5 * k}`} />
+                    <circle cx={pl.pos.x} cy={pl.pos.y} r={13 * k} fill="rgba(248,250,252,0.35)" stroke="#f8fafc" strokeWidth={2 * k} />
+                  </>)}
+                  {c.kind === 'maim' && <circle cx={pl.pos.x} cy={pl.pos.y} r={16 * k} fill="rgba(239,68,68,0.35)" stroke="#fecaca" strokeWidth={2.5 * k} />}
                   {/* how close you are to shaking it off */}
                   <circle cx={pl.pos.x} cy={pl.pos.y} r={30 * k} fill="none" stroke="#0008" strokeWidth={6 * k} />
                   <circle cx={pl.pos.x} cy={pl.pos.y} r={30 * k} fill="none" stroke="#a7f3d0" strokeWidth={4 * k} strokeLinecap="round"
@@ -1199,6 +1225,16 @@ function AttackShape({ a, k, layer }) {
     return <line x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} stroke="#fff" strokeWidth={a.w * 0.4} opacity={strikeFade} strokeLinecap="round"
       style={{ filter: 'drop-shadow(0 0 10px #fff)' }} />;
   }
+  if (a.kind === 'shot' && a.opts?.web) {
+    // a spiderling's web: a short white pointer, then a strand of silk flying at you
+    if (a.phase === 'tele') return <line x1={a.sx} y1={a.sy} x2={a.sx + a.ux * (50 + 70 * p) * k} y2={a.sy + a.uy * (50 + 70 * p) * k} stroke={`rgba(248,250,252,${0.35 + 0.5 * p})`} strokeWidth={4 * k} strokeLinecap="round" strokeDasharray={`${5 * k} ${4 * k}`} />;
+    return (
+      <g>
+        <line x1={a.sx} y1={a.sy} x2={a.x} y2={a.y} stroke="#f8fafc" strokeWidth={1.8 * k} opacity={0.8} />
+        <circle cx={a.x} cy={a.y} r={a.r * 1.1} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={2 * k} />
+      </g>
+    );
+  }
   if (a.kind === 'shot') {
     const hex = !!a.opts?.debuff, col = hex ? '#c084fc' : '#ff2a2a';
     if (a.phase === 'tele') {
@@ -1419,7 +1455,8 @@ const EnemySprite = memo(function EnemySprite({ id, register, img, shape, tint, 
   else if (frozen) filter = 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)';   // icy blue whatever colour it was
   else if (flashRed || pose) filter = 'none';
   else if (hurt) filter = `${tint ?? ''} brightness(2.2)`;
-  const showBar = tier !== 'boss' || role === 'hydra' || role === 'hand' || (grouped && role !== 'head');
+  // (the spider's legs: only once they're hurt, eight full bars would just be clutter)
+  const showBar = tier !== 'boss' || role === 'hydra' || role === 'hand' || (role === 'leg' && hpPct < 100) || (grouped && role !== 'head');
   return (
     <div ref={el => register(id, el)} style={{
       position: 'absolute', left: 0, top: 0, width: size, height: size, willChange: 'transform',
@@ -1777,6 +1814,7 @@ ${ICE_CSS}
   @keyframes sealSpin { to { transform: rotate(360deg); } }
   .storm-bat { position:absolute; left:0; top:0; z-index:9; pointer-events:none; object-fit:contain; }
 ${GIANT_RIG_CSS}
+${SPIDER_CSS}
   .giant-eye { opacity:0; transition: opacity 0.25s; }
   .giant-eye.open { opacity:0.85; animation: giantEyePulse 0.9s ease-in-out infinite; }
   .giant-eye.warn { opacity:1; animation: giantEyePulse 0.18s ease-in-out infinite; }

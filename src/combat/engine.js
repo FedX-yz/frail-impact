@@ -7,6 +7,7 @@ import { sheetLife } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
 import { giantIdlePose } from './giantIdle';
+import { createSpider } from './spider';
 import { solveArm } from './giantArm';
 import { makeEndlessStage, MODIFIERS } from './stages';
 import { sfx } from '../utils/sfx';
@@ -39,6 +40,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     special: { cd: 0, cdMax: 0 },   // M2 skills' cooldown (kitRuntime.js)
     dev: { god: false, timeScale: 1 },   // sandbox menu switches
     combo: { n: 0, t: 0, best: 0 },      // landed hits in a row (see BAL.COMBO_*)
+    webs: [], eggs: [],                  // Daddy Hairy Legs: web patches / traps, egg sacs (spider.js)
     hazards: [],                         // poison puddles from Toxic elites, the Swarm King's acid (acid: true)
     globs: [],                           // the Swarm King's acid in the air
     bolts: [],                           // the Swarm King's bats and acid shots
@@ -115,6 +117,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
     rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(), heal: (n) => heal(n), asYou: (fn) => api_asYou(fn),
     announce: (...a) => announce(...a),
+  });
+
+  // Daddy Hairy Legs (spider.js)
+  const spider = createSpider({
+    s, K, rand, dist, clamp, floater, effect, shake, sfx, nextId: () => uid++, spawnEnemy, queueAttack,
+    hitPlayer: (...a) => hitPlayer(...a), aimPoint: () => aimPoint(), announce: (...a) => announce(...a), addDebuff: id => addDebuff(id),
+    capture: (h, o) => capture(h, o), target: () => rt.target(), restScale: () => s.stage.bossCooldownMult * M('enemyCd'),
   });
 
   // ── Spawning ────────────────────────────────────────────────────────────
@@ -201,6 +210,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       parts = spawnWorm(typeId);
     } else if (t.kind === 'giant') {
       parts.push(spawnGiant(typeId));
+    } else if (t.kind === 'spider') {
+      parts.push(spider.spawn(typeId));
     } else if (t.kind === 'hydra') {
       for (let i = 0; i < t.heads; i++) {
         const h = spawnEnemy(typeId, { pos: { x: s.W / 2, y: s.H / 2 }, role: 'hydra', group, segIndex: i });
@@ -321,29 +332,60 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     hydraAttack(h);
     c.next = rand(...HYDRA.pause) * slow;          // (counted once its attack is over)
   }
-  // the tongue caught you: it drags your cursor toward its mouth (s.player.pull), then bites.
-  // Struggle (move your pointer / finger around a lot) to break free, or be out of reach when it bites.
-  function tongueCatch(h) {
+  // CAUGHT: something has hold of your cursor (the Hydra's tongue, a spiderling's web, the spider's
+  // hands) and drags it toward c.mouth(h). Struggle (move your pointer / finger around a lot,
+  // c.need) to break free. When the hold runs out (c.dur), c.end(c, h, close) decides what
+  // happens (the tongue bites if you're close to its mouth). c.tick runs every frame meanwhile.
+  function capture(h, opts) {
     const pl = s.player;
-    if (pl.caught) return;
-    pl.caught = { by: h.id, t: 0, dur: HYDRA.tongue.hold, struggle: 0, need: K(HYDRA.tongue.struggle) };
+    if (pl.caught) return false;
+    pl.caught = { by: h.id, t: 0, struggle: 0, ...opts };
     if (!pl.raw && pl.pos) pl.raw = { ...pl.pos };
     h.busy++;                                    // holds on until it lets go
-    const P = pl.pos ?? h;
-    floater('CAUGHT! SHAKE FREE', P.x, P.y - K(50), '#f472b6', true);
-    sfx('tongue'); shake(0.2);
+    return true;
   }
-  function tongueRelease(h) {
+  function release() {
+    const c = s.player.caught;
     s.player.caught = null;
+    const h = c && s.enemies.find(e => e.id === c.by);
     if (!h) return;
     h.busy = Math.max(0, h.busy - 1);
     if (h.busy === 0) h.cd = restCd(h);
   }
-  // Where you are = your pointer + how far the tongue has dragged you
+  function tongueCatch(h) {
+    const H = HYDRA.tongue;
+    if (!capture(h, {
+      kind: 'tongue', dur: H.hold, need: K(H.struggle), pull: K(H.pull), stopAt: K(18), mouth: hydraMouth,
+      end: (c, hh, close, m, P) => {
+        if (close) {
+          hurt(enemyDmg('hydraBite'), 'circle', hh);
+          effect({ kind: 'burst', x: m.x, y: m.y, r: K(H.biteR), color: '#f472b6' });
+          effect({ kind: 'shards', x: m.x, y: m.y, r: K(H.biteR), color: '#fda4af', n: 10 });
+          shake(0.4); sfx('crit');
+        } else floater('MISSED!', P.x, P.y - K(40), '#a7f3d0', true);
+        hh.attackT = 0.45;
+      },
+      biteR: K(H.biteR),
+    })) return;
+    const P = s.player.pos ?? h;
+    floater('CAUGHT! SHAKE FREE', P.x, P.y - K(50), '#f472b6', true);
+    sfx('tongue'); shake(0.2);
+  }
+  // Where you are = your pointer + how far you've been dragged (s.player.pull). In a WEB PATCH your
+  // cursor only moves a fraction of how far the pointer does (s.player.slow); in a WEB TRAP it
+  // doesn't move at all (s.player.stuck) — the difference is kept in pull, and slides back out after.
   function setPos(x, y) {
-    const pl = s.player, d = pl.pull;
-    if (pl.caught && pl.raw) pl.caught.struggle += Math.hypot(x - pl.raw.x, y - pl.raw.y);   // fighting the tongue
+    const pl = s.player, prevRaw = pl.raw, prev = pl.pos;
+    if (pl.caught && prevRaw) pl.caught.struggle += Math.hypot(x - prevRaw.x, y - prevRaw.y);   // fighting it
     pl.raw = { x, y };
+    if (!pl.caught && prev && prevRaw && (pl.stuck || (pl.slow ?? 1) < 1)) {
+      const f = pl.stuck ? 0 : pl.slow;
+      const nx = clamp(prev.x + (x - prevRaw.x) * f, 0, s.W), ny = clamp(prev.y + (y - prevRaw.y) * f, 0, s.H);
+      pl.pull = { x: nx - x, y: ny - y };
+      pl.pos = { x: nx, y: ny };
+      return pl.pos;
+    }
+    const d = pl.pull;
     pl.pos = d ? { x: clamp(x + d.x, 0, s.W), y: clamp(y + d.y, 0, s.H) } : { x, y };
     return pl.pos;
   }
@@ -351,30 +393,23 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const pl = s.player, c = pl.caught;
     if (c) {
       const h = s.enemies.find(e => e.id === c.by);
-      if (!h || h.down > 0 || s.mahoraga || s.phase === 'clear' || s.phase === 'defeat' || !pl.pos) { tongueRelease(h); return; }
+      if (!h || h.down > 0 || s.mahoraga || s.phase === 'clear' || s.phase === 'defeat' || !pl.pos) { release(); return; }
       c.t += dt;
-      const m = hydraMouth(h), P = pl.pos, H = HYDRA.tongue;
+      const m = c.mouth(h), P = pl.pos;
       c.mx = m.x; c.my = m.y;
       const dx = m.x - P.x, dy = m.y - P.y, d = Math.hypot(dx, dy) || 1;
       pl.pull = pl.pull ?? { x: 0, y: 0 };
-      const step = Math.min(Math.max(0, d - K(18)), K(H.pull) * dt);
+      const step = Math.min(Math.max(0, d - (c.stopAt ?? 0)), c.pull * dt);
       pl.pull.x += dx / d * step; pl.pull.y += dy / d * step;
-      if (c.struggle >= K(H.struggle)) {          // shook it off
+      if (c.struggle >= c.need) {                 // shook it off
         floater('BROKE FREE!', P.x, P.y - K(40), '#a7f3d0', true);
-        effect({ kind: 'burst', x: P.x, y: P.y, r: K(50), color: '#f472b6' });
-        tongueRelease(h);
-      } else if (c.t >= c.dur) {
-        const close = d <= K(H.biteR);
-        if (close) {
-          hurt(enemyDmg('hydraBite'), 'circle', h);
-          effect({ kind: 'burst', x: m.x, y: m.y, r: K(H.biteR), color: '#f472b6' });
-          effect({ kind: 'shards', x: m.x, y: m.y, r: K(H.biteR), color: '#fda4af', n: 10 });
-          shake(0.4); sfx('crit');
-        } else floater('MISSED!', P.x, P.y - K(40), '#a7f3d0', true);
-        h.attackT = 0.45;
-        tongueRelease(h);
+        effect({ kind: 'burst', x: P.x, y: P.y, r: K(50), color: c.kind === 'web' ? '#f8fafc' : '#f472b6' });
+        release();
+      } else {
+        c.tick?.(c, h, dt);
+        if (pl.caught === c && c.t >= c.dur) { c.end?.(c, h, d <= (c.biteR ?? 0), m, P); release(); }
       }
-    } else if (pl.pull) {
+    } else if (pl.pull && !pl.stuck && (pl.slow ?? 1) >= 1) {
       const f = Math.exp(-dt * 5);                // let go: your cursor slides back to your pointer
       pl.pull.x *= f; pl.pull.y *= f;
       if (Math.hypot(pl.pull.x, pl.pull.y) < 1) pl.pull = null;
@@ -922,7 +957,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // Phase 1 is dead: it bursts open and the Swarm King (phase 2) crawls out where it sat
   function burstHost(e) {
     const R = drawnSize(e) * 0.5, o = spotOn(e, 'vent');
-    s.globs = []; s.bolts = []; s.gas = null;
+    s.globs = []; s.bolts = []; s.gas = null; s.webs = []; s.eggs = []; s.ambush = null; s.spiderMaim = null; s.player.stuck = null;
     s.enemies = s.enemies.filter(x => !(x.type.acidOnly && x.owner === e.id));
     effect({ kind: 'flash', color: '#a3e635', life: 0.5 });
     sheetFx('boom', o.x, o.y, Math.max(R * 3, K(420)));
@@ -972,6 +1007,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
         g.t += dt;
         if (g.t < g.dur || g.landed) continue;
         g.landed = true;
+        if (spider.landed(g)) continue;   // web, a web trap, venom, an egg sac
         const r = g.r ?? K(SWK.splash);
         if (T0 && !g.harmless && dist(T0.x, T0.y, g.x, g.y) <= r + T0.r) hurt(enemyDmg(g.rain ? 'acidRain' : 'acid'), 'circle');
         if (!g.rain) s.hazards.push({ id: uid++, x: g.x, y: g.y, r: K(SWK.pool.r), t: 0, grow: 0.3, life: g.life ?? SWK.pool.life, acid: true });
@@ -1148,6 +1184,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.move === 'worm') { moveWorm(e, dt); return; }
     if (e.role === 'hydra') { moveHydraHead(e, dt); return; }
     if (e.role === 'hand') return;   // the Red Giant moves his own hands (updateGiant)
+    if (e.type.kind === 'spider' || e.role === 'leg') return;   // Daddy Hairy Legs moves himself (spider.js)
+    if (e.type.kind === 'spiderling') { spider.moveAdd(e, dt); return; }
     if (e.dashing) return;
     // walking in from the edge of the screen
     if (e.entering) {
@@ -1311,10 +1349,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
             a.phase = 'strike';
             if (a.opts.boom) { sfx('boom'); shake(0.25); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#f97316', n: 14 }); }
             if (a.opts.lunge && owner) { owner.lunge = { x: a.cx, y: a.cy, t: 0.3 }; sfx('leap'); }   // the Hydra's stinger
-            if (T && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r) hurt(a.dmg, 'circle');
+            if (T && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r && hurt(a.dmg, 'circle') && a.opts.debuff) addDebuff(a.opts.debuff);
           } else if (a.kind === 'slash') {
             a.phase = 'strike';
-            if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r) hurt(a.dmg, 'slash');
+            if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r && hurt(a.dmg, 'slash') && a.opts.debuff) addDebuff(a.opts.debuff);
           } else if (a.kind === 'tongue') {
             a.phase = 'strike'; sfx('tongue');
             if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r) {
@@ -1340,7 +1378,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           }
           if (!a.hitDone && T && dist(T.x, T.y, a.x, a.y) <= a.r + K(6) + T.r) {
             a.hitDone = true;
-            if (hurt(a.dmg, 'shot') && a.opts.debuff) addDebuff(a.opts.debuff);   // Hexer: WEAKENED
+            if (a.opts.web) spider.webHit(owner);   // a spiderling's web: it reels you in
+            else if (hurt(a.dmg, 'shot') && a.opts.debuff) addDebuff(a.opts.debuff);   // Hexer: WEAKENED
           }
           if (a.x < -50 || a.y < -50 || a.x > s.W + 50 || a.y > s.H + 50 || a.hitDone) finishAttack(a);
         } else if (a.kind === 'dash') {
@@ -1494,6 +1533,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.hp <= 0) {
       if (e.role === 'hydra') headDown(e);
       else if (e.role === 'hand') handDown(e);
+      else if (e.role === 'leg') spider.legDown(e);
       else killEnemy(e);
     }
     return dmg;
@@ -1580,8 +1620,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.tier === 'treasure') treasurePowerUp(e);
     if (t.weakPoints) s.enemies = s.enemies.filter(x => x.core !== e.id);   // its weak spots go with it
     if (e.tier === 'boss' && t.nextPhase && s.phase !== 'clear' && s.phase !== 'defeat') { burstHost(e); return; }   // the Swarm King's phase 1
+    if (t.kind === 'spider') spider.died(e);
     if (t.kind === 'giant' && e.gl) s.giantFall = { t: 0, left: e.gl.left, top: e.gl.top, w: e.gl.w, h: e.gl.h, sc: e.gl.sc };
-    if (e.tier === 'boss') { bossBoom(e); s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
+    if (e.tier === 'boss') { bossBoom(e); s.enemies = s.enemies.filter(x => !x.type.acidOnly); s.globs = []; s.bolts = []; s.gas = null; s.webs = []; s.eggs = []; s.ambush = null; s.spiderMaim = null; s.player.stuck = null; s.hitStop = 0.28; shake(0.6); stageClear(); return; }
     if (s.phase === 'fight' && e.tier !== 'treasure') {
       s.kills++;
       cb('onProgress', { stage: s.stageNum, kills: s.kills });
@@ -1685,6 +1726,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function pointerDownNow(x, y) {
     if (s.paused || s.choosing) return;
     ({ x, y } = setPos(x, y));   // (dragged by the Hydra's tongue: your click lands where it dragged you)
+    if (s.player.stuck && s.phase !== 'defeat' && s.phase !== 'clear') { spider.stuckClick(); return; }   // in a web trap: clicks tear you free
     pointerHold(true);
     if (s.phase === 'defeat' || s.phase === 'clear') return;
     if (rt.onPointerDown(x, y)) return;   // suspended (Mahoraga) / Tyran's slashes
@@ -1699,6 +1741,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (sk?.type === 'gun') shoot(sk.shots ?? 1, sk.pct);
     const pv = rt.passive();
     if (pv?.type === 'extraShot' && Math.random() < pv.chance) { shoot(pv.shots, pv.pct); floater('💃', x, y - K(26), '#c084fc'); }
+    if (s.eggs.length) spider.clickNear(x, y);   // egg sacs hatch when you click near them
   }
 
   // Holding M1 (Doro's drag): BattleArena reports press and release
@@ -1832,6 +1875,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const bt = ENEMY_TYPES[s.stage.boss], first = ENEMY_TYPES[bt?.firstPhase] ?? bt;
     s.bossMusic = first?.music ?? null;   // its song starts with the BOSS INCOMING banner
     s.banner = bt?.kind === 'giant' ? { text: '⚠ RED GIANT ⚠', sub: 'IT RISES', t: 2.4, boss: true }
+      : bt?.kind === 'spider' ? { text: '⚠ DADDY HAIRY LEGS ⚠', sub: 'IT\'S FAST', t: 2.4, boss: true }
       : s.stage.mini ? { text: '⚠ MINI-BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true }
       : { text: '⚠ BOSS ⚠', sub: 'INCOMING!', t: 2.4, boss: true };
   }
@@ -1840,7 +1884,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.timeStop = 0;   // a time stop ends with its stage (it used to freeze the start of the next one)
     rt.reset('clear');
     s.enemies.forEach(e => effect({ kind: 'poof', x: e.x, y: e.y, r: e.size * s.k * 0.6 }));
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null;
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null; s.webs = []; s.eggs = []; s.ambush = null; s.spiderMaim = null; s.player.stuck = null;
     const r = s.stage.clearReward;
     const coins = Math.round((r?.coins ?? 0) * M('coin')), gems = Math.round((r?.gems ?? 0) * M('gem'));
     s.banner = { text: s.stage.story ? 'VICTORY!' : `${stageLabel()} CLEAR!`, t: 3, good: true,
@@ -1852,7 +1896,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.phase = 'defeat'; s.phaseT = 2.6;
     s.timeStop = 0;
     rt.reset('defeat');
-    s.attacks = []; s.shots = []; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null; s.combo.n = 0;
+    s.attacks = []; s.shots = []; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null; s.webs = []; s.eggs = []; s.ambush = null; s.spiderMaim = null; s.player.stuck = null; s.combo.n = 0;
     s.banner = { text: 'DEFEATED', sub: s.stage.story ? null : `retrying stage ${s.stageNum}…`, t: 2.6, bad: true };
     cb('onDefeat', s.stageNum);
   }
@@ -1861,7 +1905,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     s.timeStop = 0;
     rt.reset('load');
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
-    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null;
+    s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null; s.webs = []; s.eggs = []; s.ambush = null; s.spiderMaim = null; s.player.stuck = null;
     s.player.hp = s.player.maxHp; s.player.invuln = 1;
     s.timers.basic = 0.3; s.timers.elite = 4; s.timers.horde = 8;
     s.banner = stageBanner();
@@ -1900,7 +1944,19 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
     pl.invuln = Math.max(0, pl.invuln - dt);
     for (const k of Object.keys(pl.debuffs)) { pl.debuffs[k] -= dt; if (pl.debuffs[k] <= 0) delete pl.debuffs[k]; }
-    if (pl.caught || pl.pull) updatePull(dt);   // the Hydra's tongue
+    if (pl.caught || pl.pull) updatePull(dt);   // the Hydra's tongue, webs
+    // POISONED: a bit of your HP every half second (Daddy Hairy Legs)
+    if (pl.debuffs.poison > 0 && s.phase !== 'defeat' && s.phase !== 'clear' && !s.dev.god) {
+      pl.poisonT = (pl.poisonT ?? 0) + dt;
+      if (pl.poisonT >= 0.5) {
+        pl.poisonT -= 0.5;
+        const dmg = Math.max(1, Math.round(pl.maxHp * DEBUFFS.poison.dps * 0.5));
+        pl.hp = Math.max(0, pl.hp - dmg);
+        const p = pl.pos ?? { x: s.W / 2, y: s.H / 2 };
+        floater(`-${dmg}`, p.x + rand(-10, 10), p.y - K(20), '#84cc16');
+        if (pl.hp <= 0) startDefeat();
+      }
+    }
     pl.hitT   = Math.max(0, pl.hitT - dt);
     s.shake   = Math.max(0, s.shake - dt);
     s.frenzy  = Math.max(0, s.frenzy - dt);
@@ -2067,6 +2123,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     updateSwarmKing(dt);
     updateHydra(dt);
     updateGiant(dt);
+    spider.update(dt);
   }
 
   function resize(W, H) {
@@ -2124,7 +2181,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (!t) return;
       if (t.tier === 'boss') { s.phase = 'boss'; spawnBoss(typeId, { direct }); return; }
       if (typeId === 'swarmling') { spawnHorde(); return; }
-      for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : t.kind === 'worm' ? spawnWorm(typeId) : spawnEnemy(typeId, { armed: true });
+      for (let i = 0; i < n; i++) typeId === 'treasure' ? spawnTreasure() : t.kind === 'worm' ? spawnWorm(typeId)
+        : t.kind === 'spiderling' ? spider.spawnAdd(rand(s.W * 0.1, s.W * 0.9), rand(s.H * 0.3, s.H * 0.85)) : spawnEnemy(typeId, { armed: true });
     },
     // story: skip straight to winning this level
     win: () => { s.enemies = []; s.attacks = []; stageClear(); s.phaseT = 0.6; },
@@ -2132,7 +2190,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     killAll: () => { [...s.enemies].forEach(e => { if (s.enemies.includes(e)) { if (e.role === 'hydra') { e.hp = 0; e.down = 0; } killEnemy(e); } }); },
     clearEnemies: () => {
       rt.reset('load');
-      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null;
+      s.enemies = []; s.attacks = []; s.shots = []; s.weakPts = []; s.bossInfo = null; s.hazards = []; s.globs = []; s.bolts = []; s.gas = null; s.webs = []; s.eggs = []; s.ambush = null; s.spiderMaim = null; s.player.stuck = null;
       // boss removed → back to the fight, one kill short of summoning it again
       if (s.phase === 'boss' || s.phase === 'bossIntro') { s.phase = 'fight'; s.kills = Math.min(s.kills, s.stage.killTarget - 1); }
     },
