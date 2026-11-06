@@ -14,6 +14,10 @@
 //               take the hits is how he climbs the tiers
 //   hold M1     BRACE: while held he takes much less damage; let go and everything he soaked
 //               up comes back out around the cursor
+//   drag        BREACH: hold M1 and move: he charges along the path. Everything on it is hit
+//               and thrown aside (bosses are too heavy: he goes through them), and every one
+//               he plows through hits him back a little (never below 1 HP): a fast way down
+//               the tiers
 //   Q           SECOND WIND: heals a chunk of HP (and so drops him down the tiers): the way
 //               out when he's gone too deep
 //   ult         NO RETREAT: for dur s he's at the top tier whatever his HP, and nothing can
@@ -22,9 +26,10 @@
 
 const HOLD_MIN = 0.25;      // shorter than this is a click, not a Brace
 const BRACE_AFTER = 0.12;   // the guard comes up this long after you press
+const DRAG_START = 18;      // design px the cursor has to move while held to Breach instead
 const CUTIN = 1.0;          // seconds the burst art is on screen (the fight goes on)
 export const ASTREC_INTRO = CUTIN;
-export const ASTREC_EFFECTS = new Set(['dwcleave', 'dwshock', 'dwcounter', 'dwrevive', 'dwwind']);
+export const ASTREC_EFFECTS = new Set(['dwcleave', 'dwshock', 'dwcounter', 'dwrevive', 'dwwind', 'dwbreach']);
 export const TIER_COLORS = ['#d4d4d4', '#fdba74', '#f87171', '#fca5a5'];   // (tier III: the brightest, it's the loudest)
 
 // which tier he's in: 0 (none) … 3
@@ -52,7 +57,7 @@ export function astrecChips(s, sk, mobile = false) {
 }
 
 export function createAstrecPlatinum(ctx) {
-  const { s, api, K, dist, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius } = ctx;
+  const { s, api, K, dist, distToSegment, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius, heavy } = ctx;
   const st = () => s.kit.astrec ?? (s.kit.astrec = { lock: 0, revived: false, draw: 0, dcd: 0, dcdMax: 0, qcd: 0, qcdMax: 0, soak: 0, bracing: false, bonus: 0, tier: 0, cutin: null, floats: 0 });
   const label = (text, x, y, color, big = false) => { const a = st(); if (a.floats++ < 3) floater(text, x, y, color, big); };
 
@@ -126,10 +131,11 @@ export function createAstrecPlatinum(ctx) {
     const a = st(), sk = skill();
     if (sk?.type === 'deathwish' && a.bracing) a.soak += dmg / Math.max(0.05, 1 - sk.braceDR);   // the whole hit, not just what got through
   }
-  function release(held, x, y) {
+  function release(held, x, y, press0) {
     const sk = skill(), a = st();
     const soak = a.soak;
     a.bracing = false; a.soak = 0;
+    if (press0?.astrec?.drag) { const n = press0.astrec.hit?.size ?? 0; if (n >= 3) api.announce(`BREACH ×${n}`, '#fecaca'); return; }   // that was a Breach
     if (!sk || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const frac = soak / Math.max(1, s.player.maxHp);
     const pct = Math.min(sk.counterMax, sk.counterMin + frac * sk.counterPer);
@@ -140,6 +146,34 @@ export function createAstrecPlatinum(ctx) {
     effect({ kind: 'dwcounter', x, y, r: R, life: 0.55, big: soak > 0 });
     if (soak > 0) { label(`HIT BACK ×${pct.toFixed(1)}`, x, y - R * 0.6, '#fecaca', true); shake(Math.min(0.6, 0.2 + frac)); sfx('boom'); }
     else sfx('hit');
+  }
+
+  // ── drag: BREACH ─────────────────────────────────────────────────────────
+  function breach(sk, d0, P) {
+    const a0 = d0.last, d = dist(a0.x, a0.y, P.x, P.y);
+    if (d > K(240)) { d0.last = { x: P.x, y: P.y }; return; }   // a jump (lost the pointer)
+    if (d < K(14) || d0.used >= K(sk.breachLen)) return;
+    effect({ kind: 'dwbreach', x1: a0.x, y1: a0.y, x2: P.x, y2: P.y, life: 0.6 });
+    const ux = (P.x - a0.x) / d, uy = (P.y - a0.y) / d;
+    let n = 0;
+    api.asYou(() => foes().forEach(e => {
+      if (d0.hit.has(e.id) || distToSegment(e.x, e.y, a0.x, a0.y, P.x, P.y) > K(24) + radius(e) * 0.6) return;
+      d0.hit.add(e.id);
+      kitHit(e, sk.breachPct, { color: '#fecaca', label: '⛨', quiet: n++ >= 3 });
+      if (e.hp > 0 && s.enemies.includes(e) && !heavy(e) && !(e.down > 0) && !e.grabbed) {
+        // thrown aside: off the line, and a little the way he's going
+        const side = (e.x - a0.x) * -uy + (e.y - a0.y) * ux >= 0 ? 1 : -1, v = K(1100);
+        if (e.dashing) api.finishAttack(e.dashing);
+        e.kb = { vx: (-uy * side * 0.85 + ux * 0.5) * v, vy: (ux * side * 0.85 + uy * 0.5) * v, hit: [], crush: sk.breachPct };
+        e.target = null;
+      }
+      // it hits him back (never the last of his HP)
+      const pl = s.player, cost = Math.min(sk.breachCost * pl.maxHp, Math.max(0, pl.hp - 1));
+      if (cost > 0) { pl.hp -= cost; d0.cost += cost; pl.hitT = 0.15; }
+      if (n === 1) { sfx('hit'); shake(0.12); }
+    }));
+    d0.used += d; d0.last = { x: P.x, y: P.y };
+    if (d0.used >= K(sk.breachLen)) floater('breach: max length', P.x, P.y - K(30), '#fecaca');
   }
 
   // ── Q: SECOND WIND ───────────────────────────────────────────────────────
@@ -178,8 +212,14 @@ export function createAstrecPlatinum(ctx) {
     a.dcd = Math.max(0, a.dcd - dt);
     a.qcd = Math.max(0, a.qcd - dt);
     if (a.cutin) { a.cutin.t += dt; if (a.cutin.t >= a.cutin.life) a.cutin = null; }
-    const held = pl.held;
-    a.bracing = !!(sk?.type === 'deathwish' && held && live && !s.mahoraga && s.time - held.t0 >= BRACE_AFTER);
+    const held = pl.held, P = pl.pos;
+    // drag: BREACH (hold M1 and move)
+    if (sk?.type === 'deathwish' && held && P && live && !s.mahoraga) {
+      const d0 = held.astrec ?? (held.astrec = { drag: false, last: { x: held.x ?? P.x, y: held.y ?? P.y }, used: 0, hit: new Set(), cost: 0 });
+      if (!d0.drag && dist(P.x, P.y, held.x ?? P.x, held.y ?? P.y) > K(DRAG_START)) { d0.drag = true; a.soak = 0; }
+      if (d0.drag) breach(sk, d0, P);
+    }
+    a.bracing = !!(sk?.type === 'deathwish' && held && !held.astrec?.drag && live && !s.mahoraga && s.time - held.t0 >= BRACE_AFTER);
     if (!held && a.soak) a.soak = 0;
     // the damage bonus the engine reads (rollClick)
     const t = sk?.type === 'deathwish' ? dwTier(s) : 0;

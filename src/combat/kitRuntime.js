@@ -570,7 +570,7 @@ export function createKitRuntime(api) {
     const sk = skill();
     if (sk?.type === 'zero') { ice.release(held, x, y, press); return; }   // 6★ Ice: Shatter (or the end of a frost line)
     if (sk?.type === 'boil') { bonk.release(held, x, y, press); return; }  // 6★ Bonk: Rupture (or the end of a claw rake)
-    if (sk?.type === 'deathwish') { astrec.release(held, x, y); return; }  // 6★ Astrec: Brace's hit back
+    if (sk?.type === 'deathwish') { astrec.release(held, x, y, press); return; }  // 6★ Astrec: Brace's hit back (or the end of a Breach)
     if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
     const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
@@ -784,7 +784,7 @@ export function createKitRuntime(api) {
   const ice = createIcePlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius });
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze); null = Q is M2 as usual
   const bonk = createBonkPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
-  const astrec = createAstrecPlatinum({ s, api, K, dist, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius });
+  const astrec = createAstrecPlatinum({ s, api, K, dist, distToSegment, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius, heavy });
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze, Bonk's Bloodletting, Astrec's Second Wind); null = Q is M2 as usual
   const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : null; };
   function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : false; }

@@ -2,7 +2,7 @@
 // What 6★ Astrec's kit looks like (the logic is in astrecPlatinum.js). All drawn in code except
 // the burst art (mainCard.burstArt, his story art until the real one is drawn).
 //   AstrecOver    Brace's guard at the cursor (and what it has soaked up), Draw Fire's marks
-//   AstrecEffect  one-off effects: dwcleave, dwshock, dwcounter, dwrevive, dwwind
+//   AstrecEffect  one-off effects: dwcleave, dwshock, dwcounter, dwrevive, dwwind, dwbreach (his charge's track)
 //   AstrecScreen  Death Wish's tier on the screen's edge, Not Yet's grey, No Retreat
 // ─────────────────────────────────────────────────────────────────────────────
 import { dwTier, TIER_COLORS } from './astrecPlatinum.js';
@@ -88,6 +88,19 @@ export function AstrecEffect({ f, k }) {
         {outP > 0 && <circle cx={f.x} cy={f.y} r={f.r * outP} fill="none" stroke={PALE} strokeWidth={6 * k * (1 - outP)} opacity={1 - outP} />}
         <text x={f.x} y={f.y + 6 * k} textAnchor="middle" fontSize={34 * k} fontWeight={900} fill={PALE} opacity={1 - outP}
           style={{ paintOrder: 'stroke', stroke: '#000', strokeWidth: 5 }}>✝</text>
+      </g>
+    );
+  }
+  if (f.kind === 'dwbreach') {
+    // his charge: a heavy streak where he went through, cracks either side
+    const dx = f.x2 - f.x1, dy = f.y2 - f.y1, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, mx = (f.x1 + f.x2) / 2, my = (f.y1 + f.y2) / 2;
+    return (
+      <g opacity={o}>
+        <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke="rgba(0,0,0,0.55)" strokeWidth={22 * k} strokeLinecap="round" />
+        <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke={RED} strokeOpacity={0.55} strokeWidth={12 * k} strokeLinecap="round" />
+        <line x1={f.x1} y1={f.y1} x2={f.x2} y2={f.y2} stroke={PALE} strokeWidth={3 * k} strokeLinecap="round" />
+        {[1, -1].map(sd => <path key={sd} d={`M${mx + nx * sd * 10 * k},${my + ny * sd * 10 * k} l${nx * sd * 9 * k + dx / L * 6 * k},${ny * sd * 9 * k + dy / L * 6 * k} l${nx * sd * 6 * k - dx / L * 4 * k},${ny * sd * 6 * k - dy / L * 4 * k}`}
+          fill="none" stroke={BONE} strokeOpacity={0.6} strokeWidth={1.5 * k} />)}
       </g>
     );
   }
