@@ -77,6 +77,17 @@ export function RamsfOver({ s, k, P, time }) {
         </g>
       )}
       {P && r.strings && <polyline points={r.strings.pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')} fill="none" stroke={PINK} strokeOpacity={0.35} strokeWidth={1 * k} strokeDasharray={`${2 * k} ${4 * k}`} />}
+      {/* the timing cue: the next hit coming at you. A ring closes in and meets the cursor's ring
+          the moment it lands (it doesn't tell you when to press: you read it) */}
+      {P && r.threat != null && !(r.pw > 0) && (() => {
+        const f = clamp01(r.threat / 0.7), R0 = 16 * k, R = R0 + 70 * k * f;
+        return (
+          <g opacity={0.35 + 0.5 * (1 - f)}>
+            <circle cx={P.x} cy={P.y} r={R0} fill="none" stroke={BLUSH} strokeOpacity={0.5} strokeWidth={1.2 * k} />
+            <circle cx={P.x} cy={P.y} r={R} fill="none" stroke={PINK} strokeWidth={(1.5 + 1.5 * (1 - f)) * k} strokeDasharray={f > 0.02 ? `${4 * k} ${3 * k}` : undefined} />
+          </g>
+        );
+      })()}
       {/* the parry window: a ring closing on the cursor */}
       {P && r.pw > 0 && (() => {
         const f = clamp01(r.pw / (sk.parryWin ?? 0.22));

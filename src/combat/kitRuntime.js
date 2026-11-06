@@ -286,6 +286,7 @@ export function createKitRuntime(api) {
   }
   function onPlayerHit(dmg = 0) {
     if (skill()?.type === 'deathwish') astrec.onHit(dmg);   // 6★ Astrec: what Brace soaks up
+    if (skill()?.type === 'marionette') ramsf.onHurt(dmg);  // 6★ Ramsf: a hit you might still parry a hair late
     if (s.kit.souls > 0) {
       s.kit.souls--;
       const P = s.player.pos;
@@ -1266,7 +1267,7 @@ export function createKitRuntime(api) {
     ultBlocked, activateUlt, endUlt, choose,
     hitMahoraga: (raw, kind) => (s.mahoraga?.v2 ? ts : bio).hitMahoraga(raw, kind),
     // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
-    signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale(),
+    signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale() * (skill()?.type === 'marionette' ? ramsf.timeScale() : 1),   // (Bio's sign wheel / 6★ Ramsf's slow motion after a parry)
     cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
     hurtMult, attackRate, undying, exposedBonus,
     update, reset, origin, slide,

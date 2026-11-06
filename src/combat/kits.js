@@ -155,12 +155,12 @@ export const SKILLS = {
                               desc: 'Sub-Zero: frozen enemies take +{bonus} DMG from everything. Chain Frost: every shattered enemy throws shards that add {chain} Freeze to whatever is near it.' } },
   // 6★ Ramsf (Platinum): ten porcelain doll arms; a parry character (ramsfPlatinum.js)
   marionette:    { type: 'marionette', style: 'platinum',
-                   parryWin: 0.22, parryCd: 0.6, hitstop: 0.09, parryPct: 3, reflectPct: 4, stagger: 1.5,   // M2: Parry
+                   parryWin: 0.27, parryCd: 0.45, hitstop: 0.09, parryPct: 3, reflectPct: 4, stagger: 1.5,   // M2: Parry
                    armR: 160,                                       // the arms on the cursor reach this far
                    stringLen: 900, stringPct: 1.5,                  // drag: Strings
                    full: 0.8, minPct: 1, pct: 4, gustR: 220,        // hold M1: Wingbeat
                    cooldown: 14, torDur: 6, torR: 110, torPull: 240, torPct: 2,   // Q: Tornado
-                   lv1: { parryWin: 0.18, parryPct: 1.8, reflectPct: 2.4, stringPct: 0.9, minPct: 0.6, pct: 2.4, cooldown: 18, torPct: 1.2 },
+                   lv1: { parryWin: 0.23, parryPct: 1.8, reflectPct: 2.4, stringPct: 0.9, minPct: 0.6, pct: 2.4, cooldown: 18, torPct: 1.2 },
                    si: { parryWin: 0.01, parryPct: 0.5, reflectPct: 0.6, stringPct: 0.25, pct: 0.6, minPct: 0.15, cooldown: -0.6, torPct: 0.35, torDur: 0.5 },
                    desc: 'MARIONETTE. M2: PARRY. Tap just before a hit lands ({parryWin}s window): the game freezes for a beat, the attack is cancelled, a shot flies back at whoever fired it ({reflectPct} click DMG), and anything that swung at you is struck by an arm ({parryPct} click DMG) and staggered. Nothing to parry, and you can\'t parry again for {parryCd}s. '
                      + 'DRAG (hold M1 and move): STRINGS. Tie up everything you pass through (up to {stringLen} long); let go and they\'re yanked together into a heap ({stringPct} click DMG each). '

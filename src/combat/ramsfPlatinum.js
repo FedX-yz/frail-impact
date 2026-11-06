@@ -4,10 +4,13 @@
 // file while he's the main card. What's drawn for it is in RamsfFx.jsx.
 //
 //   M2          PARRY: tap just before a hit lands. Inside the window (parryWin s) anything
-//               that would hit you is parried: the game freezes for a beat (hitstop), the
-//               attack is cancelled, a shot flies back at whoever fired it, and the attacker
-//               is struck by an arm, staggered, and exposed (takes more damage) for a while.
-//               A whiff (nothing to parry) and you can't parry again for parryCd s.
+//               that would hit you is parried: the game freezes for a beat (hitstop), eases
+//               back in through a moment of slow motion, the attack is cancelled, a shot
+//               flies back at whoever fired it, and the attacker is struck by an arm,
+//               staggered, and exposed (takes more damage) for a while. A hair late (up to
+//               LATE s after it hit) still counts: the damage is given back. A whiff
+//               (nothing to parry) and you can't parry again for parryCd s. A ring closing on
+//               the cursor shows when the next hit will land (RamsfFx).
 //   passive     TEN ARMS: every perfect parry puts one of his doll arms on your cursor (up to
 //               ten). Every click, each of them strikes too. Go armHold s without a parry and
 //               they drop off, one at a time. Parries in a row (a streak) freeze harder.
@@ -24,6 +27,9 @@
 const HOLD_MIN = 0.25;      // shorter than this is a click, not a Wingbeat
 const DRAG_START = 18;      // design px the cursor has to move while held to string instead
 const CUTIN = 1.1;          // seconds the burst art is on screen (the fight goes on)
+const LATE = 0.06;          // a parry this late (after the hit landed) still counts
+const SLOWMO = 0.22;        // after the freeze: this long easing back in from slow motion
+const CUE = 0.7;            // the timing cue shows hits this many seconds away
 export const MAX_ARMS = 10;
 export const RAMSF_INTRO = CUTIN;
 export const RAMSF_EFFECTS = new Set(['parryflash', 'gust', 'yank', 'armhit']);
@@ -54,6 +60,15 @@ export function createRamsfPlatinum(ctx) {
     const sk = skill(), r = st();
     if (!sk || !fighting()) return false;
     if (r.pw > 0) return true;   // already up
+    // a hair late: it hit a moment ago → it still counts (and the damage comes back)
+    const lh = r.lastHurt;
+    if (lh && s.time - lh.t <= LATE && s.phase !== 'defeat') {
+      r.lastHurt = null;
+      s.player.hp = Math.min(s.player.maxHp, s.player.hp + lh.dmg);
+      s.combo.n = Math.max(s.combo.n, lh.combo);
+      parry(sk, lh.kind, lh.src && s.enemies.includes(lh.src) ? lh.src : null, lh.from, false);
+      return true;
+    }
     if (r.pcd > 0) { label('…', x, y - K(30), '#a8a29e'); return false; }
     r.pw = sk.parryWin; r.pwHit = false;
     sfx('tick');
@@ -64,9 +79,15 @@ export function createRamsfPlatinum(ctx) {
     const sk = skill(), r = st();
     if (sk?.type !== 'marionette' || kind === 'poison') return false;
     const auto = openArms();
-    if (!(r.pw > 0) && !auto) return false;
+    if (!(r.pw > 0) && !auto) { r.pending = { t: s.time, kind, src, from, combo: s.combo.n }; return false; }   // (in case you parry a hair late)
     parry(sk, kind, src, from, auto);
     return true;
+  }
+  // the hit landed (engine → kitRuntime.onPlayerHit): remember it for a late parry
+  function onHurt(dmg) {
+    const r = st();
+    if (r.pending && s.time - r.pending.t < 0.02) r.lastHurt = { ...r.pending, dmg, t: s.time };
+    r.pending = null;
   }
   function parry(sk, kind, src, from, auto) {
     const r = st(), pv = passive(), p = P();
@@ -79,6 +100,7 @@ export function createRamsfPlatinum(ctx) {
     const stop = auto ? 0.05 : Math.min(0.17, sk.hitstop + 0.015 * Math.min(5, r.streak - 1));
     s.timeStop = Math.max(s.timeStop, stop);
     r.hitstop = stop;   // (so the arena shows a parry's impact frame, not a time stop)
+    if (!auto) r.slow = SLOWMO;   // …then a moment of slow motion, easing back to full speed
     s.player.invuln = Math.max(s.player.invuln, stop + 0.25);
     r.lastParry = { x: p.x, y: p.y, t: s.time };
     // who did it: the enemy that swung, or the one that fired the shot
@@ -207,6 +229,8 @@ export function createRamsfPlatinum(ctx) {
     const sk = skill(), pv = passive(), r = st(), pl = s.player, p = pl.pos;
     r.floats = 0;
     r.hitstop = Math.max(0, (r.hitstop ?? 0) - dt);
+    if (r.slow > 0 && !(r.hitstop > 0)) r.slow = Math.max(0, r.slow - dt / Math.max(0.3, timeScale()));   // (real seconds, not slowed ones)
+    r.threat = sk?.type === 'marionette' && p ? nextHit(p) : null;
     if (r.cutin) { r.cutin.t += dt; if (r.cutin.t >= r.cutin.life) r.cutin = null; }
     r.strikes.forEach(k => { k.t += dt; }); r.strikes = r.strikes.filter(k => k.t < k.life);
     r.tcd = Math.max(0, r.tcd - dt);
@@ -270,16 +294,48 @@ export function createRamsfPlatinum(ctx) {
     }
   }
 
+  // the slow motion after a parry: 0.3 → 1 (kitRuntime.timeScale → the engine's dt)
+  function timeScale() {
+    const r = st();
+    if (!(r.slow > 0) || r.hitstop > 0) return 1;
+    const u = 1 - r.slow / SLOWMO;   // 0 → 1 as it wears off
+    return 0.3 + 0.7 * u * u;
+  }
+  // how soon the next enemy attack aimed at you lands (seconds), for the timing cue; null = none coming
+  function nextHit(p) {
+    const T = { x: p.x, y: p.y, r: K(10) };
+    let best = null;
+    const take = eta => { if (eta >= 0 && eta <= CUE && (best == null || eta < best)) best = eta; };
+    for (const a of s.attacks) {
+      if (a.phase === 'done' || a.hitDone) continue;
+      const left = a.phase === 'tele' ? a.tele - a.t : a.phase === 'wait' ? a.delay + a.tele : 0;
+      if (a.kind === 'shot') {
+        if (a.phase === 'fly') {
+          const dx = T.x - a.x, dy = T.y - a.y, along = dx * a.ux + dy * a.uy;
+          if (along > 0 && Math.abs(dx * a.uy - dy * a.ux) <= (a.r ?? 0) + K(6) + T.r) take((along - (a.r ?? 0) - T.r) / Math.max(1, a.speed));
+        } else if (a.phase === 'tele' && a.sx != null) take(left + dist(a.sx, a.sy, T.x, T.y) / Math.max(1, a.speed ?? K(600)));
+      } else if (a.phase === 'tele' && (a.kind === 'circle' || a.kind === 'poke')) {
+        if (a.cx != null && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r) take(left);
+      } else if (a.phase === 'tele' && (a.kind === 'slash' || a.kind === 'tongue')) {
+        if (a.x1 != null && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= (a.w ?? 0) / 2 + T.r) take(left);
+      } else if (a.phase === 'tele' && a.kind === 'dash') {
+        const o = s.enemies.find(e => e.id === a.owner);
+        if (o) take(left + Math.max(0, dist(o.x, o.y, T.x, T.y) - radius(o)) / K(950));
+      }
+    }
+    return best;
+  }
+
   // ── for the HUD ──────────────────────────────────────────────────────────
   const m2Info = () => { const r = st(), sk = skill(); return { kind: 'cd', cd: r.pw > 0 ? 0 : r.pcd, cdMax: sk?.parryCd || 0.6, color: PINK, text: 'M2', btn: 'PARRY', hint: 'Parry: M2 just before a hit lands' }; };
   const qInfo = () => { const r = st(), sk = skill(); return { kind: 'cd', cd: r.tcd, cdMax: r.tcdMax || sk?.cooldown || 14, color: '#c084fc', text: 'Q', hint: 'Tornado: Q (phone: the SKILL button)' }; };
-  const active = () => { const r = s.kit.ramsf; return !!(r && (r.tornado || r.strikes.length || r.cutin || r.arms > 0 || r.pw > 0 || r.pcd > 0)); };
+  const active = () => { const r = s.kit.ramsf; return !!(r && (r.tornado || r.strikes.length || r.cutin || r.arms > 0 || r.pw > 0 || r.pcd > 0 || r.slow > 0)); };
   function reset(why) {
     const r = st();
-    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0;
+    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null;
     if (why === 'defeat') r.arms = 0;
   }
   const exposedBonus = e => { const pv = passive(); return pv?.type === 'tenarms' && e.exposedT > s.time ? pv.exposed : 0; };
 
-  return { press, tryParry, onClick, release, tornado, ult, endUlt, update, m2Info, qInfo, active, reset, exposedBonus, armsNow, PORCELAIN };
+  return { press, tryParry, onHurt, onClick, release, tornado, ult, endUlt, update, m2Info, qInfo, active, reset, exposedBonus, armsNow, timeScale, PORCELAIN };
 }
