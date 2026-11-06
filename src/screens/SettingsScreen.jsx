@@ -249,10 +249,10 @@ function CommandLine({ onClose }) {
     if (!cmd) return;
     setLine('');
     const r = await runCommand(cmd).catch(() => null);
-    if (r) {
-      setOut(r === 'on' ? '☸ THE WHEEL TURNS.' : '…the shadows sleep.');
+    if (r?.what === 'wheel') {
+      setOut(r.on ? '☸ THE WHEEL TURNS.' : '…the shadows sleep.');
       setTimeout(() => window.location.reload(), 1400);
-    } else setOut(`'${cmd.slice(0, 32)}' is not recognized as an internal or external command, operable program or batch file.`);
+    } else if (r?.what === 'dub') setOut(r.on ? '🎙 THE CAST FINDS ITS VOICE.' : '…the voices fall quiet.'); else setOut(`'${cmd.slice(0, 32)}' is not recognized as an internal or external command, operable program or batch file.`);
   };
   return (
     <form onSubmit={submit} style={{ background:'#0a0603', borderBottom:'1px solid #ff8c00', padding:'8px 14px', fontFamily:'var(--font-ui)', color:'var(--amber)', fontSize:14, flexShrink:0 }}>

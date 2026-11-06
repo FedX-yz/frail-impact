@@ -5,8 +5,8 @@
 // tools/voices-*.json say which take belongs to which line (its generation id, its length and
 // the game file it becomes). Each downloaded file is matched to its line by the generation id
 // in its file name if it has one, otherwise by its length (and the voice's name, if the file
-// name has it). Then it gets its character's filter (cast.js voice.fx: Dr. Reef's distortion)
-// and is levelled like tools/make-voices.mjs does, into public/audio/voice/<who>/<hash>.mp3.
+// name has it). Then it gets its character's filter (cast.js dub.fx: Dr. Reef's distortion)
+// and is levelled like tools/make-voices.mjs does, into public/audio/dub/<who>/<hash>.mp3 (the secret dub).
 // Lines it isn't sure about are listed, not guessed.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -56,7 +56,7 @@ function loudestMoment(file) {
 for (const [x, l, how] of plan) {
   console.log(`${x.base}  →  ${l.file}  (${l.who}: "${l.text.slice(0, 50)}", by ${how})`);
   if (dry) continue;
-  const v = CAST[l.who].voice, fx = path.join(tmp, 'fx.wav');
+  const v = CAST[l.who].dub, fx = path.join(tmp, 'fx.wav');
   execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', x.f, ...(v.fx ? [v.fx.includes('[') ? '-filter_complex' : '-af', v.fx] : []), '-ar', '44100', '-ac', '1', fx]);
   const gain = DIALOGUE_M - loudestMoment(fx);
   fs.mkdirSync(path.dirname(l.file), { recursive: true });

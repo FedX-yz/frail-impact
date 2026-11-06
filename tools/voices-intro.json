@@ -1,12 +1,12 @@
 {
  "flow": "o1dA0Vxis7WIN96QsPGU",
  "voice": "Reef",
- "note": "Dr. Reef (the hidden caller) in the intro (c1-briefing): Reef's ElevenLabs voice; the filter (cast.js stranger.voice.fx) goes on when imported",
+ "note": "Dr. Reef (the hidden caller) in the intro (c1-briefing): Reef's ElevenLabs voice; the filter (cast.js stranger.dub.fx) goes on when imported",
  "lines": [
   {
    "n": 1,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/a0a46ec8.mp3",
+   "file": "public/audio/dub/stranger/a0a46ec8.mp3",
    "text": "Happy birthday, dear guest.",
    "generation": "fWFKSakq3ZHOiCa1six6",
    "secs": 2.4
@@ -14,7 +14,7 @@
   {
    "n": 2,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/12246b4c.mp3",
+   "file": "public/audio/dub/stranger/12246b4c.mp3",
    "text": "Please don't be alarmed, I was just so delighted to know you'd come here. Have a seat.",
    "generation": "0sFKRrM4l3gsQluCnDft",
    "secs": 5.6
@@ -22,7 +22,7 @@
   {
    "n": 3,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/de7210b0.mp3",
+   "file": "public/audio/dub/stranger/de7210b0.mp3",
    "text": "You are here for a very special reason, do you know why that is?",
    "generation": "vVd6cIq1fHAyac1yGcQI",
    "secs": 4.56
@@ -30,7 +30,7 @@
   {
    "n": 4,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/1382739f.mp3",
+   "file": "public/audio/dub/stranger/1382739f.mp3",
    "text": "You've been chosen for your excellent skills as a manager of the squadrons you've led throughout your career. That's the type of person I'm looking for to be in charge of a very special mission.",
    "generation": "371RlfFd7uH3NLXqgPRq",
    "secs": 10.8
@@ -38,7 +38,7 @@
   {
    "n": 5,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/05617725.mp3",
+   "file": "public/audio/dub/stranger/05617725.mp3",
    "text": "Oh? Then tell me.",
    "generation": "mFGqT657rIu2w4ZIFIIo",
    "secs": 2.32
@@ -46,7 +46,7 @@
   {
    "n": 6,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/ccaf2004.mp3",
+   "file": "public/audio/dub/stranger/ccaf2004.mp3",
    "text": "...How clever, that's correct!",
    "generation": "GwEayJ7kjDrJc8lzIY69",
    "secs": 2.88
@@ -54,7 +54,7 @@
   {
    "n": 7,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/8a1a3b56.mp3",
+   "file": "public/audio/dub/stranger/8a1a3b56.mp3",
    "text": "...Ground zero.",
    "generation": "khHukgBvQkBTTxC2h1sg",
    "secs": 1.52
@@ -62,7 +62,7 @@
   {
    "n": 8,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/0aaf5f8b.mp3",
+   "file": "public/audio/dub/stranger/0aaf5f8b.mp3",
    "text": "I am reuniting a squad to delve deep into the ground zero of the virus outbreak, where it all started.",
    "generation": "fHHV3lP56N0HjgMs0AmM",
    "secs": 6.96
@@ -70,7 +70,7 @@
   {
    "n": 9,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/e1974d14.mp3",
+   "file": "public/audio/dub/stranger/e1974d14.mp3",
    "text": "I call it... the Frail Initiative.",
    "generation": "LxgQ4TF7V3ud4aGWb61s",
    "secs": 2.88
@@ -78,7 +78,7 @@
   {
    "n": 10,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/90317ddd.mp3",
+   "file": "public/audio/dub/stranger/90317ddd.mp3",
    "text": "Oh? So you're calling it quits? Is that what I'm hearing?",
    "generation": "g10Fg6Jg29znQc04Kp6y",
    "secs": 3.92
@@ -86,7 +86,7 @@
   {
    "n": 11,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/c649495f.mp3",
+   "file": "public/audio/dub/stranger/c649495f.mp3",
    "text": "Very well.",
    "generation": "T6KK4Ls2l7cPWQp1rwgF",
    "secs": 1.68
@@ -94,7 +94,7 @@
   {
    "n": 12,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/7f7f4335.mp3",
+   "file": "public/audio/dub/stranger/7f7f4335.mp3",
    "text": "The Frail Initiative was created to investigate the ground zero in search of clues to what may have caused the Havoc virus outbreak, in an effort to produce a cure with our finds.",
    "generation": "mQCw0XZpeQoZAaEd2y7N",
    "secs": 10.64
@@ -102,7 +102,7 @@
   {
    "n": 13,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/da119068.mp3",
+   "file": "public/audio/dub/stranger/da119068.mp3",
    "text": "You may be thinking it's too dangerous for a squad to go to these depths, however...",
    "generation": "LA5buKtpozl5hS7Fmyd2",
    "secs": 5.36
@@ -110,7 +110,7 @@
   {
    "n": 14,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/8509e499.mp3",
+   "file": "public/audio/dub/stranger/8509e499.mp3",
    "text": "The Frail Initiative is formed by a group of the strongest humans available on earth.",
    "generation": "qLMgYzAgdmMIi4EeLisp",
    "secs": 5.36
@@ -118,7 +118,7 @@
   {
    "n": 15,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/a600fd9e.mp3",
+   "file": "public/audio/dub/stranger/a600fd9e.mp3",
    "text": "Your everyday Havoc threat is nothing more than child's play for those individuals. But the ground zero still poses a great threat regardless of our group's level, and that's where you come in, dear manager.",
    "generation": "11menKCOG7AW44BKfbqN",
    "secs": 12.64
@@ -126,7 +126,7 @@
   {
    "n": 16,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/252ae3df.mp3",
+   "file": "public/audio/dub/stranger/252ae3df.mp3",
    "text": "Are we on the same page? Hm?",
    "generation": "yS72tGkmoHfw9c18qIIg",
    "secs": 2.48
@@ -134,7 +134,7 @@
   {
    "n": 17,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/82858def.mp3",
+   "file": "public/audio/dub/stranger/82858def.mp3",
    "text": "I am delighted to hear that. However... you must pass a test to get the job.",
    "generation": "E1iQUgeHwPUKl8CN7x1V",
    "secs": 6.88
@@ -142,7 +142,7 @@
   {
    "n": 18,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/d8d8553f.mp3",
+   "file": "public/audio/dub/stranger/d8d8553f.mp3",
    "text": "Look over the table next to you, the papers and pen should be at your disposal. Good luck.",
    "generation": "nOnlTgBDs2QsLJNeuw97",
    "secs": 5.76
@@ -150,7 +150,7 @@
   {
    "n": 19,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/918c1c76.mp3",
+   "file": "public/audio/dub/stranger/918c1c76.mp3",
    "text": "Hmmmmm... well...",
    "generation": "w6fFxrShGzRRPLDThbsk",
    "secs": 3.04
@@ -158,7 +158,7 @@
   {
    "n": 20,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/59b58620.mp3",
+   "file": "public/audio/dub/stranger/59b58620.mp3",
    "text": "Con-gra..........tulations!!!!!!! You may now blow out the candle, Mr. Manager, it's your birthday!!!",
    "generation": "t7Hh3RFtB8b4AZ8wMILk",
    "secs": 7.12
@@ -166,7 +166,7 @@
   {
    "n": 21,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/1669f328.mp3",
+   "file": "public/audio/dub/stranger/1669f328.mp3",
    "text": "Okay Mr. Manager, now sign this contract right here.",
    "generation": "LRM1fc0UpE4SqM64Y5pS",
    "secs": 4.0
@@ -174,7 +174,7 @@
   {
    "n": 22,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/f6929182.mp3",
+   "file": "public/audio/dub/stranger/f6929182.mp3",
    "text": "That settles it! The Frail Initiative welcomes you with open arms.",
    "generation": "mnNwg5PCISAIJJ0uVbp3",
    "secs": 4.88
@@ -182,7 +182,7 @@
   {
    "n": 23,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/124f7f3b.mp3",
+   "file": "public/audio/dub/stranger/124f7f3b.mp3",
    "text": "Now get out of my clinic!!! Your first day will be tomorrow in the Z district at 6. I do hope you are prepared.",
    "generation": "4EMTYSuvh0YgFbck0xdG",
    "secs": 8.16
@@ -190,7 +190,7 @@
   {
    "n": 24,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/6affe315.mp3",
+   "file": "public/audio/dub/stranger/6affe315.mp3",
    "text": "Oh, and you may take the cake.",
    "generation": "Owonzznstse9aUWuxCOS",
    "secs": 2.64
@@ -198,7 +198,7 @@
   {
    "n": 25,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/2b23da64.mp3",
+   "file": "public/audio/dub/stranger/2b23da64.mp3",
    "text": "Hmmmmm.... No, that's not quite it.",
    "generation": "bRiWkL9Pd4uu6bnYWqVP",
    "secs": 3.92
@@ -206,7 +206,7 @@
   {
    "n": 26,
    "who": "stranger",
-   "file": "public/audio/voice/stranger/f857eca3.mp3",
+   "file": "public/audio/dub/stranger/f857eca3.mp3",
    "text": "I'm afraid our birthday party here is over. Out of here!!",
    "generation": "tpWxQH9oYduKdStUG6Ds",
    "secs": 3.92

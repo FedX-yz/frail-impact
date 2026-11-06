@@ -70,8 +70,9 @@ for (const [scene, steps] of Object.entries(SCENES)) {
   for (const step of steps) {
     if (!Array.isArray(step)) continue;
     const [who, text] = step;
-    const v = CAST[who]?.voice;
-    if (!v || !text || !/[a-z0-9]/i.test(text) || (only && !only.has(who))) continue;   // (no words: "..." stays silent)
+    if (!text || !/[a-z0-9]/i.test(text) || (only && !only.has(who))) continue;   // (no words: "..." stays silent)
+    // their normal voice and their dub (cast.js), each into its own folder
+    for (const v of [CAST[who]?.voice, CAST[who]?.dub].filter(Boolean)) {
     const el = v.engine === 'elevenlabs';
     if (el && !v.id) { waiting.add(who); continue; }
     const out = path.join('public', voiceFile(v.dir, text));
@@ -102,6 +103,7 @@ for (const [scene, steps] of Object.entries(SCENES)) {
       '-ar', '44100', '-ac', '1', '-b:a', '96k', out]);
     console.log(`${scene}  ${who}: ${say.slice(0, 60)}  →  ${out}`);
     made++;
+    }
   }
 }
 fs.rmSync(tmp, { recursive: true, force: true });

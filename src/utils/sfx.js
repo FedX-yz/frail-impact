@@ -113,7 +113,8 @@ export function playMusic(src, { offset = 0, fadeIn = 0, gain = 1, loop = false 
   }).catch(() => null);
 }
 // Voiced story lines: one at a time, a new one (or stopVoice) cuts the last off.
-// onEnd() is called once when the line has finished (or couldn't be played).
+// onEnd(played) is called once when the line has finished (played: true) or couldn't be played.
+// src can be a list: the first file that loads plays (the dub, else the normal voice).
 // The files are mastered to the dialogue level (-17 LUFS), so they play at unity.
 let voice = null;
 export function playVoice(src, onEnd = null) {
@@ -121,8 +122,10 @@ export function playVoice(src, onEnd = null) {
   if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
   const h = { stopped: false };
   voice = h;
-  const done = () => { if (!h.ended) { h.ended = true; if (!h.stopped) onEnd?.(); } };
-  loadBuffer(src).then(decoded => {
+  const done = () => { if (!h.ended) { h.ended = true; if (!h.stopped) onEnd?.(!!h.source); } };
+  const srcs = [src].flat().filter(Boolean);
+  const first = srcs.reduce((p, s) => p.catch(() => loadBuffer(s)), Promise.reject(new Error('no voice')));
+  first.then(decoded => {
     if (h.stopped) return;
     const s = _audioCtx.createBufferSource(), g = _audioCtx.createGain();
     s.buffer = decoded; g.gain.value = 1;

@@ -6,6 +6,7 @@ import { Portrait } from './Codec';
 import { CODEC, useTypewriter } from './codecStyle';
 import { playSFX, playPress, storyTrack, stopStoryTrack, playVoice, stopVoice, preloadSound, soundLength } from '../utils/sfx';
 import { voiceFile } from './voice';
+import { dubOn } from '../utils/secrets';
 import TapButton from '../components/TapButton';
 import JobApplication from './JobApplication';
 import { CREDITS } from './credits';
@@ -100,16 +101,24 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   // (keyed by the line itself: a choice coming up under it mustn't play it again).
   // voiceDone: the line's voice has finished (auto mode and 'end' sounds wait for it)
   const lineKey = st.line ? `${st.line.at}:${st.line.who}` : null;
-  // (an ElevenLabs voice with no ID picked yet: silent)
-  const voiceOf = who => { const v = CAST[who]?.voice; return v && (v.engine !== 'elevenlabs' || v.id) ? v : null; };
-  const voiced = !!(st.line && voiceOf(st.line.who));
+  // the files a line can play, in order: with the secret dub on (utils/secrets.js), its dub
+  // (cast.js → dub, if that voice is picked), then its normal voice; a missing file is skipped
+  const voicesOf = line => {
+    const c = line && CAST[line.who];
+    if (!c) return [];
+    const dirs = [dubOn() && c.dub?.id ? c.dub.dir : null, c.voice?.dir].filter(Boolean);
+    return dirs.map(d => asset(voiceFile(d, line.text)));
+  };
+  const [voiced, setVoiced] = useState(false);   // this line really has a voice playing (auto mode's pace)
   const [voiceDone, setVoiceDone] = useState(true);
   useEffect(() => {
-    const v = st.line && voiceOf(st.line.who);
-    if (!v || skip) { stopVoice(); setVoiceDone(true); return; }
+    const srcs = voicesOf(st.line);
+    setVoiced(false);
+    if (!srcs.length || skip) { stopVoice(); setVoiceDone(true); return; }
     let alive = true;
     setVoiceDone(false);
-    playVoice(asset(voiceFile(v.dir, st.line.text)), () => { if (alive) { setVoiceDone(true); window.__vnDebug?.('voiceEnd', st.line.text.slice(0, 30)); } });
+    setVoiced(true);
+    playVoice(srcs, played => { if (alive) { setVoiced(played); setVoiceDone(true); window.__vnDebug?.('voiceEnd', st.line.text.slice(0, 30)); } });
     const safety = setTimeout(() => { if (alive) setVoiceDone(true); }, 4000 + st.line.text.length * 90);   // never wait forever
     return () => { alive = false; clearTimeout(safety); };
   }, [lineKey]); // eslint-disable-line react-hooks/exhaustive-deps
