@@ -337,7 +337,6 @@ export function createKitRuntime(api) {
     if (skill()?.type === 'zero') ice.onClick(e, auto);            // 6★ Ice: every click builds Freeze
     if (skill()?.type === 'boil') bonk.onClick(e, auto);           // 6★ Bonk: every click builds Bleed
     if (skill()?.type === 'deathwish') astrec.onClick(e, auto);    // 6★ Astrec: Death Wish's cleave and shockwaves
-    if (skill()?.type === 'marionette') ramsf.onClick(e, auto);    // 6★ Ramsf: the arms on your cursor strike too
   }
   // Stephen: a crit click slices a line through the target
   function onCritClick(e) {

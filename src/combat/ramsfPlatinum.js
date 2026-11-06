@@ -16,7 +16,7 @@
 //               don't give arms or count toward the streak, freeze only a tick, and don't make
 //               the follow-through last longer.
 //   passive     TEN ARMS: every perfect parry puts one of his doll arms on your cursor (up to
-//               ten). Every click, each of them strikes too. Go armHold s without a parry and
+//               ten). They fight on their own (armsFight). Go armHold s without a parry and
 //               they drop off, one at a time. Parries in a row (a streak) freeze harder.
 //   drag        STRINGS: hold M1 and move through enemies to tie them with doll strings; let
 //               go and they're yanked together into a heap
@@ -145,31 +145,38 @@ export function createRamsfPlatinum(ctx) {
     r.pcd = 0;
   }
 
-  // ── click: the arms strike too ───────────────────────────────────────────
-  function onClick(e, auto) {
-    const sk = skill(), pv = passive(), r = st(), n = armsNow();
-    if (!sk || !e || auto || !n || !pv) return;
-    const R = K(sk.armR), p = P();
-    // every arm goes for its own enemy around the cursor: the one you clicked, then the nearest others.
-    // Only once everyone in reach has an arm on them do they double up.
-    const near = foes().filter(o => o !== e && dist(o.x, o.y, p.x, p.y) <= R + radius(o) * 0.5)
-      .sort((a, b) => dist(a.x, a.y, p.x, p.y) - dist(b.x, b.y, p.x, p.y));
-    const pool = [e, ...near];
-    const picks = Array.from({ length: n }, (_, i) => pool[i % pool.length]);
-    // each one goes to the free arm pointing most its way (so they fan out instead of crossing)
-    const free = Array.from({ length: n }, (_, i) => i), want = (t) => Math.atan2(t.y - p.y, t.x - p.x);
-    const order = picks.map((t, j) => j).sort((a, b) => Math.abs(angDiff(want(picks[a]), -Math.PI / 2)) - Math.abs(angDiff(want(picks[b]), -Math.PI / 2)));
-    let q = 0;
-    api.asYou(() => order.forEach(j => {
-      const t = picks[j];
-      if (!alive(t)) return;
-      const a = want(t);
-      let best = 0;
-      free.forEach((arm, f) => { if (Math.abs(angDiff(restAngle(arm), a)) < Math.abs(angDiff(restAngle(free[best]), a))) best = f; });
-      const arm = free.splice(best, 1)[0];
-      kitHit(t, pv.armPct, { color: '#fbcfe8', label: '🖐', quiet: q++ >= 2 });
-      r.strikes.push({ id: nextId(), arm, foe: t.id, x: t.x + rand(-0.3, 0.3) * radius(t), y: t.y + rand(-0.3, 0.3) * radius(t), t: 0, life: 0.2 + Math.min(0.12, dist(t.x, t.y, p.x, p.y) / K(2600)) + q * 0.01 });
-    }));
+  // ── TEN ARMS: they fight on their own ────────────────────────────────────
+  // Every armRate s each arm strikes something within its reach of the cursor (no stretching
+  // past it). They spread out: an arm goes for the enemy with the fewest arms on it, then the one
+  // on its own side of the cursor, then the nearest. Not while they're folded into wings.
+  const wingsOut = () => { const h = s.player.held; return !!(h && !h.ramsf?.drag && s.time - h.t0 > 0.12); };
+  function armsFight(dt, live) {
+    const r = st(), pv = passive(), sk = skill(), p = P(), n = armsNow();
+    const cd = r.armCd ?? (r.armCd = []);
+    cd.length = n;   // (arms that dropped off forget their timing)
+    if (!n || !pv || !p || !live || !fighting() || s.mahoraga || s.timeStop > 0 || wingsOut()) return;
+    const R = K(sk?.armR ?? 80), rate = pv.armRate ?? 0.5;
+    let near = null;
+    api.asYou(() => {
+      for (let i = 0; i < n; i++) {
+        if (cd[i] == null) cd[i] = rand(0.1, rate);   // (a new arm joins out of step with the rest)
+        cd[i] -= dt;
+        if (cd[i] > 0) continue;
+        near ??= foes().filter(e => dist(e.x, e.y, p.x, p.y) <= R + radius(e) * 0.6);
+        if (!near.length) { cd[i] = 0.05; continue; }
+        const side = restAngle(i);
+        let t = null, tk = null;
+        for (const e of near) {
+          if (!alive(e)) continue;
+          const k = [r.strikes.reduce((c, x) => c + (x.foe === e.id), 0), Math.round(Math.abs(angDiff(Math.atan2(e.y - p.y, e.x - p.x), side)) * 2), dist(e.x, e.y, p.x, p.y)];
+          if (!tk || k[0] < tk[0] || (k[0] === tk[0] && (k[1] < tk[1] || (k[1] === tk[1] && k[2] < tk[2])))) { t = e; tk = k; }
+        }
+        if (!t) { cd[i] = 0.05; continue; }
+        cd[i] = rate * rand(0.85, 1.15);
+        kitHit(t, pv.armPct, { color: '#fbcfe8', label: '🖐', quiet: r.floats++ >= 2 });
+        r.strikes.push({ id: nextId(), arm: i, foe: t.id, x: t.x + rand(-0.25, 0.25) * radius(t), y: t.y + rand(-0.25, 0.25) * radius(t), t: 0, life: 0.22 });
+      }
+    });
     if (r.strikes.length > 40) r.strikes.splice(0, r.strikes.length - 40);
   }
 
@@ -268,6 +275,7 @@ export function createRamsfPlatinum(ctx) {
       r.armT += dt;
       if (r.armT >= (pv?.armHold ?? 6)) { r.dropT += dt; if (r.dropT >= 1.5) { r.dropT = 0; r.arms--; if (p) label(`🖐 ${r.arms}/${MAX_ARMS}`, p.x, p.y + K(40), '#a8a29e'); } }
     }
+    armsFight(dt, live);
     // drag: STRINGS (hold M1 and move through enemies)
     const held = pl.held;
     if (sk?.type === 'marionette' && held && p && live && !s.mahoraga) {
@@ -361,5 +369,5 @@ export function createRamsfPlatinum(ctx) {
   }
   const exposedBonus = e => { const pv = passive(); return pv?.type === 'tenarms' && e.exposedT > s.time ? pv.exposed : 0; };
 
-  return { press, tryParry, onHurt, onClick, release, tornado, ult, endUlt, update, m2Info, qInfo, active, reset, exposedBonus, armsNow, timeScale, PORCELAIN };
+  return { press, tryParry, onHurt, release, tornado, ult, endUlt, update, m2Info, qInfo, active, reset, exposedBonus, armsNow, timeScale, PORCELAIN };
 }

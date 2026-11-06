@@ -49,20 +49,20 @@ const at = (p, a, d) => ({ x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d })
 const lerpA = (a, b, f) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * f; };
 
 // `ang`: where it hangs from the cursor (bent a little at the elbow). `to` + `f`: a strike, the hand
-// going f of the way (0..1) to `to`; the elbow bends to get it there, and past the arm's full stretch
-// the hand flies off on a string. `side`: which side of the cursor it's on (mirrors the pieces).
+// going f of the way (0..1) to `to`; the elbow bends to get it there, and it goes no further than
+// the arm's full stretch. `side`: which side of the cursor it's on (mirrors the pieces).
 function DollArm({ x, y, ang, k, to = null, f = 0, ghost = false, seg = 21, side = 1 }) {
   const U = U0 * k * seg / 21, L1 = L1N * U, L2 = L2N * U, HL = 300 * U;
   const S = { x, y }, bend = Math.cos(ang) > 0 ? 1 : -1, flip = side > 0;
   // resting pose
-  let a1 = ang, E = at(S, a1, L1), a2 = ang + bend * 0.55, W = at(E, a2, L2), ah = a2 + bend * 0.2, W0 = null;
+  let a1 = ang, E = at(S, a1, L1), a2 = ang + bend * 0.55, W = at(E, a2, L2), ah = a2 + bend * 0.2;
   if (to && f > 0) {
     const toW = at(to, Math.atan2(to.y - S.y, to.x - S.x) + Math.PI, HL * 0.75);   // the wrist stops short so the hand lands on it
     const T = { x: W.x + (toW.x - W.x) * f, y: W.y + (toW.y - W.y) * f };
     const D = Math.hypot(T.x - S.x, T.y - S.y), a = Math.atan2(T.y - S.y, T.x - S.x);
     if (D >= L1 + L2) {
-      // full stretch: straight out, and the rest of the way the hand flies on its string
-      a1 = a2 = a; E = at(S, a, L1); W0 = at(E, a, L2); W = D > L1 + L2 + 2 * k ? T : W0; if (W === W0) W0 = null;
+      // full stretch: straight out
+      a1 = a2 = a; E = at(S, a, L1); W = at(E, a, L2);
     } else {
       const cosA = (L1 * L1 + D * D - L2 * L2) / (2 * L1 * Math.max(1e-3, D));
       a1 = a - bend * Math.acos(Math.max(-1, Math.min(1, cosA)));
@@ -75,7 +75,6 @@ function DollArm({ x, y, ang, k, to = null, f = 0, ghost = false, seg = 21, side
     <g opacity={ghost ? 0.5 : 1}>
       <Piece p={PIECE.upper} {...at(S, a1, g1)} a={a1} U={U} flip={flip} />
       <Piece p={PIECE.fore} {...at(E, a2, g2)} a={a2} U={U} flip={flip} />
-      {W0 && <line x1={W0.x} y1={W0.y} x2={W.x} y2={W.y} stroke="#fdf2f8" strokeWidth={1.1 * k} opacity={0.85} style={{ filter: 'drop-shadow(0 0 2px #f472b6)' }} />}
       <Piece p={PIECE.hand} {...at(W, ah, 4 * U)} a={ah} U={U} flip={flip} />
       <Ball p={PIECE.shoulder} {...S} a={a1} U={U} flip={flip} />
       <Ball p={PIECE.elbow} {...E} a={a2} U={U} flip={flip} />
