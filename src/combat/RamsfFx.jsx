@@ -17,16 +17,18 @@ function armAngle(i, spread = 1, time = 0) {
 }
 
 // One doll arm: shoulder → elbow → wrist, ball joints, a mitten hand. `to` = where the hand goes
-// (straight out for a strike), else it hangs at `ang` with a slight bend.
+// (straight out for a strike: past the arm's full stretch, the hand flies off on a string),
+// else it hangs at `ang` with a slight bend.
 function DollArm({ x, y, ang, k, to = null, ghost = false, seg = 21 }) {
   const L1 = seg * k, L2 = seg * 0.95 * k;
-  let E, W, a2;
+  let E, W, a2, fly = null;
   if (to) {
-    const d = Math.hypot(to.x - x, to.y - y) || 1, a = Math.atan2(to.y - y, to.x - x), reach = Math.min(d, (L1 + L2) * 3.2);
+    const d = Math.hypot(to.x - x, to.y - y) || 1, a = Math.atan2(to.y - y, to.x - x), reach = Math.min(d, (L1 + L2) * 2.2);
     const s1 = reach * 0.52;
     E = { x: x + Math.cos(a) * s1, y: y + Math.sin(a) * s1 };
     W = { x: x + Math.cos(a) * reach, y: y + Math.sin(a) * reach };
     a2 = a;
+    if (d > reach + 2 * k) fly = { x: to.x - Math.cos(a) * 5 * k, y: to.y - Math.sin(a) * 5 * k };
   } else {
     E = { x: x + Math.cos(ang) * L1, y: y + Math.sin(ang) * L1 };
     a2 = ang + (Math.cos(ang) > 0 ? 0.55 : -0.55);
@@ -41,11 +43,12 @@ function DollArm({ x, y, ang, k, to = null, ghost = false, seg = 21 }) {
   );
   const ball = (p, r) => <circle cx={p.x} cy={p.y} r={r * k} fill={PORCELAIN} stroke={INK} strokeWidth={1.3 * k} />;
   const hx = Math.cos(a2), hy = Math.sin(a2);
-  const H = { x: W.x + hx * 5 * k, y: W.y + hy * 5 * k };
+  const H = fly ?? { x: W.x + hx * 5 * k, y: W.y + hy * 5 * k };
   return (
     <g opacity={ghost ? 0.5 : 1}>
       {bone({ x, y }, E, 5.5)}
       {bone(E, W, 4.6)}
+      {fly && <line x1={W.x} y1={W.y} x2={H.x} y2={H.y} stroke="#fdf2f8" strokeWidth={1.1 * k} opacity={0.85} style={{ filter: 'drop-shadow(0 0 2px #f472b6)' }} />}
       {ball(E, 3.6)}
       {ball(W, 3)}
       {/* the hand: a little porcelain mitten with a thumb */}

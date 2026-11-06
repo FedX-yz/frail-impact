@@ -1417,7 +1417,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function hitPlayer(raw, kind = 'hit', src = null, from = null) {
     const pl = s.player;
     if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return false;
-    if (rt.absorbHit(kind, src, from)) { pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity
+    const ab = rt.absorbHit(kind, src, from);
+    if (ab) { if (ab !== 'parry') pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity (a 6★ Ramsf parry sets its own, shorter)
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction) * rt.hurtMult()));   // (6★ Astrec bracing)
     if (dmg >= pl.hp && rt.cheatDeath()) { pl.invuln = Math.max(pl.invuln, BAL.HIT_INVULN); return false; }   // Bio's Round Deer
     pl.hp = Math.max(0, pl.hp - dmg);

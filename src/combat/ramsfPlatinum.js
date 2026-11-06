@@ -11,6 +11,10 @@
 //               LATE s after it hit) still counts: the damage is given back. A whiff
 //               (nothing to parry) and you can't parry again for parryCd s. A ring closing on
 //               the cursor shows when the next hit will land (RamsfFx).
+//               FOLLOW-THROUGH: for FOLLOW s after a parry you land yourself, other hits that
+//               land are parried too (a volley of shots, a flurry), like Deepwoken's. They
+//               don't give arms or count toward the streak, freeze only a tick, and don't make
+//               the follow-through last longer.
 //   passive     TEN ARMS: every perfect parry puts one of his doll arms on your cursor (up to
 //               ten). Every click, each of them strikes too. Go armHold s without a parry and
 //               they drop off, one at a time. Parries in a row (a streak) freeze harder.
@@ -30,6 +34,7 @@ const CUTIN = 1.1;          // seconds the burst art is on screen (the fight goe
 const LATE = 0.06;          // a parry this late (after the hit landed) still counts
 const SLOWMO = 0.22;        // after the freeze: this long easing back in from slow motion
 const CUE = 0.7;            // the timing cue shows hits this many seconds away
+const FOLLOW = 0.3;         // after a parry you land yourself, other hits this soon are parried too
 export const MAX_ARMS = 10;
 export const RAMSF_INTRO = CUTIN;
 export const RAMSF_EFFECTS = new Set(['parryflash', 'gust', 'yank', 'armhit']);
@@ -52,6 +57,9 @@ export function createRamsfPlatinum(ctx) {
   const alive = e => e && e.hp > 0 && s.enemies.includes(e);
   const openArms = () => s.ult.active?.type === 'openarms';
   const armsNow = () => (openArms() ? MAX_ARMS : st().arms);
+  // where arm i hangs from the cursor (the same fan RamsfFx draws), and the gap between two angles
+  const restAngle = (i) => -Math.PI / 2 + (i % 2 ? 1 : -1) * (0.62 + Math.floor(i / 2) * 0.4);
+  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
   const label = (text, x, y, color, big = false) => { const r = st(); if (r.floats++ < 3) floater(text, x, y, color, big); };
   const P = () => s.player.pos ?? { x: s.W / 2, y: s.H / 2 };
 
@@ -78,9 +86,9 @@ export function createRamsfPlatinum(ctx) {
   function tryParry(kind, src, from) {
     const sk = skill(), r = st();
     if (sk?.type !== 'marionette' || kind === 'poison') return false;
-    const auto = openArms();
-    if (!(r.pw > 0) && !auto) { r.pending = { t: s.time, kind, src, from, combo: s.combo.n }; return false; }   // (in case you parry a hair late)
-    parry(sk, kind, src, from, auto);
+    const auto = openArms(), follow = !(r.pw > 0) && r.follow > 0;
+    if (!(r.pw > 0) && !auto && !follow) { r.pending = { t: s.time, kind, src, from, combo: s.combo.n }; return false; }   // (in case you parry a hair late)
+    parry(sk, kind, src, from, auto, follow && !auto);
     return true;
   }
   // the hit landed (engine → kitRuntime.onPlayerHit): remember it for a late parry
@@ -89,27 +97,34 @@ export function createRamsfPlatinum(ctx) {
     if (r.pending && s.time - r.pending.t < 0.02) r.lastHurt = { ...r.pending, dmg, t: s.time };
     r.pending = null;
   }
-  function parry(sk, kind, src, from, auto) {
-    const r = st(), pv = passive(), p = P();
+  // auto: Open Arms parried it by itself; follow: caught by the follow-through of your last parry
+  function parry(sk, kind, src, from, auto, follow = false) {
+    const r = st(), pv = passive(), p = P(), light = auto || follow;
     r.pwHit = true;
-    // the streak: parries close together
-    r.streak = s.time - r.streakT <= 3 ? r.streak + 1 : 1;
-    r.streakT = s.time;
-    const big = r.streak >= 3;
-    // HITSTOP: everything freezes for a beat (longer on a streak; just a tick for the ult's auto-parries)
-    const stop = auto ? 0.05 : Math.min(0.17, sk.hitstop + 0.015 * Math.min(5, r.streak - 1));
+    r.parryN = (r.parryN ?? 0) + 1;
+    if (!light) {
+      r.pw = 0;              // this press is spent (what comes next is the follow-through's)
+      r.follow = FOLLOW;
+      // the streak: parries close together
+      r.streak = s.time - r.streakT <= 3 ? r.streak + 1 : 1;
+      r.streakT = s.time;
+    }
+    const big = !light && r.streak >= 3;
+    // HITSTOP: everything freezes for a beat (longer on a streak; just a tick for auto and follow-through parries)
+    const stop = auto ? 0.05 : follow ? 0.035 : Math.min(0.17, sk.hitstop + 0.015 * Math.min(5, r.streak - 1));
     s.timeStop = Math.max(s.timeStop, stop);
     r.hitstop = stop;   // (so the arena shows a parry's impact frame, not a time stop)
-    if (!auto) r.slow = SLOWMO;   // …then a moment of slow motion, easing back to full speed
-    s.player.invuln = Math.max(s.player.invuln, stop + 0.25);
+    if (!light) r.slow = SLOWMO;   // …then a moment of slow motion, easing back to full speed
+    s.player.invuln = Math.max(s.player.invuln, stop + 0.04);   // (short: what comes next is the follow-through's to parry)
     r.lastParry = { x: p.x, y: p.y, t: s.time };
     // who did it: the enemy that swung, or the one that fired the shot
     const owner = src ?? (from?.owner != null ? s.enemies.find(e => e.id === from.owner) : null);
     if (from && from.phase !== 'done') { from.hitDone = true; api.finishAttack(from); }
-    effect({ kind: 'parryflash', x: p.x, y: p.y, r: K(big ? 140 : 100), life: auto ? 0.3 : 0.45, big, auto, a: owner ? Math.atan2(owner.y - p.y, owner.x - p.x) : rand(0, 6.28) });
-    if (!auto) { effect({ kind: 'flash', color: '#ffffff', life: big ? 0.22 : 0.14 }); shake(big ? 0.45 : 0.3); }
-    sfx(big && !auto ? 'parryBig' : 'parry');
-    label(auto ? 'PARRY' : big ? `PARRY ×${r.streak}` : 'PARRY!', p.x, p.y - K(46), '#fdf2f8', !auto);
+    effect({ kind: 'parryflash', x: p.x, y: p.y, r: K(big ? 140 : light ? 80 : 100), life: light ? 0.3 : 0.45, big, auto: light, a: owner ? Math.atan2(owner.y - p.y, owner.x - p.x) : rand(0, 6.28) });
+    if (!light) { effect({ kind: 'flash', color: '#ffffff', life: big ? 0.22 : 0.14 }); shake(big ? 0.45 : 0.3); }
+    else shake(0.1);
+    sfx(big ? 'parryBig' : 'parry');
+    label(light ? 'PARRY' : big ? `PARRY ×${r.streak}` : 'PARRY!', p.x, p.y - K(46), '#fdf2f8', !light);
     if (big && !auto && r.streak % 3 === 0) api.announce(`PARRY ×${r.streak}`, '#f9a8d4');
     // the counter
     if (kind === 'shot' && owner && alive(owner)) {
@@ -125,7 +140,7 @@ export function createRamsfPlatinum(ctx) {
       owner.exposedT = s.time + (pv?.exposedDur ?? 3);
     }
     // TEN ARMS: a new arm on the cursor
-    if (!auto && pv?.type === 'tenarms' && r.arms < MAX_ARMS) { r.arms++; label(`🖐 ${r.arms}/${MAX_ARMS}`, p.x, p.y + K(40), PINK); }
+    if (!light && pv?.type === 'tenarms' && r.arms < MAX_ARMS) { r.arms++; label(`🖐 ${r.arms}/${MAX_ARMS}`, p.x, p.y + K(40), PINK); }
     r.armT = 0; r.dropT = 0;
     r.pcd = 0;
   }
@@ -134,19 +149,27 @@ export function createRamsfPlatinum(ctx) {
   function onClick(e, auto) {
     const sk = skill(), pv = passive(), r = st(), n = armsNow();
     if (!sk || !e || auto || !n || !pv) return;
-    const R = K(sk.armR);
-    // nearest first: the target, then whoever's around it
-    const pool = foes().filter(o => o === e || dist(o.x, o.y, e.x, e.y) <= R + radius(o) * 0.5)
-      .sort((a, b) => dist(a.x, a.y, e.x, e.y) - dist(b.x, b.y, e.x, e.y));
+    const R = K(sk.armR), p = P();
+    // every arm goes for its own enemy around the cursor: the one you clicked, then the nearest others.
+    // Only once everyone in reach has an arm on them do they double up.
+    const near = foes().filter(o => o !== e && dist(o.x, o.y, p.x, p.y) <= R + radius(o) * 0.5)
+      .sort((a, b) => dist(a.x, a.y, p.x, p.y) - dist(b.x, b.y, p.x, p.y));
+    const pool = [e, ...near];
+    const picks = Array.from({ length: n }, (_, i) => pool[i % pool.length]);
+    // each one goes to the free arm pointing most its way (so they fan out instead of crossing)
+    const free = Array.from({ length: n }, (_, i) => i), want = (t) => Math.atan2(t.y - p.y, t.x - p.x);
+    const order = picks.map((t, j) => j).sort((a, b) => Math.abs(angDiff(want(picks[a]), -Math.PI / 2)) - Math.abs(angDiff(want(picks[b]), -Math.PI / 2)));
     let q = 0;
-    api.asYou(() => {
-      for (let i = 0; i < n; i++) {
-        const t = pool[i % pool.length];
-        if (!alive(t)) continue;
-        kitHit(t, pv.armPct, { color: '#fbcfe8', label: '🖐', quiet: q++ >= 2 });
-        r.strikes.push({ id: nextId(), arm: i, x: t.x + rand(-0.3, 0.3) * radius(t), y: t.y + rand(-0.3, 0.3) * radius(t), t: 0, life: 0.18 + i * 0.012 });
-      }
-    });
+    api.asYou(() => order.forEach(j => {
+      const t = picks[j];
+      if (!alive(t)) return;
+      const a = want(t);
+      let best = 0;
+      free.forEach((arm, f) => { if (Math.abs(angDiff(restAngle(arm), a)) < Math.abs(angDiff(restAngle(free[best]), a))) best = f; });
+      const arm = free.splice(best, 1)[0];
+      kitHit(t, pv.armPct, { color: '#fbcfe8', label: '🖐', quiet: q++ >= 2 });
+      r.strikes.push({ id: nextId(), arm, foe: t.id, x: t.x + rand(-0.3, 0.3) * radius(t), y: t.y + rand(-0.3, 0.3) * radius(t), t: 0, life: 0.2 + Math.min(0.12, dist(t.x, t.y, p.x, p.y) / K(2600)) + q * 0.01 });
+    }));
     if (r.strikes.length > 40) r.strikes.splice(0, r.strikes.length - 40);
   }
 
@@ -229,6 +252,7 @@ export function createRamsfPlatinum(ctx) {
     const sk = skill(), pv = passive(), r = st(), pl = s.player, p = pl.pos;
     r.floats = 0;
     r.hitstop = Math.max(0, (r.hitstop ?? 0) - dt);
+    if (s.timeStop <= 0) r.follow = Math.max(0, (r.follow ?? 0) - dt);   // (game time: it waits out the freeze)
     if (r.slow > 0 && !(r.hitstop > 0)) r.slow = Math.max(0, r.slow - dt / Math.max(0.3, timeScale()));   // (real seconds, not slowed ones)
     r.threat = sk?.type === 'marionette' && p ? nextHit(p) : null;
     if (r.cutin) { r.cutin.t += dt; if (r.cutin.t >= r.cutin.life) r.cutin = null; }
@@ -332,7 +356,7 @@ export function createRamsfPlatinum(ctx) {
   const active = () => { const r = s.kit.ramsf; return !!(r && (r.tornado || r.strikes.length || r.cutin || r.arms > 0 || r.pw > 0 || r.pcd > 0 || r.slow > 0)); };
   function reset(why) {
     const r = st();
-    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null;
+    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null; r.follow = 0;
     if (why === 'defeat') r.arms = 0;
   }
   const exposedBonus = e => { const pv = passive(); return pv?.type === 'tenarms' && e.exposedT > s.time ? pv.exposed : 0; };

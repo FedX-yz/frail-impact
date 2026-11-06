@@ -174,10 +174,10 @@ export function createKitRuntime(api) {
   }
 
   // ── Getting hit ──────────────────────────────────────────────────────────
-  // true = the hit was stopped (Toad / Infinity)
+  // true = the hit was stopped (Toad / Infinity); 'parry' = 6★ Ramsf parried it (no extra i-frames: the follow-through gets the next one)
   function absorbHit(kind, src, from) {
     const P = s.player.pos;
-    if (skill()?.type === 'marionette' && ramsf.tryParry(kind, src, from)) return true;   // 6★ Ramsf: parried
+    if (skill()?.type === 'marionette' && ramsf.tryParry(kind, src, from)) return 'parry';   // 6★ Ramsf: parried
     const toad = s.allies.find(a => a.kind === 'toad');
     if (toad) {
       s.allies = s.allies.filter(a => a !== toad);

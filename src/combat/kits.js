@@ -156,19 +156,19 @@ export const SKILLS = {
   // 6★ Ramsf (Platinum): ten porcelain doll arms; a parry character (ramsfPlatinum.js)
   marionette:    { type: 'marionette', style: 'platinum',
                    parryWin: 0.27, parryCd: 0.45, hitstop: 0.09, parryPct: 3, reflectPct: 4, stagger: 1.5,   // M2: Parry
-                   armR: 160,                                       // the arms on the cursor reach this far
+                   armR: 260,                                       // the arms on the cursor reach this far (each one picks its own enemy)
                    stringLen: 900, stringPct: 1.5,                  // drag: Strings
                    full: 0.8, minPct: 1, pct: 4, gustR: 220,        // hold M1: Wingbeat
                    cooldown: 14, torDur: 6, torR: 110, torPull: 240, torPct: 2,   // Q: Tornado
                    lv1: { parryWin: 0.23, parryPct: 1.8, reflectPct: 2.4, stringPct: 0.9, minPct: 0.6, pct: 2.4, cooldown: 18, torPct: 1.2 },
                    si: { parryWin: 0.01, parryPct: 0.5, reflectPct: 0.6, stringPct: 0.25, pct: 0.6, minPct: 0.15, cooldown: -0.6, torPct: 0.35, torDur: 0.5 },
-                   desc: 'MARIONETTE. M2: PARRY. Tap just before a hit lands ({parryWin}s window): the game freezes for a beat, the attack is cancelled, a shot flies back at whoever fired it ({reflectPct} click DMG), and anything that swung at you is struck by an arm ({parryPct} click DMG) and staggered. Nothing to parry, and you can\'t parry again for {parryCd}s. '
+                   desc: 'MARIONETTE. M2: PARRY. Tap just before a hit lands ({parryWin}s window): the game freezes for a beat, the attack is cancelled, a shot flies back at whoever fired it ({reflectPct} click DMG), and anything that swung at you is struck by an arm ({parryPct} click DMG) and staggered. For a moment after a parry, other hits that land are parried too (a volley, a flurry), but those don\'t give arms. Nothing to parry, and you can\'t parry again for {parryCd}s. '
                      + 'DRAG (hold M1 and move): STRINGS. Tie up everything you pass through (up to {stringLen} long); let go and they\'re yanked together into a heap ({stringPct} click DMG each). '
                      + 'HOLD M1 and let go: WINGBEAT. His arms fold into wings: a gust around your cursor ({gustR} range) throws enemies back for up to {pct} click DMG (full in {full}s) and blows enemy shots away. '
                      + 'Q: TORNADO. His wings spin up a tornado at your cursor for {torDur}s: it drifts after you, pulls enemies in, shreds what\'s inside ({torPct} click DMG per second) and swallows shots. {cooldown}s cooldown.',
                    passive: { type: 'tenarms', armPct: 0.3, armHold: 6, exposed: 0.3, exposedDur: 3,
                               lv1: { armPct: 0.18, exposed: 0.18 }, si: { armPct: 0.06, exposed: 0.05 },
-                              desc: 'Ten Arms: every perfect parry puts one of his doll arms on your cursor (up to 10). Every click, each arm strikes too ({armPct} click DMG each, spread over the target and what\'s around it). Go {armHold}s without a parry and they drop off one at a time. Parries in a row freeze harder, and anything you parry takes +{exposed} DMG for {exposedDur}s.' } },
+                              desc: 'Ten Arms: every perfect parry puts one of his doll arms on your cursor (up to 10). Every click, each arm strikes too ({armPct} click DMG each): the first at what you clicked, the rest each at a different enemy near your cursor, doubling up only when there aren\'t enough to go round. Go {armHold}s without a parry and they drop off one at a time. Parries in a row freeze harder, and anything you parry takes +{exposed} DMG for {exposedDur}s.' } },
   // 6★ Astrec (Platinum): sent in first because he can't stay dead (astrecPlatinum.js)
   death_wish:    { type: 'deathwish', style: 'platinum',
                    t1: 0.3, t2: 0.6, t3: 1, cleave: 0.5, cleaveR: 110, shock: 0.6, shockR: 150,   // Death Wish: the tiers
