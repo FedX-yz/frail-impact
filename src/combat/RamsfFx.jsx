@@ -20,27 +20,30 @@ function armAngle(i, spread = 1, time = 0) {
 // One doll arm, put together from the hand-drawn pieces in public/fx/ramsf_arm (shoulder ball,
 // upper bone, elbow ball, forearm, wrist ball, hand). Each piece: its size, and (bones/hand) the
 // point where it hangs from the joint above (t) and where the next joint goes (b), in its own pixels.
-const ARM = `${import.meta.env.BASE_URL}fx/ramsf_arm/`;
+// (full paths written out, so the build can point them at its WebP copies)
+const BASE = import.meta.env.BASE_URL;
 const PIECE = {
-  upper:    { src: 'upper.png',    w: 118, h: 366, t: [53, 0],   b: [62, 366] },
-  fore:     { src: 'fore.png',     w: 166, h: 395, t: [76, 0],   b: [106, 394] },
-  hand:     { src: 'hand.png',     w: 268, h: 367, t: [190, 12], b: [150, 366] },
-  shoulder: { src: 'shoulder.png', w: 121, h: 130, c: [60, 62] },
-  elbow:    { src: 'elbow.png',    w: 118, h: 134, c: [57, 65] },
-  wrist:    { src: 'wrist.png',    w: 65,  h: 68,  c: [32, 34] },
+  upper:    { src: `${BASE}fx/ramsf_arm/upper.png`,    w: 118, h: 366, t: [53, 0],   b: [62, 366] },
+  fore:     { src: `${BASE}fx/ramsf_arm/fore.png`,     w: 166, h: 395, t: [76, 0],   b: [106, 394] },
+  hand:     { src: `${BASE}fx/ramsf_arm/hand.png`,     w: 268, h: 367, t: [190, 12], b: [150, 366] },
+  shoulder: { src: `${BASE}fx/ramsf_arm/shoulder.png`, w: 121, h: 130, c: [60, 62] },
+  elbow:    { src: `${BASE}fx/ramsf_arm/elbow.png`,    w: 118, h: 134, c: [57, 65] },
+  wrist:    { src: `${BASE}fx/ramsf_arm/wrist.png`,    w: 65,  h: 68,  c: [32, 34] },
 };
+// (loaded up front, so the first arm isn't drawn before its pieces arrive)
+if (typeof Image !== 'undefined') Object.values(PIECE).forEach(p => { const i = new Image(); i.src = p.src; });
 const U0 = 0.062;              // the pieces' pixels → the arena's (× k)
 const L1N = 416, L2N = 435;    // shoulder → elbow, elbow → wrist (bone + the bit hidden under the balls)
 const deg = a => a * 180 / Math.PI;
 // a bone (or the hand): its top at (x, y), pointing along angle a
 function Piece({ p, x, y, a, U, flip }) {
   const f = flip ? -1 : 1, rot = deg(a - Math.atan2(p.b[1] - p.t[1], f * (p.b[0] - p.t[0])));
-  return <image href={ARM + p.src} width={p.w} height={p.h} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${(f * U).toFixed(4)} ${U.toFixed(4)}) translate(${-p.t[0]} ${-p.t[1]})`} />;
+  return <image href={p.src} width={p.w} height={p.h} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${(f * U).toFixed(4)} ${U.toFixed(4)}) translate(${-p.t[0]} ${-p.t[1]})`} />;
 }
 // a ball joint, centred on (x, y), turning with the bone below it
 function Ball({ p, x, y, a, U, flip }) {
   const f = flip ? -1 : 1;
-  return <image href={ARM + p.src} width={p.w} height={p.h} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg(a - Math.PI / 2).toFixed(1)}) scale(${(f * U).toFixed(4)} ${U.toFixed(4)}) translate(${-p.c[0]} ${-p.c[1]})`} />;
+  return <image href={p.src} width={p.w} height={p.h} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg(a - Math.PI / 2).toFixed(1)}) scale(${(f * U).toFixed(4)} ${U.toFixed(4)}) translate(${-p.c[0]} ${-p.c[1]})`} />;
 }
 const at = (p, a, d) => ({ x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d });
 const lerpA = (a, b, f) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * f; };
