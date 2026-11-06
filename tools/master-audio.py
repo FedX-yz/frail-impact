@@ -63,6 +63,19 @@ SFX = {
     'bus_idle':      ('Truck Engine Sound Effect - Sound effx (128k).mp3', 0, None, 0.4, 1.4, 35, -27),             # background
 }
 
+# Combat sounds (python3 tools/master-audio.py <folder> --combat): the boss sounds the battle
+# plays through sfx() (utils/sfx.js → SFX_FILES), at unity. Same fields as SFX; out: public/sounds/<name>.mp3
+COMBAT = {
+    'spider/daddy_maim':     ('FRAIL SFX/DADDY_MAIM.mp3', 0, None, 0.0, 0.3, 40, -16),       # the MAIM wind-up: on top of everything
+    'spider/daddy_chatter':  ('FRAIL SFX/DADDY_CHATTER.mp3', 0, None, 0.0, 0.2, 60, -20),
+    'spider/daddy_step':     ('FRAIL SFX/DADDY_STEP.mp3', 0, None, 0.0, 0.1, 60, -24),       # every few steps: low
+    'spider/daddy_move1':    ('FRAIL SFX/DADDY_MOVE1.mp3', 0, None, 0.0, 0.1, 60, -22),
+    'spider/daddy_move2':    ('FRAIL SFX/DADDY_MOVE2.mp3', 0, None, 0.0, 0.1, 60, -22),
+    'spider/daddy_move3':    ('FRAIL SFX/DADDY_MOVE3.mp3', 0, None, 0.0, 0.1, 60, -22),
+    'spider/daddy_movelong': ('FRAIL SFX/DADDY_MOVELONG if needed.mp3', 0, None, 0.0, 0.3, 60, -22),
+    'spider/daddy_idle':     ('FRAIL SFX/DADDY_IDLENOISE.mp3', 0, None, 0.0, 0.3, 60, -25),  # background, while he stalks
+}
+
 TP_CEIL = -1.5   # dBTP
 
 
@@ -166,6 +179,28 @@ def encode(y, out, kbps, target=None, key='I', caps=None):
         y = limit(y * db(g))
 
 
+def master_sfx(src, table, report):
+    for name, (f, a, b, fin, fout, hp, target) in table.items():
+        y = decode(os.path.join(src, f), 1, a, (b - a) if b else None)
+        y = run_filter(y, f'highpass=f={hp}:poles=2')
+        y = fades(y, fin, fout)
+        out = os.path.join(ROOT, 'public/sounds', name + '.mp3')
+        if isinstance(target, tuple):   # too short for a 400 ms loudness reading: set the peak
+            y = y * db(target[1] - (measure(y)['TP'] or 0)); y = limit(y)
+            encode(y, out, '96k')
+        else:
+            y = to_level(y, target, 'M')
+            encode(y, out, '96k', target, 'M')
+        report.append(('sfx', name, target, measure(decode(out, 1)), 0))
+
+
+def print_report(report):
+    print(f"{'kind':<9}{'name':<22}{'target':>8}{'  heard: I':>12}{'LRA':>6}{'max M':>8}{'max S':>8}{'TP':>7}")
+    for kind, name, t, m, play in report:
+        h = lambda v: '—' if v is None else f'{v + play:.1f}'
+        print(f"{kind:<9}{name:<22}{str(t):>8}{h(m['I']):>12}{'—' if m['LRA'] is None else m['LRA']:>6}{h(m['M']):>8}{h(m['S']):>8}{'—' if m['TP'] is None else round(m['TP'], 1):>7}")
+
+
 def main(src):
     report = []
     for name, (f, heard) in MUSIC.items():
@@ -212,5 +247,7 @@ def main(src):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2: sys.exit(__doc__ or 'usage: master-audio.py <raw sound folder>')
-    main(sys.argv[1])
+    if len(sys.argv) < 2: sys.exit(__doc__ or 'usage: master-audio.py <raw sound folder> [--combat]')
+    if '--combat' in sys.argv:
+        rep = []; master_sfx(sys.argv[1], COMBAT, rep); print_report(rep)
+    else: main(sys.argv[1])

@@ -54,7 +54,7 @@ export function createSpider(c) {
       e.role = 'leg'; e.owner = b.id; e.leg = i; e.hidden = true;
       b.legs.push(e.id);
     });
-    sfx('hiss'); shake(0.3);
+    sfx('daddyMoveLong'); shake(0.3);
     return b;
   }
 
@@ -100,12 +100,12 @@ export function createSpider(c) {
       if (sp.t > 1.7) {
         sp.mode = 'fight'; b.hidden = false; r.curl = 0;
         for (const id of b.legs) { const l = s.enemies.find(x => x.id === id); if (l && !(l.down > 0)) l.hidden = false; }
-        announce('DADDY HAIRY LEGS', '#c084fc'); shake(0.5); sfx('roar');
+        announce('DADDY HAIRY LEGS', '#c084fc'); shake(0.5); sfx('daddyChatter');
       }
     } else {
       // half HP: venomous
       if (!sp.mad && b.hp < b.maxHp * 0.5) {
-        sp.mad = true; shake(0.8); sfx('roar');
+        sp.mad = true; shake(0.8); sfx('daddyChatter'); sfx('roar');
         effect({ kind: 'flash', color: '#84cc16', life: 0.5 });
         announce('HE TURNS VENOMOUS', '#a3e635');
       }
@@ -117,8 +117,9 @@ export function createSpider(c) {
           if (!sp.target) sp.target = stalkSpot(r);
           if (Math.hypot(sp.target.x - r.x, sp.target.y - r.y) < K(12)) {
             sp.wait = (sp.wait ?? rand(0.08, 0.3)) - dt;
-            if (sp.wait <= 0) { sp.target = stalkSpot(r); sp.wait = null; }
+            if (sp.wait <= 0) { sp.target = stalkSpot(r); sp.wait = null; if (Math.random() < 0.35) sfx('daddyMove'); }
           }
+          if ((sp.idleT = (sp.idleT ?? rand(4, 7)) - dt) <= 0) { sp.idleT = rand(6, 11); sfx(Math.random() < 0.75 ? 'daddyIdle' : 'daddyChatter'); }
           if (sp.cd <= 0) startAttack(b);
         }
       }
@@ -129,6 +130,7 @@ export function createSpider(c) {
     }
     r.stepDur = 0.12 / Math.max(0.5, 1 - SP.legHurt.speed * sp.broken);
     poseSpider(r, dt);
+    footsteps(r);
     // hitboxes: his head and body; each leg's knee
     b.x = r.x; b.y = r.y + (-220 + r.bob - r.rear * 140) * r.sc; b.size = 600 * r.sc / 0.55 / s.k;
     for (const id of b.legs) {
@@ -161,6 +163,7 @@ export function createSpider(c) {
     for (const [k, w] of opts) { if ((x -= w) <= 0) { kind = k; break; } }
     const [r0, r1] = sp.mad ? SP.stab.repsMad : SP.stab.reps;
     sp.atk = { kind, t: 0, phase: 'start', reps: kind === 'stab' ? Math.floor(rand(r0, r1 + 1)) : 1 };
+    if ((kind === 'spit' || kind === 'traps' || kind === 'eggs') && Math.random() < 0.6) sfx('daddyChatter');
   }
   const T0 = () => c.target();
 
@@ -232,7 +235,7 @@ export function createSpider(c) {
         // he charges along the line, through where you were
         const dd = Math.hypot(P.x - r.x, P.y - r.y) + s.W * 0.25;
         sp.target = clampTo(r, { x: r.x + Math.cos(A.ang) * dd, y: r.y + Math.sin(A.ang) * dd });
-        A.phase = 'dash'; A.t = 0; A.hold = false; A.dash = true; sfx('leap'); shake(0.3);
+        A.phase = 'dash'; A.t = 0; A.hold = false; A.dash = true; sfx('leap'); sfx('daddyMove'); shake(0.3);
       } else if (A.phase === 'dash' && A.t > 0.45) { A.dash = false; endAttack(b); }
     } else if (k === 'eggs') {
       A.hold = true; A.rear = -0.2;
@@ -263,7 +266,7 @@ export function createSpider(c) {
       if (A.t > 0.55 || Math.hypot(sp.target.x - r.x, sp.target.y - r.y) < K(20)) {
         A.phase = 'wind'; A.t = 0; A.hold = true; A.rear = 1; A.jaw = 0.6;
         s.spiderMaim = { x: P.x, y: P.y, r: K(SP.maim.r), t: 0, dur: SP.maim.wind, lockAt: SP.maim.lockAt, owner: b.id };
-        sfx('charge'); floater('MAIM!', P.x, P.y - K(130), '#f87171', true);
+        sfx('daddyMaim'); floater('MAIM!', P.x, P.y - K(130), '#f87171', true);
       }
     } else if (A.phase === 'wind') {
       const m = s.spiderMaim;
@@ -421,8 +424,13 @@ export function createSpider(c) {
       if (steerAmbush(r, am.away, dt, 1.4) < K(30) || am.t > 2) { s.ambush = null; s.ambushT = rand(...SP.ambush.every); }
     }
     poseSpider(r, dt);
+    footsteps(r);
   }
-  function out(am) { am.mode = 'out'; am.t = 0; sfx('hiss'); }
+  function out(am) { am.mode = 'out'; am.t = 0; sfx('daddyMove'); }
+  // his footsteps: the legs that started a step this frame (every few, so it's a patter, not a buzz)
+  function footsteps(r) {
+    if (r.steps) { sfx('daddyStep'); r.steps = 0; }
+  }
   function steerAmbush(r, to, dt, mult = 1) {
     const dx = to.x - r.x, dy = to.y - r.y, d = Math.hypot(dx, dy) || 1, v = Math.min(SP.speed * s.W * mult, d * 6);
     const f = Math.min(1, dt * 10);
@@ -437,7 +445,7 @@ export function createSpider(c) {
     const off = side < 0 ? -1700 * sc : s.W + 1700 * sc;
     const rig = makeSpiderRig(off, y, sc);
     s.ambush = { rig, side, mode: 'in', t: 0, spot: { x: side < 0 ? s.W * 0.02 : s.W * 0.98, y }, away: { x: off, y: y + rand(-0.1, 0.1) * s.H } };
-    sfx('hiss');
+    sfx('daddyMoveLong');
   }
 
   // ── on the ground: webs (slow your cursor), traps (stick it), eggs (hatch when you click near) ──

@@ -332,7 +332,8 @@ export const playPress = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Combat sounds. These are generated in code as placeholders. To use a real
 // sound instead, put the file in public/sounds/ and write its name here,
-// e.g.  hit: 'hit.mp3'. Leave null to keep the generated one.
+// e.g.  hit: 'hit.mp3'. Leave null to keep the generated one. A list of files: one of
+// them at random each time (variations).
 // ─────────────────────────────────────────────────────────────────────────────
 const SFX_FILES = {
   hit:     null,   // normal click hit
@@ -348,8 +349,15 @@ const SFX_FILES = {
   // Bio (Ten Shadows / Mahoraga)
   summon: null, sign: null, tick: null, bark: null, howl: null, thunder: null, ox: null, deer: null, hiss: null, roar: null,
   trumpet: null, splash: null, tongue: null, domain: null, wheel: null, gun: null, leap: null, charge: null, worldslash: null, discover: null, saved: null, dive: null, fart: null,
+  // DADDY HAIRY LEGS (combat.spider.js; mastered by tools/master-audio.py --combat)
+  daddyStep: 'spider/daddy_step.mp3',                 // his legs, every few steps
+  daddyMove: ['spider/daddy_move1.mp3', 'spider/daddy_move2.mp3', 'spider/daddy_move3.mp3'],   // a scuttle
+  daddyMoveLong: 'spider/daddy_movelong.mp3',         // a long run: dropping in, coming out of the edge
+  daddyChatter: 'spider/daddy_chatter.mp3',           // his voice
+  daddyIdle: 'spider/daddy_idle.mp3',                 // every so often while he stalks you
+  daddyMaim: 'spider/daddy_maim.mp3',                 // MAIM: he rears up
 };
-Object.values(SFX_FILES).filter(Boolean).forEach(f => loadBuffer(`${BASE}sounds/${f}`).catch(() => {}));
+Object.values(SFX_FILES).flat().filter(Boolean).forEach(f => loadBuffer(`${BASE}sounds/${f}`).catch(() => {}));
 
 const now = () => _audioCtx.currentTime;
 let noiseBuf = null;
@@ -463,7 +471,8 @@ const SYNTH = {
 
 // Too many sounds at once turn into mush: limit how often each can play
 const MIN_GAP = { hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06,
-  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2, fart: 1 };
+  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2, fart: 1,
+  daddyStep: 0.16, daddyMove: 0.7, daddyMoveLong: 2, daddyChatter: 2.2, daddyIdle: 3, daddyMaim: 2 };
 const lastPlayed = {};
 export function sfx(name, arg) {
   if (!getSettings().combatSfx || getSettings().volume <= 0) return;
@@ -471,7 +480,8 @@ export function sfx(name, arg) {
   const t = now();
   if (t - (lastPlayed[name] ?? -1) < (MIN_GAP[name] ?? 0.04)) return;
   lastPlayed[name] = t;
-  const file = SFX_FILES[name];
+  let file = SFX_FILES[name];
+  if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)];
   if (file && ready.has(`${BASE}sounds/${file}`)) { start(ready.get(`${BASE}sounds/${file}`), 1, vary(1, 0.06)); return; }
   try { SYNTH[name]?.(arg); } catch { /* audio not available */ }
 }

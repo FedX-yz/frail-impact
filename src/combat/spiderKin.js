@@ -97,6 +97,7 @@ export function poseSpider(r, dt) {
         const lead = 0.16;
         const to = { x: h.x + r.vx * lead, y: h.y + r.vy * lead };
         leg.step = { from: { ...leg.foot }, to, t: 0, dur: r.stepDur * (0.85 + (leg.idx % 2) * 0.25), lift: Math.min(220 * r.sc, d * 0.45) };
+        r.steps = (r.steps ?? 0) + 1;   // (the boss's footsteps: spider.js reads and clears this)
       }
     }
     solveLeg(r, leg);
