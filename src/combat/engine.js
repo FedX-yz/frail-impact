@@ -1417,7 +1417,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const pl = s.player;
     if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return false;
     if (rt.absorbHit(kind, src)) { pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity
-    const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction)));
+    const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction) * rt.hurtMult()));   // (6★ Astrec bracing)
     if (dmg >= pl.hp && rt.cheatDeath()) { pl.invuln = Math.max(pl.invuln, BAL.HIT_INVULN); return false; }   // Bio's Round Deer
     pl.hp = Math.max(0, pl.hp - dmg);
     pl.invuln = BAL.HIT_INVULN; pl.hitT = 0.35; shake(0.3);
@@ -1426,7 +1426,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     sfx('hurt');
     if (s.combo.n >= 5) floater(`COMBO LOST (${s.combo.n})`, p.x, p.y - K(48), '#94a3b8');
     s.combo.n = 0;
-    rt.onPlayerHit();
+    rt.onPlayerHit(dmg);
     cb('onPlayerHit', dmg);
     if (pl.hp <= 0) startDefeat();
     return true;
@@ -1478,6 +1478,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const blood = rt.passive();
     if (blood?.type === 'bloodlust') dmg *= 1 + blood.max * Math.min(1, Math.max(0, (1 - s.player.hp / s.player.maxHp) / 0.9));
     if (s.kit.bonk?.rage > 0 && cs?.type === 'boil') dmg *= 1 + cs.rage;
+    if (cs?.type === 'deathwish' && s.kit.astrec) dmg *= 1 + s.kit.astrec.bonus;   // 6★ Astrec: Death Wish's tiers
     if (s.frenzy > 0) dmg *= 2;
     if (s.player.debuffs.weak > 0) dmg *= DEBUFFS.weak.dmg;   // a Hexer got you
     if (s.ult.active?.type === 'transform') dmg *= s.ult.active.clickMult;
@@ -1901,6 +1902,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (coins || gems || xp) cb('onReward', { coins, gems, xp, kill: false });
   }
   function startDefeat() {
+    if (rt.undying()) return;   // 6★ Astrec: Not Yet (HP lost some other way than a hit)
     s.phase = 'defeat'; s.phaseT = 2.6;
     s.timeStop = 0;
     rt.reset('defeat');
@@ -2117,7 +2119,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (e.busy === 0 && !e.dashing && s.phase !== 'clear' && s.phase !== 'defeat') {
         const canAttack = e.tier === 'boss' || e.tier === 'elite' || e.armed;
         if (canAttack) {
-          e.cd -= dt;
+          e.cd -= dt * rt.attackRate();   // (6★ Astrec's Draw Fire: twice as fast)
           // brand-new spawns get a moment before their first attack
           // (big ones only swing when you're within reach; nobody shoots while still walking in)
           const inReach = !e.type.reach || dist(e.x, e.y, aimPoint().x, aimPoint().y) <= K(e.type.reach);

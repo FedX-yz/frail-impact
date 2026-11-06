@@ -23,6 +23,8 @@ import { IceGround, IceFigures, IceOver, IceEffect, IceScreen, ICE_CSS } from '.
 import { ICE_EFFECTS, iceChips } from './icePlatinum';
 import { BonkGround, BonkOver, BonkEffect, BonkScreen, BONK_CSS } from './BonkFx';
 import { BONK_EFFECTS, bonkChips } from './bonkPlatinum';
+import { AstrecOver, AstrecEffect, AstrecScreen, ASTREC_CSS } from './AstrecFx';
+import { ASTREC_EFFECTS, astrecChips } from './astrecPlatinum';
 
 const BASE = import.meta.env.BASE_URL;
 const STATUS_PORTRAITS = {
@@ -596,6 +598,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             <IceOver s={s} k={k} P={P} time={s.time} />
             {/* 6★ Bonk: Bleed meters, hemorrhages, wounds, blood, the Rupture charge, his claw arm */}
             <BonkOver s={s} k={k} P={P} time={s.time} />
+            {/* 6★ Astrec: Brace's guard, Draw Fire's marks, Death Wish's tier */}
+            <AstrecOver s={s} k={k} P={P} time={s.time} />
             {curSkill?.type === 'tenshadows' && !touchMode && !ringsOn && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
             {/* Hox: the Abyssal Maw opening under the cursor, jaws closing */}
             {(s.kit.maws ?? []).map(m => <Maw key={m.id} m={m} k={k} />)}
@@ -788,6 +792,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         <IceScreen s={s} mainCard={mainCard} mobile={mobile} />
         {/* 6★ Bonk: Red Mist (the burst art, the haze, the harvest) */}
         <BonkScreen s={s} mainCard={mainCard} mobile={mobile} />
+        {/* 6★ Astrec: the tier on the screen's edge, Not Yet's grey, No Retreat */}
+        <AstrecScreen s={s} mainCard={mainCard} mobile={mobile} />
         {s.kit.found && <ComboToast f={s.kit.found} />}
 
         <StageBarView {...stageBarProps(s, bossParts)} />
@@ -1278,6 +1284,7 @@ function EffectShape({ f, k }) {
   if (TS_EFFECTS.has(f.kind)) return <TsEffect f={f} k={k} />;   // Bio's
   if (ICE_EFFECTS.has(f.kind)) return <IceEffect f={f} k={k} />;  // 6★ Ice's
   if (BONK_EFFECTS.has(f.kind)) return <BonkEffect f={f} k={k} />;  // 6★ Bonk's
+  if (ASTREC_EFFECTS.has(f.kind)) return <AstrecEffect f={f} k={k} />;  // 6★ Astrec's
   const p = Math.min(1, f.t / (f.life ?? 0.5));
   if (f.kind === 'beam') return (
     <g opacity={1 - p * p}>
@@ -1584,6 +1591,7 @@ function KitChip({ s, sk, cur, mobile }) {
   if (cur?.type === 'tenshadows') out.push(<TsChips key="ts" s={s} sk={cur} mobile={mobile} />);
   if (cur?.type === 'zero') iceChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'boil') bonkChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
+  if (cur?.type === 'deathwish') astrecChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
@@ -1716,6 +1724,7 @@ const ARENA_CSS = `
 ${TS_CSS}
 ${ICE_CSS}
 ${BONK_CSS}
+${ASTREC_CSS}
   .mad-aura { position:absolute; inset:-10%; border-radius:50%; pointer-events:none; z-index:-1;
     background: radial-gradient(circle, rgba(126,34,206,0.35), rgba(76,29,149,0.15) 55%, transparent 72%); box-shadow: 0 0 14px rgba(168,85,247,0.6); }
   .mad-aura.full { animation: madPulse 0.5s ease-in-out infinite alternate; box-shadow: 0 0 20px rgba(239,68,68,0.75); }

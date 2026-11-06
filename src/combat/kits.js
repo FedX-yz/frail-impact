@@ -153,6 +153,20 @@ export const SKILLS = {
                    passive: { type: 'subzero', bonus: 0.25, chain: 40,
                               lv1: { bonus: 0.15, chain: 25 }, si: { bonus: 0.04, chain: 6 },
                               desc: 'Sub-Zero: frozen enemies take +{bonus} DMG from everything. Chain Frost: every shattered enemy throws shards that add {chain} Freeze to whatever is near it.' } },
+  // 6★ Astrec (Platinum): sent in first because he can't stay dead (astrecPlatinum.js)
+  death_wish:    { type: 'deathwish', style: 'platinum',
+                   t1: 0.3, t2: 0.6, t3: 1, cleave: 0.5, cleaveR: 110, shock: 0.6, shockR: 150,   // Death Wish: the tiers
+                   reviveHp: 0.4, lockDur: 30,                      // Not Yet
+                   drawDur: 4, drawCd: 12,                          // M2: Draw Fire
+                   braceDR: 0.6, counterMin: 1, counterPer: 25, counterMax: 15, counterR: 200,   // hold M1: Brace
+                   cooldown: 16, heal: 0.3,                         // Q: Second Wind
+                   lv1: { t1: 0.18, t2: 0.36, t3: 0.6, cleave: 0.3, shock: 0.35, braceDR: 0.45, counterPer: 15, counterMax: 9, heal: 0.2, cooldown: 20 },
+                   si: { t1: 0.05, t2: 0.1, t3: 0.15, cleave: 0.1, shock: 0.12, counterPer: 4, counterMax: 2, cooldown: -0.8, heal: 0.02 },
+                   desc: 'DEATH WISH. The more HP Astrec is missing, the more dangerous he gets. Missing 25%: his hits deal +{t1} DMG. Missing 50%: +{t2}, and every click also cuts the enemies within {cleaveR} of the target for {cleave} click DMG. Missing 75%: +{t3}, and every click is a crit with a shockwave ({shock} click DMG within {shockR}). Too low and he dies like anyone. '
+                     + 'NOT YET: the first time he would die in a stage, he gets back up with {reviveHp} of his HP, but Death Wish shuts off for {lockDur}s. '
+                     + 'M2: DRAW FIRE. For {drawDur}s every enemy attacks twice as fast: choose when to take the hits. {drawCd}s cooldown. '
+                     + 'HOLD M1: BRACE. While you hold, he takes {braceDR} less damage. Let go and everything he soaked up comes back out around your cursor (from {counterMin} click DMG, more the harder he was hit, up to {counterMax}). '
+                     + 'Q: SECOND WIND. Heals {heal} of his max HP (and so drops him down the tiers). {cooldown}s cooldown.' },
   // 6★ Bonk (Platinum): Ice's kit turned inside out (bonkPlatinum.js). Bleed instead of Freeze,
   // offence instead of control, paid for in his own HP.
   boiling_point: { type: 'boil',      style: 'platinum',
@@ -242,6 +256,9 @@ export const ULTS = {
   absolute_zero:  { type: 'absolutezero', dur: 5, storm: 22, shatter: 32, charge: 1.2,
                     si: { dur: 0.5, storm: 3, shatter: 4 },
                     desc: 'ABSOLUTE ZERO. Time stops for {dur}s: nothing moves, every attack is cancelled, your clicks build Freeze three times as fast and Flash Freeze has no cooldown. Then the ice storm hits: {storm} click DMG to every enemy, and every frozen one shatters for {shatter} click DMG more (bosses by their freeze meter).' },
+  no_retreat:     { type: 'noretreat', dur: 8, bonus: 0.3, charge: 1.1,
+                    si: { dur: 0.5, bonus: 0.08 },
+                    desc: 'NO RETREAT. For {dur}s Astrec is at the top tier of Death Wish whatever his HP (crits, cleave, shockwaves) with +{bonus} DMG on top, and nothing can take him below 1 HP. Not Yet\'s lock doesn\'t apply.' },
   red_mist:       { type: 'redmist', dur: 6, steal: 0.006, finale: 18, charge: 1.2,
                     si: { dur: 0.5, steal: 0.001, finale: 3 },
                     desc: 'RED MIST. No time stop: the fight goes on, and for {dur}s every click makes its target hemorrhage on the spot and heals you {steal} of your max HP, no hemorrhage runs out, and Bloodletting is free with no cooldown. When it ends, everything bleeding ruptures at once for {finale} click DMG (bosses by their wound).' },
@@ -290,13 +307,13 @@ export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['per', 'devour', 'deerHeal', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
-  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal']);
-const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct']);
+  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal', 't1', 't2', 't3', 'reviveHp', 'braceDR']);
+const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct', 'shock', 'counterMin', 'counterPer', 'counterMax']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR') return String(Math.round(v));
+  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR') return String(Math.round(v));
   if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
@@ -350,7 +367,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
   collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush', chill: 'freeze/click', qPct: 'Q DMG', qRadius: 'Q range', figPct: 'figure blast', wallLen: 'frost line', chain: 'chain frost', storm: 'storm', shatter: 'shatter',
-  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal' };
+  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal', t1: 'tier I', t2: 'tier II', t3: 'tier III', shock: 'shockwave', counterPer: 'hit back', counterMax: 'max hit back', braceDR: 'brace' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

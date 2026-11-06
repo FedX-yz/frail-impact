@@ -616,6 +616,39 @@ export const CHARACTERS = [
     passive: null,
   },
   {
+    id: 40,
+    name: 'Astrec',
+    subtitle: 'Death Wish',
+    rarity: 6,
+    series: 'platinum',
+    unpullable: true,                // not in any pull yet (being tried out)
+    element: null,
+    color: '#fca5a5',
+    image:           `${BASE}story/cast/astrec.png`,   // no card art yet: his story art stands in
+    characterImage:  `${BASE}story/cast/astrec.png`,
+    cardArt:         `${BASE}story/cast/astrec.png`,
+    sprite:          `${BASE}story/cast/astrec.png`,
+    burstArt:        `${BASE}story/cast/astrec.png`,   // placeholder: the art that crosses the screen for No Retreat
+    burstFocus:      [52, 9],
+    portraitFocus:   [52, 8, 3],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/6star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 2600, atk: 220, def: 120 },   // the tank: most HP of the three, so there's more to spend
+    skill: {
+      name: 'Death Wish',
+      description: 'Stronger the more HP he is missing (3 tiers), gets back up once a stage, M2 Draw Fire, hold M1 to Brace and hit back, Q Second Wind.',
+      effect: 'death_wish',
+    },
+    ult: {
+      name: 'No Retreat',
+      description: 'Top tier of Death Wish whatever his HP, and nothing can take him below 1 HP.',
+      effect: 'no_retreat',
+      cooldown: 30,
+    },
+    passive: null,
+  },
+  {
     id: 39,
     name: 'Ramsf',
     subtitle: 'Platinum Series',     // title TBD
