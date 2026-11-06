@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // What 6★ Ramsf's kit looks like (the logic is in ramsfPlatinum.js). All drawn in code except
-// the burst art (mainCard.burstArt, his full-body art until the real one is drawn).
+// the doll arms (hand-drawn pieces in public/fx/ramsf_arm, jointed here) and the burst art
+// (mainCard.burstArt, his full-body art until the real one is drawn).
 //   RamsfOver    the porcelain doll arms on your cursor (and their strikes), the parry
 //                window, Strings while you drag, the wings while you hold, the tornado
 //   RamsfEffect  one-off effects: parryflash, gust, yank, armhit
@@ -16,45 +17,66 @@ function armAngle(i, spread = 1, time = 0) {
   return -Math.PI / 2 + side * (0.62 + rank * 0.4 * spread) + Math.sin(time * 2.2 + i * 1.3) * 0.06;
 }
 
-// One doll arm: shoulder → elbow → wrist, ball joints, a mitten hand. `to` = where the hand goes
-// (straight out for a strike: past the arm's full stretch, the hand flies off on a string),
-// else it hangs at `ang` with a slight bend.
-function DollArm({ x, y, ang, k, to = null, ghost = false, seg = 21 }) {
-  const L1 = seg * k, L2 = seg * 0.95 * k;
-  let E, W, a2, fly = null;
-  if (to) {
-    const d = Math.hypot(to.x - x, to.y - y) || 1, a = Math.atan2(to.y - y, to.x - x), reach = Math.min(d, (L1 + L2) * 2.2);
-    const s1 = reach * 0.52;
-    E = { x: x + Math.cos(a) * s1, y: y + Math.sin(a) * s1 };
-    W = { x: x + Math.cos(a) * reach, y: y + Math.sin(a) * reach };
-    a2 = a;
-    if (d > reach + 2 * k) fly = { x: to.x - Math.cos(a) * 5 * k, y: to.y - Math.sin(a) * 5 * k };
-  } else {
-    E = { x: x + Math.cos(ang) * L1, y: y + Math.sin(ang) * L1 };
-    a2 = ang + (Math.cos(ang) > 0 ? 0.55 : -0.55);
-    W = { x: E.x + Math.cos(a2) * L2, y: E.y + Math.sin(a2) * L2 };
+// One doll arm, put together from the hand-drawn pieces in public/fx/ramsf_arm (shoulder ball,
+// upper bone, elbow ball, forearm, wrist ball, hand). Each piece: its size, and (bones/hand) the
+// point where it hangs from the joint above (t) and where the next joint goes (b), in its own pixels.
+const ARM = `${import.meta.env.BASE_URL}fx/ramsf_arm/`;
+const PIECE = {
+  upper:    { src: 'upper.png',    w: 118, h: 366, t: [53, 0],   b: [62, 366] },
+  fore:     { src: 'fore.png',     w: 166, h: 395, t: [76, 0],   b: [106, 394] },
+  hand:     { src: 'hand.png',     w: 268, h: 367, t: [190, 12], b: [150, 366] },
+  shoulder: { src: 'shoulder.png', w: 121, h: 130, c: [60, 62] },
+  elbow:    { src: 'elbow.png',    w: 118, h: 134, c: [57, 65] },
+  wrist:    { src: 'wrist.png',    w: 65,  h: 68,  c: [32, 34] },
+};
+const U0 = 0.062;              // the pieces' pixels → the arena's (× k)
+const L1N = 416, L2N = 435;    // shoulder → elbow, elbow → wrist (bone + the bit hidden under the balls)
+const deg = a => a * 180 / Math.PI;
+// a bone (or the hand): its top at (x, y), pointing along angle a
+function Piece({ p, x, y, a, U, flip }) {
+  const f = flip ? -1 : 1, rot = deg(a - Math.atan2(p.b[1] - p.t[1], f * (p.b[0] - p.t[0])));
+  return <image href={ARM + p.src} width={p.w} height={p.h} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)}) scale(${(f * U).toFixed(4)} ${U.toFixed(4)}) translate(${-p.t[0]} ${-p.t[1]})`} />;
+}
+// a ball joint, centred on (x, y), turning with the bone below it
+function Ball({ p, x, y, a, U, flip }) {
+  const f = flip ? -1 : 1;
+  return <image href={ARM + p.src} width={p.w} height={p.h} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg(a - Math.PI / 2).toFixed(1)}) scale(${(f * U).toFixed(4)} ${U.toFixed(4)}) translate(${-p.c[0]} ${-p.c[1]})`} />;
+}
+const at = (p, a, d) => ({ x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d });
+const lerpA = (a, b, f) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * f; };
+
+// `ang`: where it hangs from the cursor (bent a little at the elbow). `to` + `f`: a strike, the hand
+// going f of the way (0..1) to `to`; the elbow bends to get it there, and past the arm's full stretch
+// the hand flies off on a string. `side`: which side of the cursor it's on (mirrors the pieces).
+function DollArm({ x, y, ang, k, to = null, f = 0, ghost = false, seg = 21, side = 1 }) {
+  const U = U0 * k * seg / 21, L1 = L1N * U, L2 = L2N * U, HL = 300 * U;
+  const S = { x, y }, bend = Math.cos(ang) > 0 ? 1 : -1, flip = side > 0;
+  // resting pose
+  let a1 = ang, E = at(S, a1, L1), a2 = ang + bend * 0.55, W = at(E, a2, L2), ah = a2 + bend * 0.2, W0 = null;
+  if (to && f > 0) {
+    const toW = at(to, Math.atan2(to.y - S.y, to.x - S.x) + Math.PI, HL * 0.75);   // the wrist stops short so the hand lands on it
+    const T = { x: W.x + (toW.x - W.x) * f, y: W.y + (toW.y - W.y) * f };
+    const D = Math.hypot(T.x - S.x, T.y - S.y), a = Math.atan2(T.y - S.y, T.x - S.x);
+    if (D >= L1 + L2) {
+      // full stretch: straight out, and the rest of the way the hand flies on its string
+      a1 = a2 = a; E = at(S, a, L1); W0 = at(E, a, L2); W = D > L1 + L2 + 2 * k ? T : W0; if (W === W0) W0 = null;
+    } else {
+      const cosA = (L1 * L1 + D * D - L2 * L2) / (2 * L1 * Math.max(1e-3, D));
+      a1 = a - bend * Math.acos(Math.max(-1, Math.min(1, cosA)));
+      E = at(S, a1, L1); W = T; a2 = Math.atan2(W.y - E.y, W.x - E.x);
+    }
+    ah = lerpA(ah, Math.atan2(to.y - W.y, to.x - W.x), Math.min(1, f * 1.6));
   }
-  const bone = (a, b, w) => (
-    <>
-      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={INK} strokeWidth={(w + 2.6) * k} strokeLinecap="round" />
-      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={PORCELAIN} strokeWidth={w * k} strokeLinecap="round" />
-      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={SHADE} strokeWidth={w * 0.35 * k} strokeLinecap="round" transform={`translate(${0.9 * k} ${0.9 * k})`} />
-    </>
-  );
-  const ball = (p, r) => <circle cx={p.x} cy={p.y} r={r * k} fill={PORCELAIN} stroke={INK} strokeWidth={1.3 * k} />;
-  const hx = Math.cos(a2), hy = Math.sin(a2);
-  const H = fly ?? { x: W.x + hx * 5 * k, y: W.y + hy * 5 * k };
+  const g1 = (L1N - PIECE.upper.h) / 2 * U, g2 = (L2N - PIECE.fore.h) / 2 * U;
   return (
     <g opacity={ghost ? 0.5 : 1}>
-      {bone({ x, y }, E, 5.5)}
-      {bone(E, W, 4.6)}
-      {fly && <line x1={W.x} y1={W.y} x2={H.x} y2={H.y} stroke="#fdf2f8" strokeWidth={1.1 * k} opacity={0.85} style={{ filter: 'drop-shadow(0 0 2px #f472b6)' }} />}
-      {ball(E, 3.6)}
-      {ball(W, 3)}
-      {/* the hand: a little porcelain mitten with a thumb */}
-      <ellipse cx={H.x} cy={H.y} rx={5.6 * k} ry={4.2 * k} transform={`rotate(${(a2 * 180 / Math.PI).toFixed(1)} ${H.x} ${H.y})`} fill={PORCELAIN} stroke={INK} strokeWidth={1.3 * k} />
-      <line x1={H.x} y1={H.y} x2={H.x - hy * 5 * k + hx * 2 * k} y2={H.y + hx * 5 * k + hy * 2 * k} stroke={INK} strokeWidth={3.4 * k} strokeLinecap="round" />
-      <line x1={H.x} y1={H.y} x2={H.x - hy * 5 * k + hx * 2 * k} y2={H.y + hx * 5 * k + hy * 2 * k} stroke={PORCELAIN} strokeWidth={2 * k} strokeLinecap="round" />
+      <Piece p={PIECE.upper} {...at(S, a1, g1)} a={a1} U={U} flip={flip} />
+      <Piece p={PIECE.fore} {...at(E, a2, g2)} a={a2} U={U} flip={flip} />
+      {W0 && <line x1={W0.x} y1={W0.y} x2={W.x} y2={W.y} stroke="#fdf2f8" strokeWidth={1.1 * k} opacity={0.85} style={{ filter: 'drop-shadow(0 0 2px #f472b6)' }} />}
+      <Piece p={PIECE.hand} {...at(W, ah, 4 * U)} a={ah} U={U} flip={flip} />
+      <Ball p={PIECE.shoulder} {...S} a={a1} U={U} flip={flip} />
+      <Ball p={PIECE.elbow} {...E} a={a2} U={U} flip={flip} />
+      <Ball p={PIECE.wrist} {...W} a={ah} U={U} flip={flip} />
     </g>
   );
 }
@@ -98,13 +120,13 @@ export function RamsfOver({ s, k, P, time }) {
       })()}
       {/* wings: his arms folded out from the cursor while you hold */}
       {P && wings && Array.from({ length: MAX_ARMS }, (_, i) => (
-        <DollArm key={`w${i}`} x={P.x + (i % 2 ? 6 : -6) * k} y={P.y} ang={armAngle(i, 1.15 + 0.25 * charge + 0.08 * Math.sin(time * (8 + 10 * charge)), time)} k={k} ghost={i >= n} seg={21 + 6 * charge} />
+        <DollArm key={`w${i}`} x={P.x + (i % 2 ? 6 : -6) * k} y={P.y} ang={armAngle(i, 1.15 + 0.25 * charge + 0.08 * Math.sin(time * (8 + 10 * charge)), time)} k={k} ghost={i >= n} seg={21 + 6 * charge} side={i % 2 ? 1 : -1} />
       ))}
       {/* the arms on your cursor */}
       {P && !wings && Array.from({ length: n }, (_, i) => {
         const st = r.strikes.filter(x => x.arm === i).at(-1);
-        const to = st ? (() => { const f = Math.sin(clamp01(st.t / st.life) * Math.PI); return { x: P.x + (st.x - P.x) * f, y: P.y + (st.y - P.y) * f }; })() : null;
-        return <DollArm key={i} x={P.x + (i % 2 ? 5 : -5) * k} y={P.y + 2 * k} ang={armAngle(i, 1, time)} k={k} to={to && Math.hypot(to.x - P.x, to.y - P.y) > 6 * k ? to : null} />;
+        const f = st ? Math.sin(clamp01(st.t / st.life) * Math.PI) : 0;
+        return <DollArm key={i} x={P.x + (i % 2 ? 5 : -5) * k} y={P.y + 2 * k} ang={armAngle(i, 1, time)} k={k} to={st} f={f} side={i % 2 ? 1 : -1} />;
       })}
     </g>
   );
