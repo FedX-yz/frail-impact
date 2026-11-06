@@ -19,6 +19,7 @@ import { createBioClassic } from './bioClassic';
 import { createIcePlatinum } from './icePlatinum';
 import { createBonkPlatinum } from './bonkPlatinum';
 import { createAstrecPlatinum } from './astrecPlatinum';
+import { createRamsfPlatinum } from './ramsfPlatinum';
 import { CHARACTERS } from '../data/characters';
 
 // Every skill has a main move (its `style`: click / special / charge / hold / drag) and a
@@ -174,8 +175,9 @@ export function createKitRuntime(api) {
 
   // ── Getting hit ──────────────────────────────────────────────────────────
   // true = the hit was stopped (Toad / Infinity)
-  function absorbHit(kind, src) {
+  function absorbHit(kind, src, from) {
     const P = s.player.pos;
+    if (skill()?.type === 'marionette' && ramsf.tryParry(kind, src, from)) return true;   // 6★ Ramsf: parried
     const toad = s.allies.find(a => a.kind === 'toad');
     if (toad) {
       s.allies = s.allies.filter(a => a !== toad);
@@ -334,6 +336,7 @@ export function createKitRuntime(api) {
     if (skill()?.type === 'zero') ice.onClick(e, auto);            // 6★ Ice: every click builds Freeze
     if (skill()?.type === 'boil') bonk.onClick(e, auto);           // 6★ Bonk: every click builds Bleed
     if (skill()?.type === 'deathwish') astrec.onClick(e, auto);    // 6★ Astrec: Death Wish's cleave and shockwaves
+    if (skill()?.type === 'marionette') ramsf.onClick(e, auto);    // 6★ Ramsf: the arms on your cursor strike too
   }
   // Stephen: a crit click slices a line through the target
   function onCritClick(e) {
@@ -475,6 +478,7 @@ export function createKitRuntime(api) {
       case 'zero': return ice.press(x, y);            // 6★ Ice: an ice figure (hold 1s+ and let go: detonate)
       case 'boil': return bonk.press(x, y);           // 6★ Bonk: grab (hold to carry, let go to throw / slam)
       case 'deathwish': return astrec.drawFire(x, y); // 6★ Astrec: Draw Fire
+      case 'marionette': return ramsf.press(x, y);    // 6★ Ramsf: Parry
       case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
         if (!startCooldown(sk, x, y)) return false;
         s.kit.maws = s.kit.maws ?? [];
@@ -571,6 +575,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'zero') { ice.release(held, x, y, press); return; }   // 6★ Ice: Shatter (or the end of a frost line)
     if (sk?.type === 'boil') { bonk.release(held, x, y, press); return; }  // 6★ Bonk: Rupture (or the end of a claw rake)
     if (sk?.type === 'deathwish') { astrec.release(held, x, y, press); return; }  // 6★ Astrec: Brace's hit back (or the end of a Breach)
+    if (sk?.type === 'marionette') { ramsf.release(held, x, y, press); return; }  // 6★ Ramsf: Wingbeat (or Strings, after a drag)
     if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
     const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
@@ -617,6 +622,7 @@ export function createKitRuntime(api) {
     if (sk.type === 'zero') return ice.m2Info();
     if (sk.type === 'boil') return bonk.m2Info();
     if (sk.type === 'deathwish') return astrec.m2Info();
+    if (sk.type === 'marionette') return ramsf.m2Info();
     if (sk.style === 'special') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
     if (sk.type === 'souls')    return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
     if (sk.type === 'crawlers') return { kind: 'count', n: s.kit.crawlN, max: Math.round(sk.cap), color: '#c084fc' };
@@ -751,6 +757,9 @@ export function createKitRuntime(api) {
       case 'noretreat':      // 6★ Astrec: top tier whatever his HP, and he can't drop (astrecPlatinum.js)
         astrec.ult(u);
         return true;
+      case 'openarms':       // 6★ Ramsf: all ten arms on the cursor, and it parries by itself (ramsfPlatinum.js)
+        ramsf.ult(u);
+        return true;
       default: return false;
     }
   }
@@ -765,6 +774,7 @@ export function createKitRuntime(api) {
     if (act.type === 'absolutezero') ice.endUlt(act);
     if (act.type === 'redmist') bonk.endUlt(act);
     if (act.type === 'noretreat') astrec.endUlt(act);
+    if (act.type === 'openarms') ramsf.endUlt(act);
     if (act.type === 'shrine') { effect({ kind: 'flash', color: '#450a0a', life: 0.6 }); shake(0.3); }   // the domain collapses
   }
   // Room 16's ult: you picked one of the three skills
@@ -786,8 +796,10 @@ export function createKitRuntime(api) {
   const bonk = createBonkPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
   const astrec = createAstrecPlatinum({ s, api, K, dist, distToSegment, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius, heavy });
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze, Bonk's Bloodletting, Astrec's Second Wind); null = Q is M2 as usual
-  const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : null; };
-  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : false; }
+  const ramsf = createRamsfPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, foes, fighting, radius, heavy });
+  const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : t === 'marionette' ? ramsf.qInfo() : null; };
+  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.tornado(x, y) : false; }
+  const exposedBonus = e => (skill()?.type === 'marionette' ? ramsf.exposedBonus(e) : 0);
   // 6★ Astrec: how much of a hit gets through (Brace), how fast enemies attack (Draw Fire), and Not Yet
   const hurtMult = () => (skill()?.type === 'deathwish' ? astrec.hurtMult() : 1);
   const attackRate = () => (skill()?.type === 'deathwish' ? astrec.attackRate() : 1);
@@ -978,6 +990,8 @@ export function createKitRuntime(api) {
     if (sk?.type === 'boil' || bonk.active()) bonk.update(dt, live);
     // 6★ Astrec: Death Wish's tiers, Brace, Draw Fire, Not Yet's lock
     if (sk?.type === 'deathwish' || astrec.active()) astrec.update(dt, live);
+    // 6★ Ramsf: the parry window, the arms on your cursor, Strings, the tornado
+    if (sk?.type === 'marionette' || ramsf.active()) ramsf.update(dt, live);
 
     // Doro's fire arrows land
     if (kit.arrows?.length) {
@@ -1237,6 +1251,7 @@ export function createKitRuntime(api) {
     ice.reset();
     bonk.reset();
     astrec.reset(why);
+    ramsf.reset(why);
     // 6★ Ice's Absolute Zero is a time stop: it ends with the stage (its storm with it)
     if (s.ult.active?.type === 'absolutezero') s.ult.active = null;
     s.choosing = null;
@@ -1253,7 +1268,7 @@ export function createKitRuntime(api) {
     // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
     signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale(),
     cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
-    hurtMult, attackRate, undying,
+    hurtMult, attackRate, undying, exposedBonus,
     update, reset, origin, slide,
     skill2, skill2Info,
   };

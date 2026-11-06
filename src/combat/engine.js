@@ -1349,14 +1349,14 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
             a.phase = 'strike';
             if (a.opts.boom) { sfx('boom'); shake(0.25); effect({ kind: 'shards', x: a.cx, y: a.cy, r: a.r, color: '#f97316', n: 14 }); }
             if (a.opts.lunge && owner) { owner.lunge = { x: a.cx, y: a.cy, t: 0.3 }; sfx('leap'); }   // the Hydra's stinger
-            if (T && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r && hurt(a.dmg, 'circle') && a.opts.debuff) addDebuff(a.opts.debuff);
+            if (T && dist(T.x, T.y, a.cx, a.cy) <= a.r + T.r && hurt(a.dmg, 'circle', null, a) && a.opts.debuff) addDebuff(a.opts.debuff);
           } else if (a.kind === 'slash') {
             a.phase = 'strike';
-            if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r && hurt(a.dmg, 'slash') && a.opts.debuff) addDebuff(a.opts.debuff);
+            if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r && hurt(a.dmg, 'slash', null, a) && a.opts.debuff) addDebuff(a.opts.debuff);
           } else if (a.kind === 'tongue') {
             a.phase = 'strike'; sfx('tongue');
             if (T && distToSegment(T.x, T.y, a.x1, a.y1, a.x2, a.y2) <= a.w / 2 + T.r) {
-              const hit = hurt(a.dmg, 'slash', owner);
+              const hit = hurt(a.dmg, 'slash', owner, a);
               if ((hit || s.dev.god) && !s.mahoraga && owner && s.enemies.includes(owner)) tongueCatch(owner);
             }
           } else if (a.kind === 'shot') {
@@ -1379,7 +1379,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (!a.hitDone && T && dist(T.x, T.y, a.x, a.y) <= a.r + K(6) + T.r) {
             a.hitDone = true;
             if (a.opts.web) spider.webHit(owner);   // a spiderling's web: it reels you in
-            else if (hurt(a.dmg, 'shot') && a.opts.debuff) addDebuff(a.opts.debuff);   // Hexer: WEAKENED
+            else if (hurt(a.dmg, 'shot', null, a) && a.opts.debuff) addDebuff(a.opts.debuff);   // Hexer: WEAKENED
           }
           if (a.x < -50 || a.y < -50 || a.x > s.W + 50 || a.y > s.H + 50 || a.hitDone) finishAttack(a);
         } else if (a.kind === 'dash') {
@@ -1388,7 +1388,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           const step = Math.min(d, spd * dt);
           if (d > 0) { owner.x += dx / d * step; owner.y += dy / d * step; }
           if (!a.hitDone && T && dist(T.x, T.y, owner.x, owner.y) <= owner.size * s.k * 0.5 + T.r) {
-            a.hitDone = true; hurt(a.dmg, 'dash', owner);
+            a.hitDone = true; hurt(a.dmg, 'dash', owner, a);
             if (a.phase === 'done') continue;   // Infinity stopped the dash
           }
           if (d <= 1) finishAttack(a);
@@ -1401,9 +1401,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Player getting hit ──────────────────────────────────────────────────
   // An enemy attack connected with whatever it was aimed at
   // true if it actually hurt you
-  function hurt(raw, kind, src = null) {
+  // (src: the enemy that hit you, if it was in contact; from: the attack, if it was one)
+  function hurt(raw, kind, src = null, from = null) {
     if (s.mahoraga) { rt.hitMahoraga(raw, kind); return false; }
-    return hitPlayer(raw, kind, src);
+    return hitPlayer(raw, kind, src, from);
   }
   function addDebuff(id) {
     const d = DEBUFFS[id];
@@ -1413,10 +1414,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     const p = s.player.pos ?? { x: s.W / 2, y: s.H / 2 };
     if (fresh) floater(d.name, p.x, p.y - K(64), d.color, true);
   }
-  function hitPlayer(raw, kind = 'hit', src = null) {
+  function hitPlayer(raw, kind = 'hit', src = null, from = null) {
     const pl = s.player;
     if (pl.invuln > 0 || s.dev.god || s.phase === 'defeat' || s.phase === 'clear') return false;
-    if (rt.absorbHit(kind, src)) { pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity
+    if (rt.absorbHit(kind, src, from)) { pl.invuln = Math.max(pl.invuln, 0.3); return false; }   // Toad / Infinity
     const dmg = Math.max(1, Math.round(raw * (1 - s.stats.dmgReduction) * rt.hurtMult()));   // (6★ Astrec bracing)
     if (dmg >= pl.hp && rt.cheatDeath()) { pl.invuln = Math.max(pl.invuln, BAL.HIT_INVULN); return false; }   // Bio's Round Deer
     pl.hp = Math.max(0, pl.hp - dmg);
@@ -1509,6 +1510,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.refl?.state === 'on' && s.direct) { reflectHit(e, dmg); return 0; }
     if (e.fortT > 0) dmg *= 1 - BAL.FORTIFY;   // a Medic's buff
     if (e.vuln) dmg *= e.vuln;                 // Bio: bound by the Toad / standing in the shadow garden
+    if (e.exposedT > s.time) dmg *= 1 + rt.exposedBonus(e);   // 6★ Ramsf: parried, and open
     e.lastHit = s.time;
     const pv = rt.passive();
     if (e.frozen > 0 && (pv?.type === 'frost' || pv?.type === 'subzero')) dmg *= 1 + pv.bonus;   // (6★ Ice: Sub-Zero)

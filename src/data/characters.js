@@ -543,7 +543,7 @@ export const CHARACTERS = [
 
   // ── 6★ Platinum Series (the good guys; a Gold Series for the bad guys comes later).
   // The Platinum Series (6★). Ice is pulled on the secret Platinum banner only (bannerOnly).
-  // Bonk has his kit (being tried out: still `unpullable`); Ramsf has no kit or title yet.
+  // Bonk, Ramsf and the 6★ Astrec have their kits (being tried out: still `unpullable`).
   // `unpullable` keeps them out of every pull. No framed cards yet: their full-body art stands in.
   {
     id: 37,
@@ -651,25 +651,37 @@ export const CHARACTERS = [
   {
     id: 39,
     name: 'Ramsf',
-    subtitle: 'Platinum Series',     // title TBD
+    subtitle: 'Marionette',
     rarity: 6,
     series: 'platinum',
-    unpullable: true,                // not in any pull yet (remove when it's ready)
+    unpullable: true,                // not in any pull yet (being tried out)
     element: null,
     color: '#f472b6',
     image:           `${BASE}sprites/ramsf-platinum.png`,   // no card art yet: the full-body art stands in
     characterImage:  `${BASE}sprites/ramsf-platinum.png`,
     cardArt:         `${BASE}sprites/ramsf-platinum.png`,
     sprite:          `${BASE}sprites/ramsf-platinum.png`,
+    burstArt:        `${BASE}sprites/ramsf-platinum.png`,   // placeholder: the art for Open Arms
+    burstFocus:      [50, 13],
     portraitFocus:   [50, 15, 3],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/6star.mp4`,
     resultVideo:     null,
-    stats: { hp: 1600, atk: 200, def: 100 },   // placeholder
-    skill: null,                     // kit coming later
-    ult: null,
+    stats: { hp: 1900, atk: 230, def: 105 },
+    skill: {
+      name: 'Marionette',
+      description: 'M2 to parry (hitstop, reflects, staggers); every parry puts a doll arm on your cursor (up to 10). Drag strings, hold M1 for a wingbeat, Q for a tornado.',
+      effect: 'marionette',
+    },
+    ult: {
+      name: 'Open Arms',
+      description: 'All ten arms on your cursor, and it parries anything that touches it.',
+      effect: 'open_arms',
+      cooldown: 30,
+    },
     passive: null,
   },
+
 
   // ── 4★ ──────────────────────────────────────────────────────────
 

@@ -349,6 +349,8 @@ const SFX_FILES = {
   // Bio (Ten Shadows / Mahoraga)
   summon: null, sign: null, tick: null, bark: null, howl: null, thunder: null, ox: null, deer: null, hiss: null, roar: null,
   trumpet: null, splash: null, tongue: null, domain: null, wheel: null, gun: null, leap: null, charge: null, worldslash: null, discover: null, saved: null, dive: null, fart: null,
+  // 6★ Ramsf: a parry (a bright metallic ring; bigger on a streak), a gust of wings
+  parry: null, parryBig: null, gust: null,
   // DADDY HAIRY LEGS (combat.spider.js; mastered by tools/master-audio.py --combat)
   daddyStep: 'spider/daddy_step.mp3',                 // his legs, every few steps
   daddyMove: ['spider/daddy_move1.mp3', 'spider/daddy_move2.mp3', 'spider/daddy_move3.mp3'],   // a scuttle
@@ -431,6 +433,10 @@ function flutter(f0, f1, dur, vol, delay = 0) {
 }
 
 const SYNTH = {
+  // a parry: the snap of contact, then a ringing, slightly inharmonic metal (a bell more than a sword)
+  parry:    () => { crunch(5200, 0.04, 0.55, 2.2); tone('sine', vary(2350, 0.03), 2300, 0.55, 0.13); tone('sine', vary(3610, 0.03), 3560, 0.4, 0.07); tone('triangle', vary(1180, 0.03), 1150, 0.35, 0.09); tone('square', 600, 220, 0.05, 0.05); },
+  parryBig: () => { crunch(4200, 0.06, 0.7, 1.6); crunch(900, 0.12, 0.35, 0.8); tone('sine', vary(1760, 0.02), 1740, 0.9, 0.16); tone('sine', vary(2640, 0.02), 2620, 0.7, 0.1); tone('sine', vary(4070, 0.02), 4040, 0.5, 0.06); tone('triangle', 880, 860, 0.6, 0.1); },
+  gust:     () => { crunch(700, 0.45, 0.32, 0.6); crunch(1500, 0.3, 0.18, 0.9, 0.05); crunch(350, 0.5, 0.2, 0.5, 0.08); },
   hit:     () => { crunch(vary(1800), 0.05, 0.35, 2); tone('triangle', vary(420), 180, 0.06, 0.18); },
   crit:    () => { crunch(vary(2600), 0.08, 0.45, 1.5); tone('square', vary(880), 330, 0.1, 0.12); tone('triangle', vary(1320), 660, 0.12, 0.1, 0.02); },
   kill:    () => { crunch(vary(900), 0.12, 0.4, 0.8); tone('sine', vary(520), 120, 0.14, 0.22); },
@@ -470,7 +476,7 @@ const SYNTH = {
 };
 
 // Too many sounds at once turn into mush: limit how often each can play
-const MIN_GAP = { hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06,
+const MIN_GAP = { parry: 0.04, parryBig: 0.06, gust: 0.15, hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06,
   summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2, fart: 1,
   daddyStep: 0.16, daddyMove: 0.7, daddyMoveLong: 2, daddyChatter: 2.2, daddyIdle: 3, daddyMaim: 2 };
 const lastPlayed = {};
