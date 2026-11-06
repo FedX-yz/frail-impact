@@ -17,6 +17,7 @@ import { SKILLS, scaleKit } from './kits';
 import { createTenShadows } from './tenShadows';
 import { createBioClassic } from './bioClassic';
 import { createIcePlatinum } from './icePlatinum';
+import { createBonkPlatinum } from './bonkPlatinum';
 import { CHARACTERS } from '../data/characters';
 
 // Every skill has a main move (its `style`: click / special / charge / hold / drag) and a
@@ -328,6 +329,7 @@ export function createKitRuntime(api) {
     if (mods?.ratio && pv?.type === 'ratioHeal') api.heal(pv.heal * s.player.maxHp);
     if (skill()?.type === 'tenshadows') ts.afterClick(e, auto);   // Chimera Shadow Garden: shadow hands
     if (skill()?.type === 'zero') ice.onClick(e, auto);            // 6★ Ice: every click builds Freeze
+    if (skill()?.type === 'boil') bonk.onClick(e, auto);           // 6★ Bonk: every click builds Bleed
   }
   // Stephen: a crit click slices a line through the target
   function onCritClick(e) {
@@ -467,6 +469,7 @@ export function createKitRuntime(api) {
       case 'dogs': return bio.special(sk, x, y);       // Bio: two Divine Dogs
       case 'tenshadows': return ts.press(sk, x, y);   // Bio's other kit: a hand sign (tap = summon, hold = the wheel)
       case 'zero': return ice.press(x, y);            // 6★ Ice: an ice figure (hold 1s+ and let go: detonate)
+      case 'boil': return bonk.press(x, y);           // 6★ Bonk: grab (hold to carry, let go to throw / slam)
       case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
         if (!startCooldown(sk, x, y)) return false;
         s.kit.maws = s.kit.maws ?? [];
@@ -497,6 +500,7 @@ export function createKitRuntime(api) {
     const sk = skill();
     if (sk?.type === 'tenshadows') { ts.release(sk); return; }
     if (sk?.type === 'zero') { ice.m2Release(held); return; }
+    if (sk?.type === 'boil') { bonk.m2Release(held); return; }
     if (sk?.style !== 'charge' || held < CHARGE_HOLD) return;   // a tap only stocks up (done on press)
     fire(x, y);
   }
@@ -560,6 +564,7 @@ export function createKitRuntime(api) {
   function release(held, x, y, press = null) {
     const sk = skill();
     if (sk?.type === 'zero') { ice.release(held, x, y, press); return; }   // 6★ Ice: Shatter (or the end of a frost line)
+    if (sk?.type === 'boil') { bonk.release(held, x, y, press); return; }  // 6★ Bonk: Rupture (or the end of a claw rake)
     if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
     const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
@@ -604,6 +609,7 @@ export function createKitRuntime(api) {
     if (!sk) return null;
     if (sk.type === 'tenshadows') return ts.info(sk);
     if (sk.type === 'zero') return ice.m2Info();
+    if (sk.type === 'boil') return bonk.m2Info();
     if (sk.style === 'special') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
     if (sk.type === 'souls')    return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
     if (sk.type === 'crawlers') return { kind: 'count', n: s.kit.crawlN, max: Math.round(sk.cap), color: '#c084fc' };
@@ -617,6 +623,7 @@ export function createKitRuntime(api) {
     const sk = skill();
     s.kit.kills++;
     if (sk?.type === 'tenshadows') ts.onKill(sk, e);   // Bio: what his shikigami kill tops up the meter
+    if (sk?.type === 'boil') bonk.onKill(e);           // 6★ Bonk: Bloodlust feeds on what dies hemorrhaging
     // Sorcerer Killer charges from kills, not damage
     const u = s.stats.ult;
     if (u?.chargeOn === 'kills' && !s.ult.active) {
@@ -731,6 +738,9 @@ export function createKitRuntime(api) {
       case 'absolutezero':   // 6★ Ice: the burst art, time stops, then the storm (icePlatinum.js)
         ice.ult(u);
         return true;
+      case 'redmist':        // 6★ Bonk: the burst art, then a frenzy (no time stop), then the harvest (bonkPlatinum.js)
+        bonk.ult(u);
+        return true;
       default: return false;
     }
   }
@@ -743,6 +753,7 @@ export function createKitRuntime(api) {
     }
     if (act.type === 'ora') s.kit.oraSkill = null;
     if (act.type === 'absolutezero') ice.endUlt(act);
+    if (act.type === 'redmist') bonk.endUlt(act);
     if (act.type === 'shrine') { effect({ kind: 'flash', color: '#450a0a', life: 0.6 }); shake(0.3); }   // the domain collapses
   }
   // Room 16's ult: you picked one of the three skills
@@ -761,8 +772,10 @@ export function createKitRuntime(api) {
     skill, kitHit, ultHit, foes, fighting, radius, center, focus, nearest, bestAngle, lineThrough, launch, heavy });
   const ice = createIcePlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius });
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze); null = Q is M2 as usual
-  const skill2Info = () => (skill()?.type === 'zero' ? ice.qInfo() : null);
-  function skill2(x, y) { return skill()?.type === 'zero' ? ice.flash(x, y) : false; }
+  const bonk = createBonkPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
+  // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze, 6★ Bonk's Bloodletting); null = Q is M2 as usual
+  const skill2Info = () => (skill()?.type === 'zero' ? ice.qInfo() : skill()?.type === 'boil' ? bonk.qInfo() : null);
+  function skill2(x, y) { return skill()?.type === 'zero' ? ice.flash(x, y) : skill()?.type === 'boil' ? bonk.bloodletting(x, y) : false; }
 
   // ── Every frame ──────────────────────────────────────────────────────────
   function update(dt) {
@@ -945,6 +958,8 @@ export function createKitRuntime(api) {
     if (sk?.type === 'tenshadows' || ts.active()) ts.update(sk, dt, live);
     // 6★ Ice: frost lines, figures, Freeze melting, the burst and the storm
     if (sk?.type === 'zero' || ice.active()) ice.update(dt, live);
+    // 6★ Bonk: Bleed, hemorrhages, the claw (grab, rake), Red Mist
+    if (sk?.type === 'boil' || bonk.active()) bonk.update(dt, live);
 
     // Doro's fire arrows land
     if (kit.arrows?.length) {
@@ -1202,6 +1217,7 @@ export function createKitRuntime(api) {
     s.kit.meteor = null; s.kit.purple = null; s.kit.trailPt = null; s.kit.posHist = []; s.kit.tide = null; s.kit.aimA = null; s.kit.arrows = []; s.kit.maws = []; s.kit.tentacles = [];
     ts.reset();
     ice.reset();
+    bonk.reset();
     // 6★ Ice's Absolute Zero is a time stop: it ends with the stage (its storm with it)
     if (s.ult.active?.type === 'absolutezero') s.ult.active = null;
     s.choosing = null;

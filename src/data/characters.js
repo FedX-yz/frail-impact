@@ -542,9 +542,9 @@ export const CHARACTERS = [
   },
 
   // ── 6★ Platinum Series (the good guys; a Gold Series for the bad guys comes later).
-  // The Platinum Series (6★). Only Ice has a kit so far: he's pulled on the secret Platinum
-  // banner only (bannerOnly). Bonk and Ramsf: no kits, no titles yet, and `unpullable` keeps
-  // them out of every pull. They have no framed card yet, so their full-body art stands in.
+  // The Platinum Series (6★). Ice is pulled on the secret Platinum banner only (bannerOnly).
+  // Bonk has his kit (being tried out: still `unpullable`); Ramsf has no kit or title yet.
+  // `unpullable` keeps them out of every pull. No framed cards yet: their full-body art stands in.
   {
     id: 37,
     name: 'Ice',
@@ -583,23 +583,36 @@ export const CHARACTERS = [
   {
     id: 38,
     name: 'Bonk',
-    subtitle: 'Platinum Series',     // title TBD
+    subtitle: 'Boiling Point',
     rarity: 6,
     series: 'platinum',
-    unpullable: true,                // not in any pull yet (remove when it's ready)
-    element: null,
+    unpullable: true,                // not in any pull yet (when he's ready: bannerOnly: 'platinum-series', like Ice)
+    element: 'Blood',
     color: '#f87171',
     image:           `${BASE}sprites/bonk-platinum.png`,   // no card art yet: the full-body art stands in
     characterImage:  `${BASE}sprites/bonk-platinum.png`,
     cardArt:         `${BASE}sprites/bonk-platinum.png`,
     sprite:          `${BASE}sprites/bonk-platinum.png`,
+    // the art that crosses the screen when he bursts (Red Mist). Placeholder: his full-body art
+    burstArt:        `${BASE}sprites/bonk-platinum.png`,
+    burstFocus:      [41, 8],        // [x %, y %] of his face in burstArt (the cut-in centres on it)
+    ultBubble:       'claw',         // his ult bubble is his gauntlet (Ice's, on the other arm), filling with blood
     portraitFocus:   [41, 6, 3.2],
     voiceLine:       null,
     animationVideo:  `${BASE}animations/6star.mp4`,
     resultVideo:     null,
-    stats: { hp: 1600, atk: 200, def: 100 },   // placeholder
-    skill: null,                     // kit coming later
-    ult: null,
+    stats: { hp: 2300, atk: 250, def: 90 },   // more HP to bleed with, more ATK, less DEF than Ice
+    skill: {
+      name: 'Boiling Point',
+      description: 'Clicks build Bleed, hold M1 to Rupture everything hemorrhaging, drag a claw rake, Q for Bloodletting (costs HP), M2 to grab, throw and slam.',
+      effect: 'boiling_point',
+    },
+    ult: {
+      name: 'Red Mist',
+      description: 'A blood frenzy (no time stop): every click hemorrhages and heals, then everything bleeding ruptures.',
+      effect: 'red_mist',
+      cooldown: 32,
+    },
     passive: null,
   },
   {

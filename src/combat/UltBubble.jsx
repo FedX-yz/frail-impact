@@ -3,6 +3,7 @@
 // character ult buttons). The card picks its shape with `ultBubble` in characters.js:
 //   'gauntlet'  6★ Ice: his gauntlet, filling with ice
 //   'bleedeye'  HOX: an eye, filling with blood
+//   'claw'      6★ Bonk: Ice's gauntlet on the other arm (mirrored), filling with blood
 // The shape fills from the bottom as the ult charges; when it's ready it lights up in
 // its own way; on cooldown it greys out. Drawn on the status frame's own 919×677 grid
 // (the orb sat at centre 679, 347), so the frame art without the ring goes under it.
@@ -17,6 +18,11 @@ const LOOK = {
     back: 'rgba(2,6,23,0.72)', line: '#f0f9ff', glow: '#38bdf8', lineW: 15,
     fill: [['0%', '#f8fafc'], ['30%', '#bae6fd'], ['70%', '#38bdf8'], ['100%', '#0c4a6e']], wave: '#e0f2fe',
   },
+  claw: {
+    icon: 'gauntlet', size: 450, cx: 679, cy: 336, flip: true,
+    back: 'rgba(12,2,2,0.78)', line: '#fecaca', glow: '#dc2626', lineW: 15,
+    fill: [['0%', '#fca5a5'], ['30%', '#ef4444'], ['70%', '#991b1b'], ['100%', '#450a0a']], wave: '#fecaca',
+  },
   bleedeye: {
     icon: 'bleedeye', size: 470, cx: 679, cy: 352,
     back: 'rgba(12,2,2,0.78)', line: '#fbbf24', glow: '#dc2626', lineW: 14,
@@ -30,7 +36,7 @@ export default function UltBubble({ kind, charge = 0, ready = false, cooling = f
   if (!L) return null;
   const d = GAME_ICONS[L.icon][2];
   const sc = L.size / 512, x0 = L.cx - L.size / 2, y0 = L.cy - L.size / 2;
-  const tf = `translate(${x0} ${y0}) scale(${sc})`;
+  const tf = L.flip ? `translate(${x0 + L.size} ${y0}) scale(${-sc} ${sc})` : `translate(${x0} ${y0}) scale(${sc})`;
   // the fill line, in the icon's own 512 units (a little margin top and bottom so 0% and 100% look it)
   const f = Math.max(0, Math.min(1, active ? 1 : charge));
   const level = 500 - 488 * f;
@@ -65,10 +71,13 @@ export default function UltBubble({ kind, charge = 0, ready = false, cooling = f
         <path d={d} transform={tf} fill="none" stroke="#020617" strokeWidth={(L.lineW + 10) / sc * 0.5} strokeLinejoin="round" />
         <path d={d} transform={tf} fill="none" stroke={L.line} strokeWidth={L.lineW / sc * 0.5} strokeLinejoin="round" className="ub-line" />
       </g>
-      {/* ready: Ice's sparkles / HOX's blood dripping off */}
+      {/* ready: Ice's sparkles / Bonk's and HOX's blood dripping off */}
       {ready && kind === 'gauntlet' && [[470, 170, 0], [890, 230, 0.6], [520, 560, 1.1], [860, 520, 0.3], [700, 95, 0.9]].map(([x, y, dl], i) => (
         <path key={i} className="ub-spark" d={`M${x},${y - 26} L${x + 7},${y - 7} L${x + 26},${y} L${x + 7},${y + 7} L${x},${y + 26} L${x - 7},${y + 7} L${x - 26},${y} L${x - 7},${y - 7} Z`}
           fill="#f0f9ff" style={{ animationDelay: `${dl}s`, transformOrigin: `${x}px ${y}px` }} />
+      ))}
+      {ready && kind === 'claw' && [[590, 0, 150], [665, 0.55, 190], [735, 0.25, 170], [800, 0.9, 130]].map(([x, dl, dy], i) => (
+        <ellipse key={`c${i}`} className="ub-drop" cx={x} cy={L.cy + dy} rx={10} ry={15} fill="#dc2626" style={{ animationDelay: `${dl}s` }} />
       ))}
       {ready && kind === 'bleedeye' && [[565, 0], [640, 0.7], [745, 0.35], [805, 1.1]].map(([x, dl], i) => (
         <ellipse key={i} className="ub-drop" cx={x} cy={L.cy + 175} rx={11} ry={16} fill="#dc2626" style={{ animationDelay: `${dl}s` }} />

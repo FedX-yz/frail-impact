@@ -153,6 +153,24 @@ export const SKILLS = {
                    passive: { type: 'subzero', bonus: 0.25, chain: 40,
                               lv1: { bonus: 0.15, chain: 25 }, si: { bonus: 0.04, chain: 6 },
                               desc: 'Sub-Zero: frozen enemies take +{bonus} DMG from everything. Chain Frost: every shattered enemy throws shards that add {chain} Freeze to whatever is near it.' } },
+  // 6★ Bonk (Platinum): Ice's kit turned inside out (bonkPlatinum.js). Bleed instead of Freeze,
+  // offence instead of control, paid for in his own HP.
+  boiling_point: { type: 'boil',      style: 'platinum',
+                   bleed: 34, hemoDur: 4, hemoDps: 0.6,             // click: Bleed per click (a full meter = HEMORRHAGE)
+                   full: 0.6, minPct: 3, pct: 8, heal: 0.01,        // hold M1: Rupture (heal: per enemy ruptured, up to 8%)
+                   cooldown: 9, cost: 0.1, qRadius: 160, qPct: 1.5, rageDur: 4, rage: 0.5,   // Q: Bloodletting
+                   grabCd: 2, grabPct: 1, slamPct: 2.5, slamR: 110, throwPct: 3,           // M2: grab / slam / throw
+                   rakeLen: 650, rakePct: 1.2, rakeBleed: 60,       // drag: claw rake
+                   lv1: { bleed: 25, hemoDps: 0.35, minPct: 1.8, pct: 4.8, cooldown: 12, qRadius: 130, qPct: 0.9, rage: 0.3, grabPct: 0.6, slamPct: 1.5, throwPct: 1.8, rakePct: 0.7 },
+                   si: { bleed: 3, hemoDps: 0.1, pct: 1.3, minPct: 0.4, cooldown: -0.5, qRadius: 10, qPct: 0.25, rage: 0.08, slamPct: 0.4, throwPct: 0.5, rakePct: 0.2 },
+                   desc: 'BOILING POINT. CLICK: every claw hit builds BLEED on the target ({bleed} a click). A full meter makes it HEMORRHAGE for {hemoDur}s: it bleeds {hemoDps} click DMG every second (elites take twice as many clicks; bosses never hemorrhage, their meter is an open wound: they take up to 30% more damage the deeper it is). '
+                     + 'HOLD M1 and let go: RUPTURE. Every hemorrhaging enemy on screen bursts at once for up to {pct} click DMG (full in {full}s) and heals you {heal} of your max HP each (up to 8%); bosses take it scaled by their wound. '
+                     + 'DRAG (hold M1 and move): a CLAW RAKE up to {rakeLen} long. Everything it crosses is slashed for {rakePct} click DMG and gets {rakeBleed} Bleed. '
+                     + 'Q: BLOODLETTING. Bonk cuts himself for {cost} of his max HP (never the last of it): everything within {qRadius} of your cursor takes {qPct} click DMG and hemorrhages, and for {rageDur}s your hits deal {rage} more damage. {cooldown}s cooldown. '
+                     + 'M2: GRAB. His claw seizes the enemy at your cursor ({grabPct} click DMG, and it hemorrhages). Hold M2 to carry it around; let go while moving to THROW it ({throwPct} click DMG to everything it crashes into, and to itself), or while still to SLAM it down ({slamPct} click DMG, half to everything within {slamR}). Bosses are too heavy to lift: the claw rips into them instead. {grabCd}s cooldown.',
+                   passive: { type: 'bloodlust', max: 0.6, bonus: 0.2, splash: 45, feed: 0.02,
+                              lv1: { max: 0.35, bonus: 0.12, splash: 30, feed: 0.01 }, si: { max: 0.08, bonus: 0.04, splash: 6, feed: 0.004 },
+                              desc: 'Bloodlust: the lower his HP, the harder he hits (up to +{max} DMG at 10% HP). Hemorrhaging enemies take +{bonus} DMG from everything, a rupture splashes {splash} Bleed onto whatever is near it, and anything that dies hemorrhaging heals him {feed} of his max HP.' } },
 
   // ── HOLD: hold M1, release to fire ─────────────────────────────────────
   frost_bolt:    { type: 'lance',     style: 'hold', full: 1.2, minPct: 2.5, pct: 10, width: 50, freeze: 1.5,
@@ -224,6 +242,9 @@ export const ULTS = {
   absolute_zero:  { type: 'absolutezero', dur: 5, storm: 22, shatter: 32, charge: 1.2,
                     si: { dur: 0.5, storm: 3, shatter: 4 },
                     desc: 'ABSOLUTE ZERO. Time stops for {dur}s: nothing moves, every attack is cancelled, your clicks build Freeze three times as fast and Flash Freeze has no cooldown. Then the ice storm hits: {storm} click DMG to every enemy, and every frozen one shatters for {shatter} click DMG more (bosses by their freeze meter).' },
+  red_mist:       { type: 'redmist', dur: 6, steal: 0.006, finale: 18, charge: 1.2,
+                    si: { dur: 0.5, steal: 0.001, finale: 3 },
+                    desc: 'RED MIST. No time stop: the fight goes on, and for {dur}s every click makes its target hemorrhage on the spot and heals you {steal} of your max HP, no hemorrhage runs out, and Bloodletting is free with no cooldown. When it ends, everything bleeding ruptures at once for {finale} click DMG (bosses by their wound).' },
 
   // ── Anemic Kaisen ──────────────────────────────────────────────────────
   overtime:        { type: 'overtime',   dur: 8, mult: 1, collapse: 12, charge: 1,
@@ -269,13 +290,13 @@ export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['per', 'devour', 'deerHeal', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
-  'window', 'dps', 'perSoul', 'autoPct']);
-const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush']);
+  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal']);
+const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen') return String(Math.round(v));
+  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR') return String(Math.round(v));
   if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
@@ -328,7 +349,8 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   rate: 'crit rate', dmg: 'crit DMG', mult: 'DMG', stun: 'stun', clickMult: 'click ×', coins: 'coins', threshold: 'execute',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
-  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush', chill: 'freeze/click', qPct: 'Flash Freeze', qRadius: 'Flash range', figPct: 'figure blast', wallLen: 'frost line', chain: 'chain frost', storm: 'storm', shatter: 'shatter' };
+  collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush', chill: 'freeze/click', qPct: 'Q DMG', qRadius: 'Q range', figPct: 'figure blast', wallLen: 'frost line', chain: 'chain frost', storm: 'storm', shatter: 'shatter',
+  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

@@ -1156,7 +1156,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // (the lighter one moves more). Bosses, worm parts, hydra heads, ones that stand still, dash,
   // are thrown or stunned don't budge, but still push the others out of the way.
   const pushWeight = e => (e.tier === 'boss' || e.move === 'worm' || e.role === 'hydra' || e.group || e.move === 'still'
-    || e.dashing || e.kb || e.frozen > 0 ? 0 : e.tier === 'elite' ? 1 / 3 : e.tier === 'treasure' ? 2 : 1);
+    || e.dashing || e.kb || e.frozen > 0 || e.grabbed ? 0 : e.tier === 'elite' ? 1 / 3 : e.tier === 'treasure' ? 2 : 1);
   function separateEnemies() {
     const list = s.enemies.filter(e => !e.entering && !(e.down > 0) && !e.type.acidOnly);
     for (let i = 0; i < list.length; i++) {
@@ -1474,6 +1474,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (mods.ratio || mods.forceCrit) { crit = true; critMult = 1 + critDmg + (mods.bonus ?? 0); }
     let dmg = st.clickDmg * mult * rand(0.9, 1.1);
     if (st.highHpAtkBonus && s.player.hp > s.player.maxHp / 2) dmg *= 1 + st.highHpAtkBonus;
+    // 6★ Bonk: Bloodlust (harder the lower his HP: full at 10%) and Bloodletting's rage
+    const blood = rt.passive();
+    if (blood?.type === 'bloodlust') dmg *= 1 + blood.max * Math.min(1, Math.max(0, (1 - s.player.hp / s.player.maxHp) / 0.9));
+    if (s.kit.bonk?.rage > 0 && cs?.type === 'boil') dmg *= 1 + cs.rage;
     if (s.frenzy > 0) dmg *= 2;
     if (s.player.debuffs.weak > 0) dmg *= DEBUFFS.weak.dmg;   // a Hexer got you
     if (s.ult.active?.type === 'transform') dmg *= s.ult.active.clickMult;
@@ -1507,6 +1511,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     e.lastHit = s.time;
     const pv = rt.passive();
     if (e.frozen > 0 && (pv?.type === 'frost' || pv?.type === 'subzero')) dmg *= 1 + pv.bonus;   // (6★ Ice: Sub-Zero)
+    if (pv?.type === 'bloodlust') {   // 6★ Bonk: hemorrhaging enemies take more; the big ones by their wound
+      if (e.hemo > 0) dmg *= 1 + pv.bonus;
+      else if (e.bleed > 0 && (e.tier === 'boss' || e.group || e.move === 'worm' || e.role === 'hydra' || e.type?.core)) dmg *= 1 + 0.3 * Math.min(1, e.bleed / 100);
+    }
     // Hox: MAD enemies take more damage (each stack +2%, more with superimposition)
     if (e.mad > 0 && (pv?.type === 'presence' || s.ult.active?.type === 'devourer')) dmg *= 1 + e.mad * (pv?.type === 'presence' ? pv.per : 0.02);
     if (crit && pv?.type === 'critCharge') charge *= 1 + pv.bonus;   // Stephen: crits charge the ult faster
@@ -2076,7 +2084,8 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
           if (near.length) floater(`✚ MENDED ×${near.length}`, e.x, e.y - K(44), '#4ade80');
         }
       }
-      if (e.kb) { rt.slide(e, dt); if (!s.enemies.includes(e)) continue; }   // thrown by Jerry's repel
+      if (e.grabbed) continue;   // in 6★ Bonk's claw: it goes where he carries it, and can't act
+      if (e.kb) { rt.slide(e, dt); if (!s.enemies.includes(e)) continue; }   // thrown by Jerry's repel (or 6★ Bonk)
       if (e.frozen > 0) { e.frozen -= dt; continue; }
       // affixes that act every frame
       if (e.affix === 'regen' && e.hp < e.maxHp && s.time - e.lastHit > 1.5) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.06 * dt);
