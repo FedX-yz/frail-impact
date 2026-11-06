@@ -254,7 +254,9 @@ function IceCutIn({ c, card, mobile }) {
   const [fx, fy] = card?.burstFocus ?? [50, 10];
   const crack = clamp01((t - 0.55) / 0.35);
   const textO = clamp01((t - 0.3) / 0.15) * (1 - outP);
-  const zoom = 1.25 + 0.12 * t;   // the face fills the band
+  // the face fills the band, slowly zooming. (Zoomed with a scale, not by changing the picture's
+  // width: a width change is a re-layout every frame. The translate keeps the focus point in place.)
+  const Z0 = 1.25, zs = (Z0 + 0.12 * t) / Z0;
   return (
     <div className="ice-cutin" style={{ opacity: 1 - outP * 0.7 }}>
       <div className="ice-cutin-bg" style={{ opacity: clamp01(t / 0.06) * (1 - outP) }} />
@@ -265,7 +267,7 @@ function IceCutIn({ c, card, mobile }) {
       <div className="ice-cutin-band" style={{ transform: `translateX(${(1 - ease) * -110 + outP * 110}%) skewX(-14deg)` }}>
         <div className="ice-cutin-watermark" style={{ transform: `skewX(14deg) translateX(${-t * 6}%)` }}>ZERO POINT</div>
         <img src={art} alt="" draggable={false} className="ice-cutin-face"
-          style={{ width: `${zoom * 100}%`, left: mobile ? '46%' : '32%', transform: `translate(-${fx}%, -${fy}%) skewX(14deg)` }} />
+          style={{ width: `${Z0 * 100}%`, left: mobile ? '46%' : '32%', transform: `translate(${50 * (zs - 1) - fx * zs}%, ${50 * (zs - 1) - fy * zs}%) skewX(14deg) scale(${zs})` }} />
         <div className="ice-cutin-glint" style={{ left: `${-40 + t * 140}%` }} />
       </div>
       {/* the screen freezes over */}
@@ -298,8 +300,11 @@ export const ICE_CSS = `
     opacity: 0.9; mix-blend-mode: normal; }
   .ice-fig.hit { filter: brightness(3) drop-shadow(0 0 12px #fff); }
   .ice-fig-hp { position:absolute; left:-30px; width:60px; top:10px; text-align:center; font-size:10px; color:#e0f2fe; text-shadow:0 0 4px #000; letter-spacing:1px; }
-  .zero-orb { position:absolute; left:0; top:0; z-index:11; pointer-events:none;
-    filter: brightness(1.25) contrast(1.15) drop-shadow(0 0 10px rgba(125,211,252,0.95)) drop-shadow(0 0 22px rgba(56,189,248,0.6)); }
+  .zero-orb { position:absolute; left:0; top:0; z-index:11; pointer-events:none; filter: brightness(1.25) contrast(1.15); }
+  /* its glow: a soft gradient behind it (two drop-shadows redone on every frame of the clock were the
+     slowest thing in Absolute Zero on phones) */
+  .zero-orb::before { content:''; position:absolute; inset:-14%; border-radius:50%; pointer-events:none;
+    background: radial-gradient(circle, rgba(125,211,252,0.42) 0%, rgba(56,189,248,0.3) 38%, rgba(56,189,248,0.12) 55%, rgba(56,189,248,0) 70%); }
   .zero-orb-clip { position:absolute; inset:0; overflow:hidden; }
   .zero-orb-clip img { position:absolute; left:0; top:0; max-width:none; }
   .zero-hand { position:absolute; max-width:none; }
@@ -327,9 +332,9 @@ export const ICE_CSS = `
     background: repeating-linear-gradient(115deg, rgba(226,232,240,0.06) 0 2px, transparent 2px 26px), linear-gradient(90deg, #0b1220 0%, #1e293b 45%, #334155 70%, #0f172a 100%); }
   .ice-cutin-watermark { position:absolute; right:4%; top:50%; margin-top:-0.55em; font-family: var(--font-hit, serif); font-size: clamp(40px, 11cqw, 140px); line-height:1.1;
     color: transparent; -webkit-text-stroke: 1.5px rgba(226,232,240,0.35); letter-spacing: 0.08em; white-space:nowrap; }
-  .ice-cutin-face { position:absolute; left:30%; top:50%; max-width:none; height:auto; filter: contrast(1.1) brightness(1.05) drop-shadow(0 0 10px #38bdf8); }
+  .ice-cutin-face { position:absolute; left:30%; top:50%; max-width:none; height:auto; filter: contrast(1.1) brightness(1.05) drop-shadow(0 0 10px #38bdf8); will-change: transform; }
   .ice-cutin-glint { position:absolute; top:-20%; bottom:-20%; width:18%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); transform: skewX(-20deg); mix-blend-mode: overlay; }
-  .ice-cutin-full { position:absolute; right:4%; bottom:-6%; height:104%; filter: saturate(0.7) drop-shadow(0 0 2px #e2e8f0) drop-shadow(0 0 22px #38bdf8); }
+  .ice-cutin-full { position:absolute; right:4%; bottom:-6%; height:104%; filter: saturate(0.7) drop-shadow(0 0 2px #e2e8f0) drop-shadow(0 0 22px #38bdf8); will-change: transform, opacity; }
   .ice-cutin-crack { position:absolute; inset:0; width:100%; height:100%; filter: drop-shadow(0 0 3px #7dd3fc); }
   .ice-cutin-text { position:absolute; left:6%; bottom:9%; text-align:left; font-size: 1em; }
   .ice-cutin-text .small { font-family: var(--font-ui, monospace); color:#cbd5e1; letter-spacing: 0.45em; font-size: clamp(10px, 1.6cqw, 16px); }

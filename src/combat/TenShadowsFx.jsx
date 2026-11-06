@@ -590,13 +590,13 @@ export function MahoragaLayer({ s, k }) {
   const m = s.mahoraga;
   if (!m) return null;
   const w = (m.berserk ? 178 : 150) * k;
-  const tint = m.berserk ? 'grayscale(1) brightness(0.62)' : 'grayscale(1) brightness(0.7)';
   const lift = m.lift ?? 0, rise = lift * 110 * k, scale = 1 + lift * 0.4;
   const f = m.finale, color = m.berserk ? '#f87171' : '#fde047';
   const L = Math.hypot(s.W, s.H) * 1.2;
   return (
     <>
-      <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', backdropFilter: tint, WebkitBackdropFilter: tint }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', background: '#808080', mixBlendMode: 'saturation' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', background: `rgba(0,0,0,${m.berserk ? 0.38 : 0.3})` }} />
       {m.berserk && <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', background: 'radial-gradient(ellipse at 50% 50%, rgba(127,29,29,0.22), rgba(127,29,29,0.48))' }} />}
       {(m.berserk || (f && !f.cut)) && (
         <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0, zIndex: 13, pointerEvents: 'none', overflow: 'visible' }}>

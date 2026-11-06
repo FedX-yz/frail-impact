@@ -101,6 +101,19 @@ export function createRamsfPlatinum(ctx) {
   function parry(sk, kind, src, from, auto, follow = false) {
     const r = st(), pv = passive(), p = P(), light = auto || follow;
     r.pwHit = true;
+    // who did it: the enemy that swung, or the one that fired the shot
+    const owner = src ?? (from?.owner != null ? s.enemies.find(e => e.id === from.owner) : null);
+    // the same enemy again within a moment, and not a shot (a worm or a swarm still biting through
+    // your cursor): cancelled, but no counter, arm, streak or freeze, or overlapping one would farm
+    // them. A bite (contact, every frame it touches you) only counts once every 1.5s. (A worm's
+    // segments count as one enemy: whichever part of it is touching you.)
+    const foe = owner ? (owner.group != null ? `g${owner.group}` : owner.id) : null;
+    if (foe != null && kind !== 'shot' && r.lastFoe === foe && s.time - r.lastFoeT < (kind === 'bite' ? 1.5 : 0.35)) {
+      if (from && from.phase !== 'done') { from.hitDone = true; api.finishAttack(from); }
+      s.player.invuln = Math.max(s.player.invuln, 0.12);
+      return;
+    }
+    r.lastFoe = foe; r.lastFoeT = s.time;
     r.parryN = (r.parryN ?? 0) + 1;
     if (!light) {
       r.pw = 0;              // this press is spent (what comes next is the follow-through's)
@@ -117,8 +130,6 @@ export function createRamsfPlatinum(ctx) {
     if (!light) r.slow = SLOWMO;   // …then a moment of slow motion, easing back to full speed
     s.player.invuln = Math.max(s.player.invuln, stop + 0.04);   // (short: what comes next is the follow-through's to parry)
     r.lastParry = { x: p.x, y: p.y, t: s.time };
-    // who did it: the enemy that swung, or the one that fired the shot
-    const owner = src ?? (from?.owner != null ? s.enemies.find(e => e.id === from.owner) : null);
     if (from && from.phase !== 'done') { from.hitDone = true; api.finishAttack(from); }
     effect({ kind: 'parryflash', x: p.x, y: p.y, r: K(big ? 140 : light ? 80 : 100), life: light ? 0.3 : 0.45, big, auto: light, a: owner ? Math.atan2(owner.y - p.y, owner.x - p.x) : rand(0, 6.28) });
     if (!light) { effect({ kind: 'flash', color: '#ffffff', life: big ? 0.22 : 0.14 }); shake(big ? 0.45 : 0.3); }
@@ -364,7 +375,7 @@ export function createRamsfPlatinum(ctx) {
   const active = () => { const r = s.kit.ramsf; return !!(r && (r.tornado || r.strikes.length || r.cutin || r.arms > 0 || r.pw > 0 || r.pcd > 0 || r.slow > 0)); };
   function reset(why) {
     const r = st();
-    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null; r.follow = 0;
+    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null; r.follow = 0; r.lastFoe = null; r.armCd = [];
     if (why === 'defeat') r.arms = 0;
   }
   const exposedBonus = e => { const pv = passive(); return pv?.type === 'tenarms' && e.exposedT > s.time ? pv.exposed : 0; };

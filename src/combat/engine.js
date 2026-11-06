@@ -3,7 +3,7 @@
 // animation frame and draws `engine.state`. Positions are arena pixels; sizes
 // are design px × state.k so the same fight works on a phone and a PC.
 // ─────────────────────────────────────────────────────────────────────────────
-import { sheetLife } from './sheetFx.js';
+import { sheetLife, warmSheets } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
 import { giantIdlePose } from './giantIdle';
@@ -28,6 +28,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 
 export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeEndlessStage, callbacks = {} }) {
   const firstStage = makeStage(stageNum);
+  if (typeof setTimeout !== 'undefined') setTimeout(warmSheets, 3000);   // the boss explosion, once the fight has loaded
   const s = {
     W: 0, H: 0, k: 1, time: 0,
     stats,
@@ -1883,6 +1884,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   function startBossIntro() {
+    warmSheets();   // (its explosion, if a fight got here before the timer below)
     s.phase = 'bossIntro'; s.phaseT = 2.4;
     const bt = ENEMY_TYPES[s.stage.boss], first = ENEMY_TYPES[bt?.firstPhase] ?? bt;
     s.bossMusic = first?.music ?? null;   // its song starts with the BOSS INCOMING banner

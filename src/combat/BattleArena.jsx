@@ -778,7 +778,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Overlays that don't shake */}
         {/* (a parry's hitstop freezes time too, but has its own look: RamsfScreen) */}
-        {s.timeStop > 0 && !(s.kit.ramsf?.hitstop > 0) && <div style={{ position: 'absolute', inset: 0, background: 'rgba(80,160,255,0.16)', backdropFilter: 'grayscale(0.7)', pointerEvents: 'none', zIndex: 10 }} />}
+        {s.timeStop > 0 && !(s.kit.ramsf?.hitstop > 0) && <>
+          <GreyVeil amount={0.7} z={10} />
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(80,160,255,0.16)', pointerEvents: 'none', zIndex: 10 }} />
+        </>}
         {pl.hitT > 0 && <div style={{ position: 'absolute', inset: 0, boxShadow: `inset 0 0 ${80 * pl.hitT}px rgba(255,0,0,0.9)`, pointerEvents: 'none', zIndex: 11 }} />}
         {s.effects.some(f => f.kind === 'ult') && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.5, pointerEvents: 'none', zIndex: 12, animation: 'ultFlash 0.5s ease-out forwards' }} />}
         {s.effects.filter(f => f.kind === 'flash').map(f => (
@@ -1023,12 +1026,24 @@ function SwarmCloud({ e, k, time }) {
   );
 }
 
+// The world drained of colour (a time stop, Mahoraga, Astrec's locked Death Wish). A grey layer in
+// 'saturation' blend mode instead of a backdrop-filter: it looks the same, but a backdrop-filter
+// over the whole arena is redone every frame and pulled phones down to ~20 fps.
+function GreyVeil({ amount = 1, dim = 0, z = 10 }) {
+  return (
+    <>
+      <div style={{ position: 'absolute', inset: 0, zIndex: z, pointerEvents: 'none', background: '#808080', mixBlendMode: 'saturation', opacity: amount }} />
+      {dim > 0 && <div style={{ position: 'absolute', inset: 0, zIndex: z, pointerEvents: 'none', background: `rgba(0,0,0,${dim})` }} />}
+    </>
+  );
+}
+
 // Bio's usual Mahoraga: everything else goes grey, you can only watch
 function MahoragaClassic({ m, k }) {
   const w = 150 * k;
   return (
     <>
-      <div style={{ position: 'absolute', inset: 0, zIndex: 12, pointerEvents: 'none', backdropFilter: 'grayscale(1) brightness(0.7)', WebkitBackdropFilter: 'grayscale(1) brightness(0.7)' }} />
+      <GreyVeil amount={1} dim={0.3} z={12} />
       <div className="suspended-text">SUSPENDED · WATCH AND PRAY</div>
       <div style={{ position: 'absolute', left: m.x - w / 2, top: m.y - w * 0.3, width: w, zIndex: 13, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 4 * k, display: 'flex', alignItems: 'center', gap: 4 * k }}>

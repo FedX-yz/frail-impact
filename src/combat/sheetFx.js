@@ -11,7 +11,15 @@ export const SHEET_FX = {
 };
 export const sheetLife = (name) => SHEET_FX[name].n / SHEET_FX[name].fps;
 
-// load and decode them up front, so the first boss explosion isn't a blank frame while it loads
-if (typeof Image !== 'undefined') {
-  Object.values(SHEET_FX).forEach(d => { const im = new Image(); im.src = d.img; im.decode?.().catch(() => {}); });
+// load and decode them ahead of time, so the first one isn't a blank frame while it loads. The
+// crit marker (small, needed in the first seconds of a fight) right away; the boss explosion
+// (half a megabyte) only once a fight is going (warmSheets: engine.js), not on the title screen
+// or the story of a first visit.
+const warmed = new Set();
+function warm(name) {
+  if (warmed.has(name) || typeof Image === 'undefined') return;
+  warmed.add(name);
+  const im = new Image(); im.src = SHEET_FX[name].img; im.decode?.().catch(() => {});
 }
+warm('crit');
+export const warmSheets = () => Object.keys(SHEET_FX).forEach(warm);

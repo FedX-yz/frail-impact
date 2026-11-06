@@ -122,6 +122,7 @@ export function AstrecScreen({ s, mainCard, mobile }) {
     <>
       {t > 0 && <div className={`dw-edge t${t}`} />}
       {a.lock > 0 && !nr && <div className="dw-lock" style={{ opacity: Math.min(1, a.lock / 2) }} />}
+      {a.lock > 0 && !nr && <div className="dw-lock-grey" style={{ opacity: 0.4 * Math.min(1, a.lock / 2) }} />}
       {nr && !a.cutin && <div className="dw-tag" style={mobile ? { top: '24%' } : undefined}>NO RETREAT · {Math.max(0, nr.t).toFixed(1)}s</div>}
       {a.cutin && <DwCutIn c={a.cutin} card={mainCard} mobile={mobile} />}
     </>
@@ -153,7 +154,8 @@ export const ASTREC_CSS = `
   .dw-edge.t2 { box-shadow: inset 0 0 60px rgba(239,68,68,0.45); }
   .dw-edge.t3 { box-shadow: inset 0 0 90px rgba(185,28,28,0.7); animation: dwBeat 0.8s ease-in-out infinite; }
   @keyframes dwBeat { 0%,100% { filter: brightness(1); } 15% { filter: brightness(1.5); } 30% { filter: brightness(1); } 45% { filter: brightness(1.3); } }
-  .dw-lock { position:absolute; inset:0; z-index:10; pointer-events:none; box-shadow: inset 0 0 70px rgba(115,115,115,0.55); backdrop-filter: saturate(0.6); }
+  .dw-lock { position:absolute; inset:0; z-index:10; pointer-events:none; box-shadow: inset 0 0 70px rgba(115,115,115,0.55); }
+  .dw-lock-grey { position:absolute; inset:0; z-index:10; pointer-events:none; background:#808080; mix-blend-mode: saturation; }   /* (not a backdrop-filter: too slow on phones for 30s) */
   .dw-tag { position:absolute; left:50%; top:12%; transform:translateX(-50%); z-index:13; pointer-events:none; font-family: var(--font-hit, sans-serif);
     color:#fee2e2; font-size: clamp(14px, 2.2vw, 22px); letter-spacing: 4px; text-shadow: 0 0 10px #b91c1c, 0 2px 0 #000; white-space:nowrap; }
   .dw-cutin { position:absolute; inset:0; z-index:16; pointer-events:none; overflow:hidden; container-type:inline-size; }

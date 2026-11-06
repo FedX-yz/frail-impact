@@ -248,13 +248,13 @@ function BonkCutIn({ c, card, mobile }) {
   const art = card?.burstArt ?? card?.sprite;
   const [fx, fy] = card?.burstFocus ?? [50, 10];
   const textO = clamp01((t - 0.2) / 0.12) * (1 - outP);
-  const zoom = 1.3 + 0.15 * t;
+  const Z0 = 1.3, zs = (Z0 + 0.15 * t) / Z0;   // (zoomed with a scale, not a width change: see IceCutIn)
   return (
     <div className="bonk-cutin">
       <div className="bonk-cutin-band" style={{ transform: `translateX(${(1 - ease) * 110 - outP * 110}%) skewY(-6deg)` }}>
         <div className="bonk-cutin-watermark" style={{ transform: `skewY(6deg) translateX(${t * 6}%)` }}>BOILING POINT</div>
         {art && <img src={art} alt="" draggable={false} className="bonk-cutin-face"
-          style={{ width: `${zoom * 100}%`, left: mobile ? '54%' : '68%', transform: `translate(-${fx}%, -${fy}%) skewY(6deg)` }} />}
+          style={{ width: `${Z0 * 100}%`, left: mobile ? '54%' : '68%', transform: `translate(${50 * (zs - 1) - fx * zs}%, ${50 * (zs - 1) - fy * zs}%) skewY(6deg) scale(${zs})` }} />}
         <div className="bonk-cutin-slash" style={{ opacity: clamp01((t - 0.12) / 0.1) * (1 - outP) }} />
       </div>
       <div className="bonk-cutin-text" style={{ opacity: textO, fontSize: mobile ? '0.75em' : undefined }}>
@@ -281,7 +281,7 @@ export const BONK_CSS = `
     background: repeating-linear-gradient(65deg, rgba(254,202,202,0.06) 0 2px, transparent 2px 24px), linear-gradient(90deg, #1c0505 0%, #450a0a 40%, #7f1d1d 70%, #1c0505 100%); }
   .bonk-cutin-watermark { position:absolute; left:4%; top:50%; margin-top:-0.55em; font-family: var(--font-hit, serif); font-size: clamp(36px, 10cqw, 130px); line-height:1.1;
     color: transparent; -webkit-text-stroke: 1.5px rgba(254,202,202,0.3); letter-spacing: 0.08em; white-space:nowrap; }
-  .bonk-cutin-face { position:absolute; top:50%; max-width:none; height:auto; filter: contrast(1.15) saturate(1.1) drop-shadow(0 0 10px #dc2626); }
+  .bonk-cutin-face { position:absolute; top:50%; max-width:none; height:auto; filter: contrast(1.15) saturate(1.1) drop-shadow(0 0 10px #dc2626); will-change: transform; }
   .bonk-cutin-slash { position:absolute; inset:0;
     background: linear-gradient(160deg, transparent 0 44%, rgba(254,226,226,0.95) 45%, transparent 46.5%, transparent 49%, rgba(239,68,68,0.9) 50%, transparent 51.5%, transparent 54%, rgba(254,226,226,0.9) 55%, transparent 56.5%); }
   .bonk-cutin-text { position:absolute; right:6%; bottom:14%; text-align:right; font-size: 1em; }
