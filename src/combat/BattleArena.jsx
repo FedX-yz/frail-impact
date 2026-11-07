@@ -188,7 +188,12 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     if (cursorRef.current) cursorRef.current.style.transform = `translate3d(${P.x}px, ${P.y}px, 0)`;
   };
   const onPointerUp = (e) => { if (e.button === 0 || e.pointerType !== 'mouse') engine.pointerHold(false); };
-  const onMouseDown = (e) => { if (e.button === 2) { const [x, y] = toLocal(e); clickT.current = performance.now() / 1000; engine.special(x, y); } };   // M2: the card's special move
+  const onMouseDown = (e) => {
+    if (e.button === 2) { const [x, y] = toLocal(e); clickT.current = performance.now() / 1000; engine.special(x, y); }   // M2: the card's special move
+    // a left click while M2 is held (6★ Reef's soul wheel): browsers send no pointerdown for a second
+    // button pressed while another is down, only this
+    else if (e.button === 0 && (e.buttons & 2) && engine.state.player.m2) { const [x, y] = toLocal(e); engine.pointerDown(x, y); engine.pointerHold(false); }
+  };
   const onSpecial = useCallback((down) => (down ? engine.special() : engine.specialUp()), [engine]);
   const onSkill2 = useCallback(() => engine.skill2(), [engine]);   // phone: the SKILL button
   // phone: sliding the thumb on the SPECIAL button points Bio's hand-sign wheel

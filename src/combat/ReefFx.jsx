@@ -152,9 +152,9 @@ export function ReefOver({ s, k, P, time }) {
 }
 function Wheel({ r, k, P, sk }) {
   const w = r.wheel, n = r.souls.length, R = (n > 6 ? 105 : 90) * k, o = clamp01(w.t / 0.12);
-  // which one the cursor points at
-  let sel = null;
-  if (P && Math.hypot(P.x - w.x, P.y - w.y) >= 28 * k) {
+  // which one is lit: the thumb's (phone), else the cursor's
+  let sel = w.aimSel ? { key: w.aimSel } : null;
+  if (!sel && P && Math.hypot(P.x - w.x, P.y - w.y) >= 28 * k) {
     const a = Math.atan2(P.y - w.y, P.x - w.x);
     r.souls.forEach((x, i) => { const q = -Math.PI / 2 + i / n * Math.PI * 2, d = Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))); if (!sel || d < sel.d) sel = { d, key: x.key }; });
   }

@@ -176,12 +176,21 @@ export function createReefPlatinum(ctx) {
   function m2Release(held, x, y) {
     const r = st(), w = r.wheel;
     if (w) {
+      // (choose first: wheelPick reads the open wheel)
+      const key = w.aimSel ?? w.sel ?? wheelPick(x, y, false);
       r.wheel = null;
-      const key = w.sel ?? wheelPick(x, y, false);
       if (key) { r.pick = key; summon(key, w.x, w.y); }
       return;
     }
     if (held < WHEEL_HOLD + 0.05) summon(r.pick, x, y);
+  }
+  // phone: sliding the thumb on the M2 button points the wheel (dx, dy: how far it slid)
+  function aim(dx, dy) {
+    const w = st().wheel;
+    if (!w) return;
+    if (Math.hypot(dx, dy) < 14) { w.aimSel = null; return; }   // (back in the middle: nothing)
+    const slots = wheelSlots(w.x, w.y), a = Math.atan2(dy, dx);
+    w.aimSel = slots.reduce((b, q) => { const d = Math.abs(Math.atan2(Math.sin(a - q.a), Math.cos(a - q.a))); return !b || d < b.d ? { d, key: q.o.key } : b; }, null)?.key ?? null;
   }
   // a click while the wheel is open picks from it (true = it took the click)
   function onPointerDown(x, y) {
@@ -308,7 +317,11 @@ export function createReefPlatinum(ctx) {
     const m2 = pl.m2;
     if (m2 && !m2.viaM1 && !r.wheel && !m2.reefDone && p && fighting() && s.time - m2.t0 >= WHEEL_HOLD) {
       m2.reefDone = true;
-      if (r.souls.length) r.wheel = { x: p.x, y: p.y, t: 0, sel: null };
+      if (r.souls.length) {
+        // (kept fully on screen, whatever corner you're in)
+        const m = K(r.souls.length > 6 ? 105 : 90) + K(64);
+        r.wheel = { x: Math.max(m, Math.min(s.W - m, p.x)), y: Math.max(m, Math.min(s.H - m, p.y)), t: 0, sel: null, aimSel: null };
+      }
       else label('no souls yet', p.x, p.y - K(30), MAG);
     }
     if (r.wheel) { r.wheel.t += dt; if (!m2) r.wheel = null; }
@@ -434,5 +447,5 @@ export function createReefPlatinum(ctx) {
     if (why === 'defeat') { r.souls = []; r.pick = null; }   // (souls carry over from stage to stage, until you fall)
   }
 
-  return { onDamage, onKill, press, m2Release, onPointerDown, onClick, release, seance, ult, endUlt, cheatDeath, update, m2Info, qInfo, active, reset, wheelSlots, summon, addSoul };
+  return { onDamage, onKill, press, m2Release, onPointerDown, aim, onClick, release, seance, ult, endUlt, cheatDeath, update, m2Info, qInfo, active, reset, wheelSlots, summon, addSoul };
 }

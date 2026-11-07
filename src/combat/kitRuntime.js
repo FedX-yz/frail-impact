@@ -1288,7 +1288,8 @@ export function createKitRuntime(api) {
     ultBlocked, activateUlt, endUlt, choose,
     hitMahoraga: (raw, kind) => (s.mahoraga?.v2 ? ts : bio).hitMahoraga(raw, kind),
     // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
-    signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale() * (skill()?.type === 'marionette' ? ramsf.timeScale() : 1),   // (Bio's sign wheel / 6★ Ramsf's slow motion after a parry)
+    signAim: (dx, dy) => (skill()?.type === 'necro' ? reef.aim(dx, dy) : ts.signAim(dx, dy)),   // (Bio's sign wheel / 6★ Reef's soul wheel on a phone)
+    timeScale: () => ts.timeScale() * (skill()?.type === 'marionette' ? ramsf.timeScale() : 1),   // (Bio's sign wheel / 6★ Ramsf's slow motion after a parry)
     cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()) || reef.cheatDeath(),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
     hurtMult, attackRate, undying, exposedBonus, ultTap, soulMult,
     update, reset, origin, slide,
