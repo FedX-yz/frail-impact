@@ -1,31 +1,40 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// 6★ Ramsf (Platinum Series) — MARIONETTE. Ten porcelain doll arms; a parry character. The
-// numbers are in kits.js (marionette / open_arms); kitRuntime.js hands every input to this
-// file while he's the main card. What's drawn for it is in RamsfFx.jsx.
+// 6★ Ramsf (Platinum Series) — HELLFIRE STYLE. A parry character with porcelain doll arms who
+// gathers souls for his Master. The numbers are in kits.js (marionette / open_arms);
+// kitRuntime.js hands every input to this file while he's the main card. What's drawn for it
+// is in RamsfFx.jsx.
 //
+//   M1          just a click
+//   hold M1     WINGBEAT: his arms fold into wings; let go for a gust around the cursor that
+//               throws enemies back and blows enemy shots away (stronger the longer you held)
+//   drag        STRINGS: hold M1 and move through enemies to tie them with doll strings; let
+//               go and they're yanked together into a heap
 //   M2          PARRY: tap just before a hit lands. Inside the window (parryWin s) anything
 //               that would hit you is parried: the game freezes for a beat (hitstop), eases
 //               back in through a moment of slow motion, the attack is cancelled, a shot
-//               flies back at whoever fired it, and the attacker is struck by an arm,
-//               staggered, and exposed (takes more damage) for a while. A hair late (up to
-//               LATE s after it hit) still counts: the damage is given back. A whiff
-//               (nothing to parry) and you can't parry again for parryCd s. A ring closing on
-//               the cursor shows when the next hit will land (RamsfFx).
+//               flies back at whoever fired it, and the attacker is struck, staggered, and
+//               exposed (takes more damage) for a while. A hair late (up to LATE s after it
+//               hit) still counts: the damage is given back. A whiff (nothing to parry) and
+//               you can't parry again for parryCd s. A ring closing on the cursor shows when
+//               the next hit will land (RamsfFx).
 //               FOLLOW-THROUGH: for FOLLOW s after a parry you land yourself, other hits that
-//               land are parried too (a volley of shots, a flurry), like Deepwoken's. They
-//               don't give arms or count toward the streak, freeze only a tick, and don't make
-//               the follow-through last longer.
-//   passive     TEN ARMS: every perfect parry puts one of his doll arms on your cursor (up to
-//               ten). They fight on their own (armsFight). Go armHold s without a parry and
-//               they drop off, one at a time. Parries in a row (a streak) freeze harder.
-//   drag        STRINGS: hold M1 and move through enemies to tie them with doll strings; let
-//               go and they're yanked together into a heap
-//   hold M1     WINGBEAT: his arms fold into wings; let go for a gust around the cursor that
-//               throws enemies back and blows enemy shots away (stronger the longer you held)
-//   Q           TORNADO: his wings spin up a tornado at the cursor. It drifts after you, pulls
-//               enemies in, shreds what's inside and swallows shots
-//   ult         OPEN ARMS: all ten arms on the cursor for dur s (whatever you'd built up), and
-//               anything that touches you is parried by itself
+//               land are parried too (a volley of shots, a flurry), like Deepwoken's.
+//   hold M2     OTHERWORLD RIFT: hold M2 for RIFT_HOLD s and a rift tears open at the cursor:
+//               it drags enemies to its centre and burns what's inside, and swallows shots
+//   Q           SHADOW GUNSLINGER: a shadow copy of your cursor goes after the enemies: they
+//               attack it instead of you (aimPoint → decoy), and it strikes what's around it.
+//               Meanwhile every click fires his two guns from the shadows, one bullet each,
+//               at the enemies nearest the cursor
+//   talent      OFFERING: an enemy you've parried that then dies (both, in either order of
+//               hits, as long as the parry came first) gives a Soul for his Master (up to
+//               maxSouls). Every Soul: more damage. Souls decide the ult. Lost on defeat
+//   ult         OBEY YOUR MASTER, by Souls:
+//                 0+   MANIC PUPPETEER: all ten doll arms on the cursor (they strike what's in
+//                      reach by themselves), and anything that touches you is parried by itself
+//                 5+   HELL DRUMS: hell gates across the arena drag enemies in, and keep
+//                      letting out wicked souls that hunt enemies down
+//                 10   (tap the ult twice) ASCENT OF THE MASTER: offer half your HP and summon
+//                      the Master; everything on the field is purged, and the Souls go to him
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HOLD_MIN = 0.25;      // shorter than this is a click, not a Wingbeat
@@ -35,33 +44,46 @@ const LATE = 0.06;          // a parry this late (after the hit landed) still co
 const SLOWMO = 0.22;        // after the freeze: this long easing back in from slow motion
 const CUE = 0.7;            // the timing cue shows hits this many seconds away
 const FOLLOW = 0.3;         // after a parry you land yourself, other hits this soon are parried too
+const RIFT_HOLD = 0.45;     // hold M2 this long and it's a rift, not (only) a parry
+const TAP2 = 0.6;           // with 10 Souls: the second tap on the ult has this long to come
 export const MAX_ARMS = 10;
 export const RAMSF_INTRO = CUTIN;
-export const RAMSF_EFFECTS = new Set(['parryflash', 'gust', 'yank', 'armhit']);
-const PINK = '#f472b6', PORCELAIN = '#f5efe6';
+export const RAMSF_EFFECTS = new Set(['parryflash', 'gust', 'yank', 'armhit', 'muzzle', 'soulgain', 'pillar', 'shadowpuff']);
+export const ULT_NAMES = ['', 'MANIC PUPPETEER', 'HELL DRUMS', 'ASCENT OF THE MASTER'];
+const PINK = '#f472b6', PORCELAIN = '#f5efe6', HELL = '#f97316', SOUL = '#c084fc', BLOOD = '#dc2626';
+
+// which ult the Souls would give right now (1, 2 or 3: 3 needs the second tap)
+export function ultLevel(souls, pv) { return souls >= (pv?.lv3At ?? 10) ? 3 : souls >= (pv?.lv2At ?? 5) ? 2 : 1; }
 
 // the HUD chips while he's out: [key, colour, text]
 export function ramsfChips(s, sk, mobile = false) {
-  const r = s.kit.ramsf, out = [];
-  const open = s.ult.active?.type === 'openarms';
-  out.push(['arms', '#fbcfe8', `🖐 ${open ? MAX_ARMS : r?.arms ?? 0}/${MAX_ARMS} arms${open ? ' · auto-parry' : (r?.arms ? '' : mobile ? ' · PARRY to gain one' : ' · parry (M2) to gain one')}`]);
+  const r = s.kit.ramsf, out = [], pv = sk?.passive ?? s.stats.passive, act = s.ult.active;
+  const souls = r?.souls ?? 0, lv = ultLevel(souls, pv);
+  out.push(['souls', HELL, `🔥 ${souls}/${pv?.maxSouls ?? 10} souls · +${Math.round(souls * (pv?.soulDmg ?? 0) * 100)}% DMG · ult: ${ULT_NAMES[lv]}${lv === 3 ? (mobile ? ' (tap ULT twice)' : ' (tap twice)') : ''}`]);
+  if (r?.ultArm > 0) out.push(['tap', BLOOD, `🩸 TAP AGAIN: ASCENT (costs ½ HP) · ${r.ultArm.toFixed(1)}s`]);
+  if (act?.type === 'openarms') out.push(['arms', '#fbcfe8', `🖐 ${MAX_ARMS} arms · auto-parry`]);
   if (r?.streak >= 2) out.push(['st', '#f9a8d4', `⚔ PARRY STREAK ×${r.streak}`]);
   if (s.player.held && r && !s.player.held.ramsf?.drag && s.time - s.player.held.t0 > 0.12) out.push(['wb', '#fce7f3', mobile ? '🪽 WINGS · let go: gust' : '🪽 WINGS · let go of M1: gust']);
-  if (r?.tornado) out.push(['tor', '#e9d5ff', `🌪 ${Math.max(0, r.tornado.life - r.tornado.t).toFixed(1)}s`]);
+  if (r?.rift) out.push(['rift', SOUL, `🕳 RIFT ${Math.max(0, r.rift.life - r.rift.t).toFixed(1)}s`]);
+  else if (r?.rcd > 0) out.push(['rcd', '#a8a29e', `🕳 rift ${Math.ceil(r.rcd)}s`]);
+  if (r?.gun) out.push(['gun', '#e9d5ff', `🔫 SHADOW GUNSLINGER ${Math.max(0, r.gun.life - r.gun.t).toFixed(1)}s · they're after your shadow`]);
   return out;
 }
 
 export function createRamsfPlatinum(ctx) {
-  const { s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, foes, fighting, radius, heavy } = ctx;
-  const st = () => s.kit.ramsf ?? (s.kit.ramsf = { pw: 0, pcd: 0, arms: 0, armT: 0, dropT: 0, streak: 0, streakT: -9, strikes: [], strings: null, tornado: null, tcd: 0, tcdMax: 0, cutin: null, lastParry: null, floats: 0, tick: 0 });
+  const { s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy } = ctx;
+  const st = () => s.kit.ramsf ?? (s.kit.ramsf = { pw: 0, pcd: 0, streak: 0, streakT: -9, strikes: [], strings: null, cutin: null, lastParry: null, floats: 0, tick: 0,
+    souls: 0, rift: null, rcd: 0, gun: null, gcd: 0, gcdMax: 0, bullets: [], wisps: [], gates: null, ultArm: 0 });
   const alive = e => e && e.hp > 0 && s.enemies.includes(e);
   const openArms = () => s.ult.active?.type === 'openarms';
-  const armsNow = () => (openArms() ? MAX_ARMS : st().arms);
+  const armsNow = () => (openArms() ? MAX_ARMS : 0);
+  const U = () => s.stats.ult ?? {};
   // where arm i hangs from the cursor (the same fan RamsfFx draws), and the gap between two angles
   const restAngle = (i) => -Math.PI / 2 + (i % 2 ? 1 : -1) * (0.62 + Math.floor(i / 2) * 0.4);
   const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
   const label = (text, x, y, color, big = false) => { const r = st(); if (r.floats++ < 3) floater(text, x, y, color, big); };
   const P = () => s.player.pos ?? { x: s.W / 2, y: s.H / 2 };
+  const nearestTo = (x, y, list) => list.reduce((b, e) => (!b || dist(x, y, e.x, e.y) < dist(x, y, b.x, b.y) ? e : b), null);
 
   // ── M2: PARRY ────────────────────────────────────────────────────────────
   function press(x, y) {
@@ -77,7 +99,7 @@ export function createRamsfPlatinum(ctx) {
       parry(sk, lh.kind, lh.src && s.enemies.includes(lh.src) ? lh.src : null, lh.from, false);
       return true;
     }
-    if (r.pcd > 0) { label('…', x, y - K(30), '#a8a29e'); return false; }
+    if (r.pcd > 0) { label('…', x, y - K(30), '#a8a29e'); return true; }   // (still true: holding on can still open a rift)
     r.pw = sk.parryWin; r.pwHit = false;
     sfx('tick');
     return true;
@@ -97,14 +119,14 @@ export function createRamsfPlatinum(ctx) {
     if (r.pending && s.time - r.pending.t < 0.02) r.lastHurt = { ...r.pending, dmg, t: s.time };
     r.pending = null;
   }
-  // auto: Open Arms parried it by itself; follow: caught by the follow-through of your last parry
+  // auto: Manic Puppeteer parried it by itself; follow: caught by the follow-through of your last parry
   function parry(sk, kind, src, from, auto, follow = false) {
-    const r = st(), pv = passive(), p = P(), light = auto || follow;
+    const r = st(), p = P(), light = auto || follow;
     r.pwHit = true;
     // who did it: the enemy that swung, or the one that fired the shot
     const owner = src ?? (from?.owner != null ? s.enemies.find(e => e.id === from.owner) : null);
     // the same enemy again within a moment, and not a shot (a worm or a swarm still biting through
-    // your cursor): cancelled, but no counter, arm, streak or freeze, or overlapping one would farm
+    // your cursor): cancelled, but no counter, streak or freeze, or overlapping one would farm
     // them. A bite (contact, every frame it touches you) only counts once every 1.5s. (A worm's
     // segments count as one enemy: whichever part of it is touching you.)
     const foe = owner ? (owner.group != null ? `g${owner.group}` : owner.id) : null;
@@ -145,32 +167,51 @@ export function createRamsfPlatinum(ctx) {
       api.asYou(() => kitHit(owner, sk.parryPct, { color: '#fbcfe8', label: '⚔ ' }));
       effect({ kind: 'armhit', x1: p.x, y1: p.y, x2: owner.x, y2: owner.y, life: 0.25 });
     }
+    if (owner) {
+      owner.rfMark = true;   // OFFERING: once it dies, its soul is his Master's (onKill)
+      if (owner.group != null) s.enemies.forEach(e => { if (e.group === owner.group) e.rfMark = true; });   // (a worm: all of it)
+    }
     if (owner && alive(owner)) {
       owner.cd = Math.max(owner.cd ?? 0, sk.stagger);   // staggered: its next attack waits
       if (owner.dashing) api.finishAttack(owner.dashing);
-      owner.exposedT = s.time + (pv?.exposedDur ?? 3);
+      owner.exposedT = s.time + (sk.exposedDur ?? 3);
     }
-    // TEN ARMS: a new arm on the cursor
-    if (!light && pv?.type === 'tenarms' && r.arms < MAX_ARMS) { r.arms++; label(`🖐 ${r.arms}/${MAX_ARMS}`, p.x, p.y + K(40), PINK); }
-    r.armT = 0; r.dropT = 0;
     r.pcd = 0;
   }
 
-  // ── TEN ARMS: they fight on their own ────────────────────────────────────
+  // ── OFFERING: parried, then killed → a Soul ──────────────────────────────
+  function onKill(e) {
+    const r = st(), pv = passive();
+    if (!e.rfMark || pv?.type !== 'offering' || e.tier === 'treasure') return;
+    // a worm's soul is one soul (its segments die with it)
+    if (e.group != null) { if (r.soulGroups?.includes(e.group)) return; (r.soulGroups ??= []).push(e.group); if (r.soulGroups.length > 20) r.soulGroups.shift(); }
+    const max = pv.maxSouls ?? 10;
+    if (r.souls >= max) return;
+    r.souls++;
+    const p = P();
+    effect({ kind: 'soulgain', x1: e.x, y1: e.y, x2: p.x, y2: p.y, life: 0.7 });
+    floater(`🔥 SOUL ${r.souls}/${max}`, e.x, e.y - K(30), HELL, true);
+    sfx('kill');
+    if (r.souls === (pv.lv2At ?? 5)) api.announce('THE DRUMS OF HELL ARE READY', HELL);
+    if (r.souls === (pv.lv3At ?? 10)) api.announce('THE MASTER STIRS', BLOOD);
+  }
+  const soulMult = () => { const pv = passive(), r = s.kit.ramsf; return pv?.type === 'offering' && r?.souls ? 1 + pv.soulDmg * r.souls : 1; };
+
+  // ── MANIC PUPPETEER: the arms fight on their own ─────────────────────────
   // Every armRate s each arm strikes something within its reach of the cursor (no stretching
   // past it). They spread out: an arm goes for the enemy with the fewest arms on it, then the one
   // on its own side of the cursor, then the nearest. Not while they're folded into wings.
   const wingsOut = () => { const h = s.player.held; return !!(h && !h.ramsf?.drag && s.time - h.t0 > 0.12); };
   function armsFight(dt, live) {
-    const r = st(), pv = passive(), sk = skill(), p = P(), n = armsNow();
+    const r = st(), u = U(), sk = skill(), p = P(), n = armsNow();
     const cd = r.armCd ?? (r.armCd = []);
-    cd.length = n;   // (arms that dropped off forget their timing)
-    if (!n || !pv || !p || !live || !fighting() || s.mahoraga || s.timeStop > 0 || wingsOut()) return;
-    const R = K(sk?.armR ?? 80), rate = pv.armRate ?? 0.5;
+    cd.length = n;   // (when the ult ends they forget their timing)
+    if (!n || !p || !live || !fighting() || s.mahoraga || s.timeStop > 0 || wingsOut()) return;
+    const R = K(sk?.armR ?? 80), rate = u.armRate ?? 0.5;
     let near = null;
     api.asYou(() => {
       for (let i = 0; i < n; i++) {
-        if (cd[i] == null) cd[i] = rand(0.1, rate);   // (a new arm joins out of step with the rest)
+        if (cd[i] == null) cd[i] = rand(0.1, rate);   // (out of step with each other)
         cd[i] -= dt;
         if (cd[i] > 0) continue;
         near ??= foes().filter(e => dist(e.x, e.y, p.x, p.y) <= R + radius(e) * 0.6);
@@ -184,7 +225,7 @@ export function createRamsfPlatinum(ctx) {
         }
         if (!t) { cd[i] = 0.05; continue; }
         cd[i] = rate * rand(0.85, 1.15);
-        kitHit(t, pv.armPct, { color: '#fbcfe8', label: '🖐', quiet: r.floats++ >= 2 });
+        kitHit(t, u.armPct ?? 0.5, { color: '#fbcfe8', label: '🖐', quiet: r.floats++ >= 2 });
         r.strikes.push({ id: nextId(), arm: i, foe: t.id, x: t.x + rand(-0.25, 0.25) * radius(t), y: t.y + rand(-0.25, 0.25) * radius(t), t: 0, life: 0.22 });
       }
     });
@@ -236,38 +277,128 @@ export function createRamsfPlatinum(ctx) {
     if (blown) label(`${blown} shot${blown > 1 ? 's' : ''} blown away`, x, y + R * 0.6, '#fce7f3');
     shake(0.15 + 0.2 * f); sfx('gust');
   }
-  // enemy shots inside a circle are blown away
+  // enemy shots inside a circle are blown away / swallowed
   function blowShots(x, y, R) {
     let n = 0;
     for (const a of s.attacks) if (a.kind === 'shot' && a.phase === 'fly' && dist(a.x, a.y, x, y) <= R) { api.finishAttack(a); n++; }
     return n;
   }
 
-  // ── Q: TORNADO ───────────────────────────────────────────────────────────
-  function tornado(x, y) {
+  // ── hold M2: OTHERWORLD RIFT ─────────────────────────────────────────────
+  function openRift(x, y) {
     const sk = skill(), r = st();
-    if (!sk || !fighting() || s.mahoraga) return false;
-    if (r.tcd > 0) { floater(`${Math.ceil(r.tcd)}s`, x, y - K(30), '#e9d5ff'); return false; }
-    r.tcd = r.tcdMax = sk.cooldown;
-    r.tornado = { x, y, t: 0, life: sk.torDur };
-    effect({ kind: 'gust', x, y, r: K(sk.torR) * 1.4, life: 0.4, f: 0.5 });
-    shake(0.2); sfx('gust');
+    if (r.rcd > 0) { floater(`rift ${Math.ceil(r.rcd)}s`, x, y - K(30), '#a8a29e'); return false; }
+    r.rcd = r.rcdMax = sk.riftCd;
+    r.rift = { x, y, t: 0, life: sk.riftDur };
+    // holding on wasn't a parry attempt that missed: no whiff lockout for it
+    r.pw = 0; r.pcd = 0;
+    effect({ kind: 'shadowpuff', x, y, r: K(sk.riftR) * 1.6, life: 0.5, color: SOUL });
+    shake(0.3); sfx('boom');
     return true;
   }
 
-  // ── ult: OPEN ARMS ───────────────────────────────────────────────────────
-  function ult(u) {
-    const r = st();
-    s.ult.active = { type: 'openarms', t: u.dur, dur: u.dur };
-    r.cutin = { t: 0, life: CUTIN };
-    effect({ kind: 'flash', color: '#fdf2f8', life: 0.35 });
-    shake(0.4); sfx('parryBig');
+  // ── Q: SHADOW GUNSLINGER ─────────────────────────────────────────────────
+  function gunslinger(x, y) {
+    const sk = skill(), r = st();
+    if (!sk || !fighting() || s.mahoraga) return false;
+    if (r.gcd > 0) { floater(`${Math.ceil(r.gcd)}s`, x, y - K(30), '#e9d5ff'); return false; }
+    r.gcd = r.gcdMax = sk.cooldown;
+    r.gun = { t: 0, life: sk.gunDur, clone: { x, y, tick: 0.2, hitT: -9 }, lastShot: -9, side: 0 };
+    effect({ kind: 'shadowpuff', x, y, r: K(70), life: 0.45, color: '#1e1b4b' });
+    // everything that was coming for you loses you
+    s.enemies.forEach(e => { e.target = null; });
+    api.announce('SHADOW GUNSLINGER', '#e9d5ff');
+    sfx('shield');
+    return true;
   }
-  function endUlt() { api.announce('THE ARMS RETURN', '#fbcfe8'); }
+  // where the enemies think you are (kitRuntime.aimPoint): your shadow, while it's out
+  const decoy = () => { const g = s.kit.ramsf?.gun; return g && skill()?.type === 'marionette' ? { x: g.clone.x, y: g.clone.y } : null; };
+  // every click while it's out: one bullet from each gun, at the enemies nearest the cursor
+  function onPointerDown(x, y) {
+    const r = st(), g = r.gun, sk = skill();
+    if (!g || !sk || !fighting() || s.mahoraga || s.time - g.lastShot < 0.08) return;
+    const list = foes().filter(e => dist(e.x, e.y, x, y) <= K(sk.gunR) + radius(e)).sort((a, b) => dist(a.x, a.y, x, y) - dist(b.x, b.y, x, y));
+    if (!list.length) return;
+    g.lastShot = s.time;
+    [-1, 1].forEach((side, i) => {
+      const t = list[Math.min(i, list.length - 1)], sx = x + side * K(16), sy = y + K(4);
+      r.bullets.push({ id: nextId(), x: sx, y: sy, x0: sx, y0: sy, target: t.id, side });
+      effect({ kind: 'muzzle', x: sx, y: sy, a: Math.atan2(t.y - sy, t.x - sx), life: 0.12 });
+    });
+    g.recoil = s.time;
+    sfx('crit');
+  }
+
+  // ── ult: OBEY YOUR MASTER ────────────────────────────────────────────────
+  // engine.activateUlt asks first (kitRuntime.ultTap). With 10 Souls the first tap waits TAP2 s
+  // for a second one (Ascent); none → Hell Drums. 'wait' = don't fire yet.
+  function ultTap() {
+    const r = st(), pv = passive();
+    if (s.stats.ult?.type !== 'openarms') return null;
+    const lv = ultLevel(r.souls, pv);
+    if (lv < 3) { r.ultPick = lv; return null; }
+    if (r.ultGo) { r.ultGo = false; r.ultPick = 2; return null; }       // no second tap: Hell Drums
+    if (r.ultArm > 0) { r.ultArm = 0; r.ultPick = 3; return null; }     // the second tap: the Master
+    r.ultArm = TAP2;
+    const p = P();
+    floater('TAP AGAIN: ASCENT', p.x, p.y - K(60), BLOOD, true);
+    sfx('tick');
+    return 'wait';
+  }
+  function ult(u) {
+    const r = st(), lv = r.ultPick ?? 1, p = P();
+    r.ultPick = null; r.ultArm = 0;
+    r.cutin = { t: 0, life: CUTIN, lv };
+    if (lv === 1) {
+      s.ult.active = { type: 'openarms', t: u.dur, dur: u.dur, lv };
+      effect({ kind: 'flash', color: '#fdf2f8', life: 0.35 });
+      sfx('parryBig');
+    } else if (lv === 2) {
+      s.ult.active = { type: 'helldrums', t: u.drumsDur + CUTIN, dur: u.drumsDur + CUTIN, lv };
+      // the gates: spread across the arena, nudged toward where the enemies are
+      const spots = [[0.24, 0.34], [0.76, 0.34], [0.5, 0.74]];
+      const list = foes();
+      r.gates = spots.slice(0, Math.round(u.gates ?? 3)).map(([fx, fy], i) => {
+        let x = s.W * fx, y = s.H * fy;
+        const e = nearestTo(x, y, list);
+        if (e && dist(x, y, e.x, e.y) < s.W * 0.3) { x += (e.x - x) * 0.4; y += (e.y - y) * 0.4; }
+        return { id: nextId(), x, y, t: -0.15 * i, emit: 0.5 + 0.15 * i };
+      });
+      effect({ kind: 'flash', color: '#7c2d12', life: 0.5 });
+      sfx('boom');
+    } else {
+      // the offering: half of what HP you have
+      const pl = s.player, cost = Math.floor(pl.hp * (u.cost ?? 0.5));
+      pl.hp = Math.max(1, pl.hp - cost);
+      floater(`-${cost} HP · 🩸 OFFERED`, p.x, p.y - K(30), BLOOD, true);
+      s.ult.active = { type: 'ascent', t: u.masterDur + CUTIN, dur: u.masterDur + CUTIN, lv, tick: CUTIN + 0.5, n: 0 };
+      // nothing gets to finish what it started
+      s.attacks.forEach(a => { if (a.phase !== 'done') api.finishAttack(a); });
+      effect({ kind: 'flash', color: '#450a0a', life: 0.9 });
+      s.banner = { text: 'ASCENT OF THE MASTER', sub: 'obey.', t: 2, bad: true };
+      sfx('boom');
+    }
+    shake(0.5);
+  }
+  function endUlt(act) {
+    const r = st();
+    if (act.type === 'openarms') api.announce('THE ARMS RETURN', '#fbcfe8');
+    if (act.type === 'helldrums') { r.gates = null; api.announce('THE DRUMS FALL QUIET', HELL); }
+    if (act.type === 'ascent') {
+      // the finale, and he takes his Souls
+      const u = U();
+      let n = 0;
+      [...foes()].forEach(e => { effect({ kind: 'pillar', x: e.x, y: e.y, r: radius(e) * 1.3, life: 0.6, big: true }); ultHit(e, u.masterFinale ?? 12, BLOOD, n++ < 3 ? '🔥 ' : ''); });
+      effect({ kind: 'flash', color: '#fecaca', life: 0.5 });
+      shake(0.7); sfx('boom');
+      r.souls = 0; r.soulGroups = [];
+      api.announce('THE MASTER IS SATISFIED', BLOOD);
+    }
+  }
 
   // ── every frame ──────────────────────────────────────────────────────────
   function update(dt, live) {
-    const sk = skill(), pv = passive(), r = st(), pl = s.player, p = pl.pos;
+    const sk = skill(), r = st(), pl = s.player, p = pl.pos, u = U(), act = s.ult.active;
     r.floats = 0;
     r.hitstop = Math.max(0, (r.hitstop ?? 0) - dt);
     if (s.timeStop <= 0) r.follow = Math.max(0, (r.follow ?? 0) - dt);   // (game time: it waits out the freeze)
@@ -275,17 +406,18 @@ export function createRamsfPlatinum(ctx) {
     r.threat = sk?.type === 'marionette' && p ? nextHit(p) : null;
     if (r.cutin) { r.cutin.t += dt; if (r.cutin.t >= r.cutin.life) r.cutin = null; }
     r.strikes.forEach(k => { k.t += dt; }); r.strikes = r.strikes.filter(k => k.t < k.life);
-    r.tcd = Math.max(0, r.tcd - dt);
+    r.rcd = Math.max(0, r.rcd - dt);
+    r.gcd = Math.max(0, r.gcd - dt);
+    // the ult's second tap didn't come: Hell Drums
+    if (r.ultArm > 0) { r.ultArm -= dt; if (r.ultArm <= 0) { r.ultArm = 0; r.ultGo = true; if (!api.activateUlt?.()) r.ultGo = false; } }
     // the parry window closes: nothing came → a whiff
     if (r.pw > 0) {
       r.pw -= dt;
       if (r.pw <= 0) { r.pw = 0; if (!r.pwHit && sk) { r.pcd = sk.parryCd; r.streak = 0; } }
     } else r.pcd = Math.max(0, r.pcd - dt);
-    // arms fall off when you stop parrying (not during Open Arms)
-    if (r.arms > 0 && !openArms() && s.timeStop <= 0) {
-      r.armT += dt;
-      if (r.armT >= (pv?.armHold ?? 6)) { r.dropT += dt; if (r.dropT >= 1.5) { r.dropT = 0; r.arms--; if (p) label(`🖐 ${r.arms}/${MAX_ARMS}`, p.x, p.y + K(40), '#a8a29e'); } }
-    }
+    // hold M2: the rift
+    const m2 = pl.m2;
+    if (sk?.type === 'marionette' && m2 && !m2.viaM1 && !m2.rf && p && live && fighting() && !s.mahoraga && s.time - m2.t0 >= RIFT_HOLD) { m2.rf = true; openRift(p.x, p.y); }
     armsFight(dt, live);
     // drag: STRINGS (hold M1 and move through enemies)
     const held = pl.held;
@@ -310,30 +442,114 @@ export function createRamsfPlatinum(ctx) {
       }
     }
     if (!held && r.strings) r.strings = null;
-    // the tornado
-    const tn = r.tornado;
-    if (tn) {
-      tn.t += dt;
-      if (tn.t >= tn.life || !sk) r.tornado = null;
-      else if (live && s.timeStop <= 0) {
-        if (p) { const dx = p.x - tn.x, dy = p.y - tn.y, d = Math.hypot(dx, dy); if (d > 1) { const st2 = Math.min(d, K(150) * dt); tn.x += dx / d * st2; tn.y += dy / d * st2; } }
-        const pull = K(sk.torPull), core = K(sk.torR);
-        for (const e of foes()) {
-          if (heavy(e) || e.kb || e.grabbed || e.down > 0) continue;
-          const dx = tn.x - e.x, dy = tn.y - e.y, d = Math.hypot(dx, dy);
-          if (d > pull || d < 1) continue;
-          const v = K(260) * (1 - d / pull * 0.5) * dt;
-          e.x += dx / d * Math.min(d, v); e.y += dy / d * Math.min(d, v);
-        }
-        blowShots(tn.x, tn.y, core);
+    const going = live && s.timeStop <= 0;
+    // the rift: stays where it opened, drags enemies to its centre, burns what's inside
+    const rf = r.rift;
+    if (rf) {
+      rf.t += dt;
+      if (rf.t >= rf.life || !sk) r.rift = null;
+      else if (going) {
+        pull(rf.x, rf.y, K(sk.riftPull), K(320), dt);
+        blowShots(rf.x, rf.y, K(sk.riftR));
         r.tick -= dt;
         if (r.tick <= 0) {
           r.tick = 0.25; r.tickN = (r.tickN ?? 0) + 1;
           let n = 0;
-          api.asYou(() => foes().filter(e => dist(e.x, e.y, tn.x, tn.y) <= core + radius(e) * 0.5)
-            .forEach(e => kitHit(e, sk.torPct * 0.25, { color: '#e9d5ff', label: '🌪', quiet: r.tickN % 4 !== 0 || n++ >= 3, charge: 0.6 })));
+          api.asYou(() => foes().filter(e => dist(e.x, e.y, rf.x, rf.y) <= K(sk.riftR) + radius(e) * 0.5)
+            .forEach(e => kitHit(e, sk.riftPct * 0.25, { color: SOUL, label: '🕳', quiet: r.tickN % 4 !== 0 || n++ >= 3, charge: 0.6 })));
         }
       }
+    }
+    // Shadow Gunslinger: the shadow goes after them and strikes what's around it
+    const g = r.gun;
+    if (g) {
+      g.t += dt;
+      if (g.t >= g.life || !sk || sk.type !== 'marionette') { if (g.t >= g.life) effect({ kind: 'shadowpuff', x: g.clone.x, y: g.clone.y, r: K(60), life: 0.4, color: '#1e1b4b' }); r.gun = null; }
+      else if (going) {
+        const c = g.clone, e = nearestTo(c.x, c.y, foes());
+        if (e) {
+          const d = dist(c.x, c.y, e.x, e.y), keep = radius(e) + K(26);
+          if (d > keep) { const v = Math.min(d - keep, K(260) * dt); c.x += (e.x - c.x) / d * v; c.y += (e.y - c.y) / d * v; }
+        }
+        c.tick -= dt;
+        if (c.tick <= 0) {
+          c.tick = sk.cloneRate;
+          const near = foes().filter(o => dist(o.x, o.y, c.x, c.y) <= K(sk.cloneR) + radius(o) * 0.5);
+          if (near.length) {
+            c.hitT = s.time;
+            let n = 0;
+            api.asYou(() => near.forEach(o => kitHit(o, sk.clonePct, { color: '#a5b4fc', label: '🌑', quiet: n++ >= 2 })));
+          }
+        }
+      }
+    }
+    // the bullets: fast, and they don't miss
+    for (const b of r.bullets) {
+      const t = s.enemies.find(e => e.id === b.target);
+      if (!t || !alive(t)) { b.dead = true; continue; }
+      const dx = t.x - b.x, dy = t.y - b.y, d = Math.hypot(dx, dy), v = K(2400) * dt;
+      if (d <= v + radius(t) * 0.4) { b.dead = true; if (sk) api.asYou(() => kitHit(t, sk.gunPct, { color: '#e9d5ff', label: '🔫', quiet: r.floats++ >= 2 })); continue; }
+      b.x += dx / d * v; b.y += dy / d * v;
+    }
+    r.bullets = r.bullets.filter(b => !b.dead);
+    // HELL DRUMS: the gates drag enemies in and let out wicked souls that hunt them down
+    if (act?.type === 'helldrums' && r.gates && going && !r.cutin) {
+      for (const gt of r.gates) {
+        gt.t += dt;
+        if (gt.t < 0) continue;
+        pull(gt.x, gt.y, K(u.gatePull ?? 230), K(280), dt);
+        gt.emit -= dt;
+        if (gt.emit <= 0) {
+          gt.emit = u.soulEvery ?? 0.4;
+          const list = foes();
+          if (!list.length) continue;
+          // the nearest one that isn't already being hunted by most of the souls
+          const hunted = id => r.wisps.reduce((c, w) => c + (w.target === id), 0);
+          const t = list.slice().sort((a, b) => hunted(a.id) - hunted(b.id) || dist(a.x, a.y, gt.x, gt.y) - dist(b.x, b.y, gt.x, gt.y))[0];
+          const a0 = rand(0, Math.PI * 2);
+          r.wisps.push({ id: nextId(), x: gt.x, y: gt.y, vx: Math.cos(a0) * K(300), vy: Math.sin(a0) * K(300), target: t.id, t: 0 });
+        }
+      }
+    }
+    for (const w of r.wisps) {
+      w.t += dt;
+      let t = s.enemies.find(e => e.id === w.target);
+      if (!t || !alive(t)) { t = nearestTo(w.x, w.y, foes()); if (!t) { w.dead = true; continue; } w.target = t.id; }
+      if (w.t > 4) { w.dead = true; continue; }
+      if (!going) continue;
+      // steer toward it (they curve in, faster the longer they've been out)
+      const dx = t.x - w.x, dy = t.y - w.y, d = Math.hypot(dx, dy) || 1, sp = K(420 + 500 * Math.min(1, w.t));
+      w.vx += (dx / d * sp - w.vx) * Math.min(1, dt * 5); w.vy += (dy / d * sp - w.vy) * Math.min(1, dt * 5);
+      w.x += w.vx * dt; w.y += w.vy * dt;
+      if (d <= radius(t) * 0.6 + K(8)) { w.dead = true; ultHit(t, u.soulPct ?? 1.2, SOUL, r.floats++ < 2 ? '👻 ' : ''); effect({ kind: 'shadowpuff', x: w.x, y: w.y, r: K(26), life: 0.3, color: SOUL }); }
+    }
+    r.wisps = r.wisps.filter(w => !w.dead);
+    if (act?.type !== 'helldrums' && r.gates) r.gates = null;
+    // ASCENT OF THE MASTER: everything on the field is purged, again and again
+    if (act?.type === 'ascent' && going) {
+      // nothing gets to attack while he's here
+      s.attacks.forEach(a => { if (a.phase !== 'done' && !a.free) api.finishAttack(a); });
+      act.tick -= dt;
+      if (act.tick <= 0) {
+        act.tick = u.masterTick ?? 0.5; act.n++;
+        let n = 0;
+        foes().forEach(e => {
+          effect({ kind: 'pillar', x: e.x, y: e.y, r: radius(e), life: 0.45 });
+          ultHit(e, u.masterPct ?? 2.5, BLOOD, n++ < 2 && act.n % 2 === 1 ? '🔥 ' : '');
+        });
+        shake(0.25);
+        if (act.n % 2 === 1) sfx('boom');
+      }
+    }
+  }
+  // enemies within R are dragged toward (x, y)
+  function pull(x, y, R, speed, dt) {
+    for (const e of foes()) {
+      if (heavy(e) || e.kb || e.grabbed || e.down > 0) continue;
+      const dx = x - e.x, dy = y - e.y, d = Math.hypot(dx, dy);
+      if (d > R || d < 1) continue;
+      const v = speed * (1 - d / R * 0.5) * dt;
+      e.x += dx / d * Math.min(d, v); e.y += dy / d * Math.min(d, v);
     }
   }
 
@@ -370,15 +586,16 @@ export function createRamsfPlatinum(ctx) {
   }
 
   // ── for the HUD ──────────────────────────────────────────────────────────
-  const m2Info = () => { const r = st(), sk = skill(); return { kind: 'cd', cd: r.pw > 0 ? 0 : r.pcd, cdMax: sk?.parryCd || 0.6, color: PINK, text: 'M2', btn: 'PARRY', hint: 'Parry: M2 just before a hit lands' }; };
-  const qInfo = () => { const r = st(), sk = skill(); return { kind: 'cd', cd: r.tcd, cdMax: r.tcdMax || sk?.cooldown || 14, color: '#c084fc', text: 'Q', hint: 'Tornado: Q (phone: the SKILL button)' }; };
-  const active = () => { const r = s.kit.ramsf; return !!(r && (r.tornado || r.strikes.length || r.cutin || r.arms > 0 || r.pw > 0 || r.pcd > 0 || r.slow > 0)); };
+  const m2Info = () => { const r = st(), sk = skill(); return { kind: 'cd', cd: r.pw > 0 ? 0 : r.pcd, cdMax: sk?.parryCd || 0.6, color: PINK, text: 'M2', btn: 'PARRY', hint: 'Parry: tap M2 just before a hit lands · hold M2: Otherworld Rift' }; };
+  const qInfo = () => { const r = st(), sk = skill(); return { kind: 'cd', cd: r.gcd, cdMax: r.gcdMax || sk?.cooldown || 16, color: '#a5b4fc', text: 'Q', hint: 'Shadow Gunslinger: Q (phone: the SKILL button)' }; };
+  const active = () => { const r = s.kit.ramsf; return !!(r && (r.rift || r.gun || r.bullets.length || r.wisps.length || r.gates || r.strikes.length || r.cutin || r.pw > 0 || r.pcd > 0 || r.slow > 0 || r.rcd > 0 || r.gcd > 0)); };
   function reset(why) {
     const r = st();
-    r.pw = 0; r.pcd = 0; r.strings = null; r.tornado = null; r.cutin = null; r.strikes = []; r.tcd = 0; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null; r.follow = 0; r.lastFoe = null; r.armCd = [];
-    if (why === 'defeat') r.arms = 0;
+    r.pw = 0; r.pcd = 0; r.strings = null; r.cutin = null; r.strikes = []; r.streak = 0; r.slow = 0; r.lastHurt = null; r.pending = null; r.threat = null; r.follow = 0; r.lastFoe = null; r.armCd = [];
+    r.rift = null; r.rcd = 0; r.gun = null; r.gcd = 0; r.bullets = []; r.wisps = []; r.gates = null; r.ultArm = 0; r.ultGo = false; r.ultPick = null;
+    if (why === 'defeat') { r.souls = 0; r.soulGroups = []; }   // (Souls carry over from stage to stage, until you fall)
   }
-  const exposedBonus = e => { const pv = passive(); return pv?.type === 'tenarms' && e.exposedT > s.time ? pv.exposed : 0; };
+  const exposedBonus = e => { const sk = skill(); return sk?.type === 'marionette' && e.exposedT > s.time ? (sk.exposed ?? 0) : 0; };
 
-  return { press, tryParry, onHurt, release, tornado, ult, endUlt, update, m2Info, qInfo, active, reset, exposedBonus, armsNow, timeScale, PORCELAIN };
+  return { press, tryParry, onHurt, onKill, onPointerDown, release, gunslinger, decoy, soulMult, ultTap, ult, endUlt, update, m2Info, qInfo, active, reset, exposedBonus, armsNow, timeScale, PORCELAIN };
 }

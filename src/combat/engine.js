@@ -117,7 +117,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   const rt = createKitRuntime({
     s, K, rand, pick, dist, distToSegment, clamp, floater, effect, shake, sfx, nextId: () => uid++,
     rollClick, damageEnemy, killEnemy, finishAttack, startDefeat, enemyAt, comboHit: () => comboHit(), heal: (n) => heal(n), asYou: (fn) => api_asYou(fn),
-    announce: (...a) => announce(...a),
+    announce: (...a) => announce(...a), activateUlt: () => activateUlt(),
   });
 
   // Daddy Hairy Legs (spider.js)
@@ -1513,6 +1513,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.fortT > 0) dmg *= 1 - BAL.FORTIFY;   // a Medic's buff
     if (e.vuln) dmg *= e.vuln;                 // Bio: bound by the Toad / standing in the shadow garden
     if (e.exposedT > s.time) dmg *= 1 + rt.exposedBonus(e);   // 6★ Ramsf: parried, and open
+    dmg *= rt.soulMult();                                      // 6★ Ramsf: his Master's Souls
     e.lastHit = s.time;
     const pv = rt.passive();
     if (e.frozen > 0 && (pv?.type === 'frost' || pv?.type === 'subzero')) dmg *= 1 + pv.bonus;   // (6★ Ice: Sub-Zero)
@@ -1826,6 +1827,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!u || s.paused || s.choosing || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
     const blocked = rt.ultBlocked();   // e.g. Uzumaki without enough spirits
     if (blocked) { const P = s.player.pos ?? { x: s.W / 2, y: s.H / 2 }; floater(`needs ${blocked}`, P.x, P.y - K(40), '#e879f9', true); return false; }
+    if (rt.ultTap() === 'wait') return false;   // 6★ Ramsf with 10 Souls: waiting to see if a second tap comes
     s.ult.charge = 0;
     s.ult.cd = s.ult.cdMax = u.cooldown ?? 30;
     const base = s.stats.clickDmg;

@@ -157,6 +157,7 @@ export function createKitRuntime(api) {
   // where your cursor was a moment ago.
   function aimPoint() {
     if (s.mahoraga) return { x: s.mahoraga.x, y: s.mahoraga.y };
+    if (skill()?.type === 'marionette') { const d = ramsf.decoy(); if (d) return d; }   // 6★ Ramsf: they're after his shadow
     const pv = passive();
     if (pv?.type === 'phantom' && s.kit.posHist.length) {
       const want = s.time - pv.lag;
@@ -354,6 +355,7 @@ export function createKitRuntime(api) {
   }
   // true = swallow the click (you're suspended while Mahoraga fights)
   function onPointerDown(x, y) {
+    if (skill()?.type === 'marionette' && !s.mahoraga) ramsf.onPointerDown(x, y);   // 6★ Ramsf: Shadow Gunslinger's guns (the click still happens)
     // Mahoraga out: you don't fight — you watch (the usual kit) or command it (the other one)
     if (s.mahoraga) return s.mahoraga.v2 ? ts.commandMahoraga(x, y) : true;
     if (ts.busy()) return true;                          // Bio's hands are busy with a hand sign
@@ -637,6 +639,7 @@ export function createKitRuntime(api) {
     s.kit.kills++;
     if (sk?.type === 'tenshadows') ts.onKill(sk, e);   // Bio: what his shikigami kill tops up the meter
     if (sk?.type === 'boil') bonk.onKill(e);           // 6★ Bonk: Bloodlust feeds on what dies hemorrhaging
+    if (sk?.type === 'marionette') ramsf.onKill(e);    // 6★ Ramsf: Offering (parried, then killed → a Soul)
     // Sorcerer Killer charges from kills, not damage
     const u = s.stats.ult;
     if (u?.chargeOn === 'kills' && !s.ult.active) {
@@ -757,7 +760,7 @@ export function createKitRuntime(api) {
       case 'noretreat':      // 6★ Astrec: top tier whatever his HP, and he can't drop (astrecPlatinum.js)
         astrec.ult(u);
         return true;
-      case 'openarms':       // 6★ Ramsf: all ten arms on the cursor, and it parries by itself (ramsfPlatinum.js)
+      case 'openarms':       // 6★ Ramsf: Obey Your Master, by Souls: Manic Puppeteer / Hell Drums / Ascent (ramsfPlatinum.js)
         ramsf.ult(u);
         return true;
       default: return false;
@@ -774,7 +777,7 @@ export function createKitRuntime(api) {
     if (act.type === 'absolutezero') ice.endUlt(act);
     if (act.type === 'redmist') bonk.endUlt(act);
     if (act.type === 'noretreat') astrec.endUlt(act);
-    if (act.type === 'openarms') ramsf.endUlt(act);
+    if (act.type === 'openarms' || act.type === 'helldrums' || act.type === 'ascent') ramsf.endUlt(act);
     if (act.type === 'shrine') { effect({ kind: 'flash', color: '#450a0a', life: 0.6 }); shake(0.3); }   // the domain collapses
   }
   // Room 16's ult: you picked one of the three skills
@@ -796,9 +799,12 @@ export function createKitRuntime(api) {
   const bonk = createBonkPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
   const astrec = createAstrecPlatinum({ s, api, K, dist, distToSegment, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius, heavy });
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze, Bonk's Bloodletting, Astrec's Second Wind); null = Q is M2 as usual
-  const ramsf = createRamsfPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, foes, fighting, radius, heavy });
+  const ramsf = createRamsfPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
+  // 6★ Ramsf: with 10 Souls the ult waits for a second tap (engine.activateUlt); his Souls' damage bonus
+  const ultTap = () => (skill()?.type === 'marionette' ? ramsf.ultTap() : null);
+  const soulMult = () => (skill()?.type === 'marionette' ? ramsf.soulMult() : 1);
   const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : t === 'marionette' ? ramsf.qInfo() : null; };
-  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.tornado(x, y) : false; }
+  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.gunslinger(x, y) : false; }
   const exposedBonus = e => (skill()?.type === 'marionette' ? ramsf.exposedBonus(e) : 0);
   // 6★ Astrec: how much of a hit gets through (Brace), how fast enemies attack (Draw Fire), and Not Yet
   const hurtMult = () => (skill()?.type === 'deathwish' ? astrec.hurtMult() : 1);
@@ -1268,7 +1274,7 @@ export function createKitRuntime(api) {
     // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
     signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale() * (skill()?.type === 'marionette' ? ramsf.timeScale() : 1),   // (Bio's sign wheel / 6★ Ramsf's slow motion after a parry)
     cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
-    hurtMult, attackRate, undying, exposedBonus,
+    hurtMult, attackRate, undying, exposedBonus, ultTap, soulMult,
     update, reset, origin, slide,
     skill2, skill2Info,
   };

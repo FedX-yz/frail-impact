@@ -651,17 +651,17 @@ export const CHARACTERS = [
   {
     id: 39,
     name: 'Ramsf',
-    subtitle: 'Marionette',
+    subtitle: 'Hellfire Style',
     rarity: 6,
     series: 'platinum',
     unpullable: true,                // not in any pull yet (being tried out)
-    element: null,
-    color: '#f472b6',
+    element: 'Hellfire',
+    color: '#ef4444',
     image:           `${BASE}sprites/ramsf-platinum.png`,   // no card art yet: the full-body art stands in
     characterImage:  `${BASE}sprites/ramsf-platinum.png`,
     cardArt:         `${BASE}sprites/ramsf-platinum.png`,
     sprite:          `${BASE}sprites/ramsf-platinum.png`,
-    burstArt:        `${BASE}sprites/ramsf-platinum.png`,   // placeholder: the art for Open Arms
+    burstArt:        `${BASE}sprites/ramsf-platinum.png`,   // placeholder: the art for Obey Your Master
     burstFocus:      [50, 13],
     portraitFocus:   [50, 15, 3],
     voiceLine:       null,
@@ -669,13 +669,13 @@ export const CHARACTERS = [
     resultVideo:     null,
     stats: { hp: 1900, atk: 230, def: 105 },
     skill: {
-      name: 'Marionette',
-      description: 'M2 to parry (hitstop, reflects, staggers); every parry puts a doll arm on your cursor (up to 10). Drag strings, hold M1 for a wingbeat, Q for a tornado.',
+      name: 'Hellfire Style',
+      description: 'M2 to parry (hitstop, reflects, staggers), hold M2 for an Otherworld Rift. Hold M1 for a wingbeat, drag for strings, Q for Shadow Gunslinger. Parried enemies that die give Souls for his Master.',
       effect: 'marionette',
     },
     ult: {
-      name: 'Open Arms',
-      description: 'All ten arms on your cursor, and it parries anything that touches it.',
+      name: 'Obey Your Master',
+      description: 'By Souls: Manic Puppeteer (ten doll arms, auto-parry), Hell Drums at 5 (hell gates, hunting souls), Ascent of the Master at 10 (tap twice, costs half your HP).',
       effect: 'open_arms',
       cooldown: 30,
     },

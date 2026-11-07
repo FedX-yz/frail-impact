@@ -25,7 +25,7 @@ import { BonkGround, BonkOver, BonkEffect, BonkScreen, BONK_CSS } from './BonkFx
 import { BONK_EFFECTS, bonkChips } from './bonkPlatinum';
 import { AstrecOver, AstrecEffect, AstrecScreen, ASTREC_CSS } from './AstrecFx';
 import { ASTREC_EFFECTS, astrecChips } from './astrecPlatinum';
-import { RamsfOver, RamsfEffect, RamsfScreen, RAMSF_CSS } from './RamsfFx';
+import { RamsfGround, RamsfOver, RamsfEffect, RamsfScreen, RAMSF_CSS } from './RamsfFx';
 import { RAMSF_EFFECTS, ramsfChips } from './ramsfPlatinum';
 
 const BASE = import.meta.env.BASE_URL;
@@ -381,6 +381,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             <IceGround s={s} k={k} time={s.time} />
             {/* 6★ Bonk: claw rakes */}
             <BonkGround s={s} k={k} />
+            {/* 6★ Ramsf: the Otherworld Rift, Hell Drums' gates (what they drag in stays in sight, on top) */}
+            <RamsfGround s={s} k={k} time={s.time} />
             {/* Hox: Eldritch Presence — a void around your cursor, eyes on its rim watching the nearest enemy */}
             {curPassive?.type === 'presence' && P && !s.mahoraga && (
               <EldritchAura P={P} R={curPassive.radius * k} k={k} time={s.time} look={s.enemies.length ? s.enemies.reduce((b, e) => (!b || Math.hypot(e.x - P.x, e.y - P.y) < Math.hypot(b.x - P.x, b.y - P.y) ? e : b), null) : null} />
@@ -602,7 +604,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             <BonkOver s={s} k={k} P={P} time={s.time} />
             {/* 6★ Astrec: Brace's guard, Draw Fire's marks, Death Wish's tier */}
             <AstrecOver s={s} k={k} P={P} time={s.time} />
-            {/* 6★ Ramsf: the doll arms on your cursor, the parry window, Strings, wings, the tornado */}
+            {/* 6★ Ramsf: the parry window, Strings, wings, the rift, his shadow and guns, Hell Drums, the doll arms */}
             <RamsfOver s={s} k={k} P={P} time={s.time} />
             {curSkill?.type === 'tenshadows' && !touchMode && !ringsOn && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
             {/* Hox: the Abyssal Maw opening under the cursor, jaws closing */}

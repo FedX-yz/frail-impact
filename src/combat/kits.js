@@ -155,20 +155,22 @@ export const SKILLS = {
                               desc: 'Sub-Zero: frozen enemies take +{bonus} DMG from everything. Chain Frost: every shattered enemy throws shards that add {chain} Freeze to whatever is near it.' } },
   // 6★ Ramsf (Platinum): ten porcelain doll arms; a parry character (ramsfPlatinum.js)
   marionette:    { type: 'marionette', style: 'platinum',
-                   parryWin: 0.27, parryCd: 0.45, hitstop: 0.09, parryPct: 3, reflectPct: 4, stagger: 1.5,   // M2: Parry
-                   armR: 80,                                        // how far the arms on the cursor reach (their full stretch, RamsfFx)
+                   parryWin: 0.27, parryCd: 0.45, hitstop: 0.09, parryPct: 3, reflectPct: 4, stagger: 1.5, exposed: 0.3, exposedDur: 3,   // M2: Parry
+                   riftCd: 12, riftDur: 5, riftR: 110, riftPull: 260, riftPct: 2,   // hold M2: Otherworld Rift
+                   armR: 80,                                        // how far the doll arms on the cursor reach (Manic Puppeteer; their full stretch, RamsfFx)
                    stringLen: 900, stringPct: 1.5,                  // drag: Strings
                    full: 0.8, minPct: 1, pct: 4, gustR: 220,        // hold M1: Wingbeat
-                   cooldown: 14, torDur: 6, torR: 110, torPull: 240, torPct: 2,   // Q: Tornado
-                   lv1: { parryWin: 0.23, parryPct: 1.8, reflectPct: 2.4, stringPct: 0.9, minPct: 0.6, pct: 2.4, cooldown: 18, torPct: 1.2 },
-                   si: { parryWin: 0.01, parryPct: 0.5, reflectPct: 0.6, stringPct: 0.25, pct: 0.6, minPct: 0.15, cooldown: -0.6, torPct: 0.35, torDur: 0.5 },
-                   desc: 'MARIONETTE. M2: PARRY. Tap just before a hit lands ({parryWin}s window): the game freezes for a beat, the attack is cancelled, a shot flies back at whoever fired it ({reflectPct} click DMG), and anything that swung at you is struck by an arm ({parryPct} click DMG) and staggered. For a moment after a parry, other hits that land are parried too (a volley, a flurry), but those don\'t give arms. Nothing to parry, and you can\'t parry again for {parryCd}s. '
-                     + 'DRAG (hold M1 and move): STRINGS. Tie up everything you pass through (up to {stringLen} long); let go and they\'re yanked together into a heap ({stringPct} click DMG each). '
+                   cooldown: 16, gunDur: 6, gunPct: 0.6, gunR: 420, clonePct: 0.8, cloneRate: 0.5, cloneR: 130,   // Q: Shadow Gunslinger
+                   lv1: { parryWin: 0.23, parryPct: 1.8, reflectPct: 2.4, exposed: 0.18, stringPct: 0.9, minPct: 0.6, pct: 2.4, riftPct: 1.2, cooldown: 20, gunPct: 0.35, clonePct: 0.5 },
+                   si: { parryWin: 0.01, parryPct: 0.5, reflectPct: 0.6, exposed: 0.05, stringPct: 0.25, pct: 0.6, minPct: 0.15, riftPct: 0.35, riftDur: 0.4, cooldown: -0.6, gunDur: 0.3, gunPct: 0.1, clonePct: 0.12 },
+                   desc: 'HELLFIRE STYLE. M2: PARRY. Tap just before a hit lands ({parryWin}s window): the game freezes for a beat, the attack is cancelled, a shot flies back at whoever fired it ({reflectPct} click DMG), and anything that swung at you is struck ({parryPct} click DMG), staggered, and takes +{exposed} DMG for {exposedDur}s. For a moment after a parry, other hits that land are parried too (a volley, a flurry). Nothing to parry, and you can\'t parry again for {parryCd}s. '
+                     + 'HOLD M2: OTHERWORLD RIFT. A rift tears open at your cursor for {riftDur}s: it drags enemies to its centre, burns what\'s inside ({riftPct} click DMG per second) and swallows shots. {riftCd}s cooldown. '
                      + 'HOLD M1 and let go: WINGBEAT. His arms fold into wings: a gust around your cursor ({gustR} range) throws enemies back for up to {pct} click DMG (full in {full}s) and blows enemy shots away. '
-                     + 'Q: TORNADO. His wings spin up a tornado at your cursor for {torDur}s: it drifts after you, pulls enemies in, shreds what\'s inside ({torPct} click DMG per second) and swallows shots. {cooldown}s cooldown.',
-                   passive: { type: 'tenarms', armPct: 0.5, armRate: 0.5, armHold: 6, exposed: 0.3, exposedDur: 3,
-                              lv1: { armPct: 0.3, exposed: 0.18 }, si: { armPct: 0.08, exposed: 0.05 },
-                              desc: 'Ten Arms: every perfect parry puts one of his doll arms on your cursor (up to 10). They fight on their own: every {armRate}s each arm strikes an enemy within its reach of your cursor ({armPct} click DMG), spreading out over different enemies. Go {armHold}s without a parry and they drop off one at a time. Parries in a row freeze harder, and anything you parry takes +{exposed} DMG for {exposedDur}s.' } },
+                     + 'DRAG (hold M1 and move): STRINGS. Tie up everything you pass through (up to {stringLen} long); let go and they\'re yanked together into a heap ({stringPct} click DMG each). '
+                     + 'Q: SHADOW GUNSLINGER. For {gunDur}s a shadow of your cursor goes after the enemies: they attack it instead of you, and it strikes everything around it ({clonePct} click DMG every {cloneRate}s). Meanwhile every click also fires his two guns from the shadows, a bullet each at the enemies nearest your cursor ({gunPct} click DMG each). {cooldown}s cooldown.',
+                   passive: { type: 'offering', soulDmg: 0.04, maxSouls: 10, lv2At: 5, lv3At: 10,
+                              lv1: { soulDmg: 0.025 }, si: { soulDmg: 0.006 },
+                              desc: 'Offering: an enemy you\'ve parried that then dies gives a Soul for his Master (up to {maxSouls}). Every Soul: +{soulDmg} DMG. {lv2At} Souls and his ult becomes Hell Drums; {lv3At} and you can call Ascent of the Master. Souls carry over from stage to stage until you fall.' } },
   // 6★ Astrec (Platinum): sent in first because he can't stay dead (astrecPlatinum.js)
   death_wish:    { type: 'deathwish', style: 'platinum',
                    t1: 0.3, t2: 0.6, t3: 1, cleave: 0.5, cleaveR: 110, shock: 0.6, shockR: 150,   // Death Wish: the tiers
@@ -277,9 +279,12 @@ export const ULTS = {
   no_retreat:     { type: 'noretreat', dur: 8, bonus: 0.3, charge: 1.1,
                     si: { dur: 0.5, bonus: 0.08 },
                     desc: 'NO RETREAT. For {dur}s Astrec is at the top tier of Death Wish whatever his HP (crits, cleave, shockwaves) with +{bonus} DMG on top, and nothing can take him below 1 HP. Not Yet\'s lock doesn\'t apply.' },
-  open_arms:      { type: 'openarms', dur: 10, charge: 1.1,
-                    si: { dur: 0.8 },
-                    desc: 'OPEN ARMS. For {dur}s all ten of his arms are on your cursor, whatever you had built up, and anything that touches you is parried by itself.' },
+  open_arms:      { type: 'openarms', dur: 10, armPct: 0.5, armRate: 0.5,           // lv1 (0+ Souls): Manic Puppeteer
+                    drumsDur: 8, gates: 3, gatePull: 230, soulEvery: 0.4, soulPct: 1.2,   // lv2 (5+): Hell Drums
+                    masterDur: 5, masterTick: 0.5, masterPct: 2.5, masterFinale: 12, cost: 0.5,   // lv3 (10, tap twice): Ascent of the Master
+                    charge: 1.1,
+                    si: { dur: 0.8, armPct: 0.08, soulPct: 0.25, masterPct: 0.4, masterFinale: 2 },
+                    desc: 'OBEY YOUR MASTER. What it is depends on his Souls. 0+: MANIC PUPPETEER: for {dur}s all ten of his doll arms are on your cursor, striking whatever\'s in their reach by themselves ({armPct} click DMG every {armRate}s each), and anything that touches you is parried by itself. 5+: HELL DRUMS: for {drumsDur}s hell gates open across the arena, drag in the enemies around them and keep letting out wicked souls that hunt enemies down ({soulPct} click DMG each). 10 (tap the ult twice): ASCENT OF THE MASTER: offer half of the HP you have and he comes: for {masterDur}s nothing can attack, everything on the field is purged ({masterPct} click DMG every {masterTick}s) and then burns for {masterFinale} more; he takes the Souls.' },
   red_mist:       { type: 'redmist', dur: 6, steal: 0.006, finale: 18, charge: 1.2,
                     si: { dur: 0.5, steal: 0.001, finale: 3 },
                     desc: 'RED MIST. No time stop: the fight goes on, and for {dur}s every click makes its target hemorrhage on the spot and heals you {steal} of your max HP, no hemorrhage runs out, and Bloodletting is free with no cooldown. When it ends, everything bleeding ruptures at once for {finale} click DMG (bosses by their wound).' },
@@ -328,13 +333,13 @@ export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['per', 'devour', 'deerHeal', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
-  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal', 't1', 't2', 't3', 'reviveHp', 'braceDR', 'breachCost', 'exposed']);
-const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct', 'shock', 'counterMin', 'counterPer', 'counterMax', 'breachPct', 'parryPct', 'reflectPct', 'stringPct', 'torPct', 'armPct']);
+  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal', 't1', 't2', 't3', 'reviveHp', 'braceDR', 'breachCost', 'exposed', 'soulDmg']);
+const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct', 'shock', 'counterMin', 'counterPer', 'counterMax', 'breachPct', 'parryPct', 'reflectPct', 'stringPct', 'torPct', 'armPct', 'riftPct', 'clonePct', 'soulPct', 'masterPct', 'masterFinale']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR' || key === 'breachLen' || key === 'stringLen' || key === 'gustR' || key === 'armR') return String(Math.round(v));
+  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR' || key === 'breachLen' || key === 'stringLen' || key === 'gustR' || key === 'armR' || key === 'riftR' || key === 'riftPull' || key === 'gunR' || key === 'cloneR' || key === 'gatePull' || key === 'maxSouls' || key === 'lv2At' || key === 'lv3At' || key === 'gates') return String(Math.round(v));
   if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
@@ -388,7 +393,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
   collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush', chill: 'freeze/click', qPct: 'Q DMG', qRadius: 'Q range', figPct: 'figure blast', wallLen: 'frost line', chain: 'chain frost', storm: 'storm', shatter: 'shatter',
-  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal', t1: 'tier I', t2: 'tier II', t3: 'tier III', shock: 'shockwave', counterPer: 'hit back', counterMax: 'max hit back', braceDR: 'brace', breachPct: 'breach', breachLen: 'breach length', parryWin: 'parry window', parryPct: 'parry strike', reflectPct: 'reflect', stringPct: 'strings', torPct: 'tornado', torDur: 'tornado time', armPct: 'per arm', exposed: 'exposed' };
+  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal', t1: 'tier I', t2: 'tier II', t3: 'tier III', shock: 'shockwave', counterPer: 'hit back', counterMax: 'max hit back', braceDR: 'brace', breachPct: 'breach', breachLen: 'breach length', parryWin: 'parry window', parryPct: 'parry strike', reflectPct: 'reflect', stringPct: 'strings', torPct: 'tornado', torDur: 'tornado time', armPct: 'per arm', exposed: 'exposed', riftPct: 'rift', riftDur: 'rift time', clonePct: 'shadow', gunDur: 'gunslinger time', soulDmg: 'per soul', soulPct: 'wicked soul', masterPct: 'purge', masterFinale: 'finale' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);
