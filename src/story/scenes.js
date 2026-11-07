@@ -305,10 +305,10 @@ export const SCENES = {
     'Right, ground zero is very far, it\'s gonna be a long trip.',
     { ambience: null },
     { music: 'audio/story/drive.mp3' },
+    { bg: 'story/bg/bus-interior.jpg' },
     { sfx: 'door_slam' },
     { sfx: 'car_drive', delay: 0.6, hold: false },
     'You and your team get inside the bus and hit the road right away, alongside the car carrier.',
-    { bg: null },
     'Very soon you start to get drowsy and fall asleep, drifting in and out of consciousness during the whole voyage.',
     // (end of the level: the music fades as the scene ends)
   ],
@@ -316,9 +316,10 @@ export const SCENES = {
   // ── Ground Zero (one level: arrival → the road as Ice and Bonk → the city as Astrec, Ramsf, Reef) ──
   'c1-gz-arrival': [
     { crawl: ['{title:13:09}', '{zone:GROUND ZERO — OUTSKIRTS}'] },
-    { bg: null },   // [ ] CG of the scenery (send the picture)
+    { bg: 'story/bg/bus-interior.jpg' },
     { sfx: 'bus_idle', hold: false },
     'The bus arrives at ground zero after a few hours. Everyone gets up from their seats and goes outside.',
+    { bg: null },   // [ ] CG of the scenery (send the picture)
     { show: 'bonk', at: 'left' }, { show: 'astrec', at: 'right' },
     ['bonk', 'Hell of a view innit? Can you imagine what\'s hiding there?!'],
     ['astrec', 'Don\'t even mention it bro, I\'m getting the feels already...'],
