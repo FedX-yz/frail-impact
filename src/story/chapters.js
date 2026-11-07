@@ -53,15 +53,9 @@ export const CHAPTERS = [
         rewards: { gems: 5 },
       },
       {
-        id: 'c1-outskirts', name: 'Z District', desc: 'Meet the squad, then clear the stragglers at the edge of town.',
+        id: 'c1-outskirts', name: 'Z District', desc: 'Meet the squad, then the long road to ground zero.',
         x: 24, y: 52, after: ['c1-briefing'],
-        intro: 'c1-outskirts-in', outro: 'c1-outskirts-out',
-        battle: { level: 1, kills: 8, elites: [], hordes: false, goal: 'defeat 8 enemies' },
-        codec: [
-          { when: 'start',   who: 'handler', text: 'Contacts ahead. Engage.' },
-          { when: 'kills 4', who: 'handler', text: 'Halfway. Keep the combo going.' },
-          { when: 'hit',     who: 'handler', text: 'Red means incoming. Get out of the red.' },
-        ],
+        intro: 'c1-outskirts-in',   // (a story-only level: it ends on the bus, no fight)
         rewards: { gems: 10, coins: 500 },
       },
       {

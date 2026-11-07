@@ -54,6 +54,10 @@ export const CAST = {
   ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png', dub: { dir: 'audio/dub/ramsf', engine: 'elevenlabs', id: 'JGjk9pqgjO7AVqVHjnbI', model: 'eleven_v4' } },
   // a few people talking at once (no picture)
   group:   { name: 'The Group', color: '#cbd5e1', portrait: null, sprite: null },
+  // the squad's other two (Z District): Entity has no art yet; Boi uses his card's cut-out (cast.boi)
+  entity:  { name: 'Entity',   color: '#a3e635', portrait: null, sprite: null },
+  // the crew guy who gets everyone on the bus (no name or art yet)
+  crew:    { name: 'Crew',     color: '#d6d3d1', portrait: null, sprite: null },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
 
   // Anemic Kaisen 5★s — cut-out sprites (Room 16 still uses his full art until he has one);
