@@ -19,6 +19,11 @@
 //               the ElevenLabs app with tools/import-voices.mjs. Optional settings: make-voices.mjs.
 //     moods:    optional extra sprites, e.g. { angry: 'story/cast/astrec-angry.png' }
 //               — use them with { show: 'astrec', mood: 'angry' } in a scene
+//     height:   optional: how tall the sprite stands in cutscenes (1 = full height). For
+//               cut-outs that aren't head to toe (a bust, a sitting cat), e.g. 0.8
+//     call:     optional: true = they're only ever heard over a call — their face is a
+//               moving voice line instead of a picture
+//     icon:     optional: 'group' = the face is a few people (for lines said by several)
 //   }
 //
 // Leave portrait/sprite as null and a placeholder is drawn instead, so the
@@ -53,14 +58,14 @@ export const CAST = {
   bonk:    { name: 'Bonk',     color: '#f87171', portrait: 'story/cast/bonk-icon.png',  sprite: 'sprites/bonk-platinum.png', dub: { dir: 'audio/dub/bonk', engine: 'elevenlabs', id: '4AAd0brMoUBx1UTrsTp0', model: 'eleven_v4' } },
   ramsf:   { name: 'Ramsf',    color: '#f472b6', portrait: 'story/cast/ramsf-icon.png', sprite: 'sprites/ramsf-platinum.png', dub: { dir: 'audio/dub/ramsf', engine: 'elevenlabs', id: 'JGjk9pqgjO7AVqVHjnbI', model: 'eleven_v4' } },
   // a few people talking at once (no picture)
-  group:   { name: 'The Group', color: '#cbd5e1', portrait: null, sprite: null },
+  group:   { name: 'The Group', color: '#cbd5e1', portrait: null, sprite: null, icon: 'group' },
   // the squad's other two (Z District): Entity has no art yet; Boi uses his card's cut-out (cast.boi)
   entity:  { name: 'Entity',   color: '#a3e635', portrait: null, sprite: null },
   // Dave: the crew guy (gets everyone on the bus, carries the Doctor's laptop). A cat.
-  dave:    { name: 'Dave',     color: '#fdba74', portrait: 'story/cast/dave-icon.png', sprite: 'story/cast/dave.png' },
+  dave:    { name: 'Dave',     color: '#fdba74', portrait: 'story/cast/dave-icon.png', sprite: 'story/cast/dave.png', height: 0.66 },
   // The Doctor: the voice on the laptop. The same robot voice as the hospital's unknown caller
   // (it's him), and the same dub when that's made
-  doctor:  { name: 'The Doctor', color: '#9ca3af', portrait: null, sprite: null, voice: { dir: 'audio/voice/stranger', preset: 'creepy' },
+  doctor:  { name: 'The Doctor', color: '#9ca3af', portrait: null, sprite: null, call: true, voice: { dir: 'audio/voice/stranger', preset: 'creepy' },
     dub: { dir: 'audio/dub/stranger', engine: 'elevenlabs', id: null } },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },
 
@@ -73,7 +78,7 @@ export const CAST = {
   ivy:         { name: 'Ivy',                color: '#D946EF', portrait: 'sprites/ivy.png', sprite: 'sprites/ivy.png', focus: [50, 10, 3.6] },
   doro:        { name: 'Doro',               color: '#FACC15', portrait: 'sprites/doro-proud.png', sprite: 'sprites/doro-proud.png', focus: [60, 19, 3.4] },
   bio_shadows: { name: 'Bio',                color: '#6366F1', portrait: 'sprites/bio-shadows.png', sprite: 'sprites/bio-shadows.png', focus: [52, 53, 3.0] },
-  boi:         { name: 'Boiyoujustgotoofed', color: '#22D3EE', portrait: 'sprites/boiyoujustgotoofed.png', sprite: 'sprites/boiyoujustgotoofed.png', focus: [36, 15, 3.6] },
+  boi:         { name: 'Boiyoujustgotoofed', color: '#22D3EE', portrait: 'sprites/boiyoujustgotoofed.png', sprite: 'sprites/boiyoujustgotoofed.png', focus: [36, 15, 3.6], height: 0.84 },
   astrec_hr:   { name: 'Astrec',             color: '#FB7185', portrait: 'sprites/astrec-hr.png', sprite: 'sprites/astrec-hr.png', focus: [67, 15, 3.6] },
 
   // Narrator lines ("plain strings" in a scene) use this

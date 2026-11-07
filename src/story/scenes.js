@@ -5,7 +5,11 @@
 // A scene is a list of steps, played top to bottom:
 //
 //   ['astrec', 'Hello.']              someone talks (id from cast.js)
-//   'The city was quiet.'             narration (no name box)
+//   'The city was quiet.'             narration (no name box: prose across the bottom)
+//   '-BOOM!-'                         narration between dashes is a sound: the word slams onto the screen
+//   ['ice', 'HOLY SHIT!!!']           a line in capitals is shouted (short ones are drawn bigger)
+//                                       Red Mist, Havoc, Demon Core, Ground Zero and Big Boy are coloured
+//                                       wherever they come up (the list: KEY_TERMS in codecStyle.js)
 //   { bg: 'story/bg/city.png' }       change the background (null = plain dark)
 //   { show: 'astrec', at: 'left' }    bring a character in: left / center / right
 //                                       optional mood: 'angry' (cast.js → moods)

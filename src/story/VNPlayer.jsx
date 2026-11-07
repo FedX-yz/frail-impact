@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SCENES } from './scenes';
 import { CAST } from './cast';
 import { asset, testFlag } from './story';
 import { Portrait } from './Codec';
-import { CODEC, useTypewriter } from './codecStyle';
+import { CODEC, useTypewriter, termPieces, isShout, sfxWord } from './codecStyle';
 import { playSFX, playPress, storyTrack, stopStoryTrack, playVoice, stopVoice, preloadSound, soundLength } from '../utils/sfx';
 import { voiceFile } from './voice';
 import { dubOn } from '../utils/secrets';
@@ -15,6 +15,12 @@ import InterviewTest from './InterviewTest';
 const BASE = import.meta.env.BASE_URL;
 const sfxUrl = (n) => `${BASE}sounds/${n.replace(/\.mp3$/, '')}.mp3`;   // { sfx: 'name' } → public/sounds/name.mp3
 const NO_STEPS = [];
+const DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
+// the stage when a scene has no background yet, and a little film grain over it
+const STAGE = 'radial-gradient(ellipse 75% 60% at 50% 34%, #1c283c 0%, #0c121d 55%, #05070c 100%)';
+const GRAIN = `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/></filter><rect width='180' height='180' filter='url(#n)'/></svg>")}")`;
+// each sound word leans its own way (-BOOM!- one way, -Kabam!- the other)
+const sfxTilt = (w) => { const n = [...w].reduce((a, ch) => a + ch.charCodeAt(0), 0); return (n % 2 ? -1 : 1) * (3 + (n % 4)); };
 // spots for { show, at }. For four people at once, use p1…p4 (evenly spread)
 const POS = { left: 24, center: 50, right: 76, farleft: 10, farright: 90, p1: 15, p2: 38, p3: 62, p4: 85 };
 
@@ -74,9 +80,13 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const [auto, setAuto] = useState(false);
   const [skip, setSkip] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const logRef = useRef(null);
+  useEffect(() => { if (showLog && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [showLog]);   // open on the newest lines
   const mgr = profile?.name || 'Manager';
   const text = (st.line?.text ?? '').replaceAll('{manager}', mgr);
-  const [shown, finish] = useTypewriter(text, 44, skip);
+  const sfx = st.line?.who === 'narrator' ? sfxWord(text) : null;   // -BOOM!- (shows at once)
+  const [shown, finish] = useTypewriter(text, 44, skip || !!sfx);
+  const pieces = useMemo(() => termPieces(text), [text]);
   const typed = shown >= text.length;
   const ended = useRef(false);
 
@@ -165,6 +175,21 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
     if (st.done && !ended.current) { ended.current = true; onEnd(st.flags); }
   }, [st.done, st.flags, onEnd]);
 
+  // ?debug: window.__vn jumps around the scene (for tests and screenshots).
+  // jump(n) plays everything up to step n silently and stops at the first line, choice… from there
+  const finRef = useRef(finish); finRef.current = finish;
+  useEffect(() => {
+    if (!DEBUG) return;
+    const jump = (n) => {
+      let s = run(steps, 0, { bg: undefined, actors: [], flags: { ...flags }, line: null, log: [] }, true);
+      for (let g = 0; g < 3000 && !s.done && s.i < n; g++) s = run(steps, s.i + 1, s, true);
+      setSt(s);
+    };
+    const find = (t) => steps.findIndex(x => (typeof x === 'string' ? x : Array.isArray(x) ? x[1] : '')?.includes?.(t));
+    window.__vn = { steps, jump, find, finish: () => finRef.current() };
+    return () => { delete window.__vn; };
+  }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const next = useCallback(() => {
     if (st.done || st.choice || st.application || st.test || st.ending || st.credits || showLog) return;
     if (st.crawl) { setCrawlTap(t => t + 1); return; }
@@ -178,7 +203,9 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const choose = (c) => {
     playPress();
     setSt(prev => {
-      const p = { ...prev, flags: { ...prev.flags, ...(c.set ?? {}) }, log: [...prev.log, ...(prev.line ? [prev.line] : []), { who: 'choice', text: `▸ ${c.text}` }], line: null };
+      // (the line the choice came up under is usually in the log already)
+      const said = prev.line && prev.log[prev.log.length - 1] !== prev.line ? [prev.line] : [];
+      const p = { ...prev, flags: { ...prev.flags, ...(c.set ?? {}) }, log: [...prev.log, ...said, { who: 'choice', text: `▸ ${c.text}` }], line: null };
       const j = c.goto ? steps.findIndex(x => x?.label === c.goto) : -1;
       return run(steps, j >= 0 ? j : prev.i + 1, p, signedRef.current);
     });
@@ -217,95 +244,124 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
   const cast0 = st.line ? CAST[st.line.who] ?? { name: st.line.who, color: CODEC.yellow } : null;
   const speaker = cast0 && st.line.as ? { ...cast0, name: st.line.as } : cast0;   // ['ice', '…', '???'] hides the name
   const narr = st.line?.who === 'narrator';
+  const shout = !narr && isShout(text);
+  const bigShout = shout && text.length <= 42;   // a short shout is drawn bigger
   const bgUrl = st.bg ? asset(st.bg) : null;
-  const tall = mobile && portrait;
+  const tall = mobile && portrait;   // phone held upright
+  const land = mobile && !portrait;  // phone on its side: everything smaller
+  // sizes: face (0 = it goes on the name tab), text, name, the box's least height (= the face's), …
+  const S = tall ? { face: 0, say: 16, name: 19, box: 124, pad: '26px 14px 14px', prose: 20, opt: 16, stage: 52 }
+          : land ? { face: 74, say: 15, name: 17, box: 80, pad: '19px 16px 10px', prose: 18, opt: 15, stage: 88 }
+          : { face: 120, say: 20, name: 24, box: 126, pad: '28px 24px 18px', prose: 27, opt: 18, stage: 82 };
+  const next1 = typed && !st.choice;   // the ▼ that says "tap to go on"
 
   return (
     <div onPointerDown={e => { if (e.button === 0) next(); }}
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#06080f', overflow: 'hidden', userSelect: 'none', cursor: 'pointer', fontFamily: CODEC.font }}>
       <div key={`shake${st.shakeN ?? 0}`} className={st.shakeN ? 'vn-shake' : ''} style={{ position: 'absolute', inset: 0 }}>
-        {/* background */}
+        {/* background (none yet: a dark stage with a little film grain) */}
         <div key={bgUrl ?? 'none'} className="vn-bg" style={{ position: 'absolute', inset: 0,
-          background: bgUrl ? `#06080f url(${bgUrl}) center/cover no-repeat` : 'radial-gradient(ellipse at 50% 30%, #1d2b44, #06080f 75%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(transparent 55%, rgba(0,0,0,0.55))' }} />
+          background: bgUrl ? `#06080f url(${bgUrl}) center/cover no-repeat` : STAGE }} />
+        {!bgUrl && <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, opacity: 0.07, pointerEvents: 'none' }} />}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'radial-gradient(ellipse 90% 80% at 50% 40%, transparent 55%, rgba(0,0,0,0.5)), linear-gradient(transparent 55%, rgba(0,0,0,0.55))' }} />
 
-        {/* characters */}
+        {/* characters: all the same height (cast.js → height for cut-outs that aren't head to toe) */}
         {st.actors.map(a => {
           const c = CAST[a.id] ?? {};
           const src = asset((a.mood && c.moods?.[a.mood]) || c.sprite);
           const talking = st.line?.who === a.id;
           const dim = st.line && !narr && !talking;
+          const part = (c.height ?? 1) < 1;   // a bust: its cut edge sinks behind the text box
           return (
-            <div key={a.id} className="vn-actor" style={{ position: 'absolute', bottom: tall ? '26%' : 0, left: `${POS[a.at] ?? 50}%`,
-              transform: `translateX(-50%) scale(${talking ? 1.03 : 1})`, transformOrigin: 'bottom center',
-              height: tall ? '52%' : '82%', aspectRatio: '0.7', filter: dim ? 'brightness(0.45) saturate(0.6)' : 'none', zIndex: talking ? 3 : 2, pointerEvents: 'none' }}>
-              {src ? <img src={src} alt={c.name} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'bottom' }} />
-                   : <Silhouette color={c.color ?? '#888'} name={c.name ?? a.id} />}
+            <div key={a.id} className="vn-actor" style={{ position: 'absolute', bottom: tall ? (part ? '18%' : '26%') : 0, left: `${POS[a.at] ?? 50}%`,
+              transform: `translateX(-50%) scale(${talking ? 1.03 : 1})`, transformOrigin: 'bottom center', height: `${S.stage * (c.height ?? 1)}%`,
+              filter: dim ? 'brightness(0.5) saturate(0.7)' : 'none', zIndex: talking ? 3 : 2, pointerEvents: 'none' }}>
+              {!part && <div style={{ position: 'absolute', left: '50%', bottom: '-1.5%', width: '80%', height: '4%', transform: 'translateX(-50%)', background: 'radial-gradient(closest-side, rgba(0,0,0,0.6), transparent)' }} />}
+              {src ? <img src={src} alt={c.name} draggable={false} style={{ position: 'relative', display: 'block', height: '100%', width: 'auto' }} />
+                   : <Silhouette color={c.color ?? '#888'} />}
             </div>
           );
         })}
       </div>
 
       {/* top buttons */}
-      <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 10 }} onPointerDown={e => e.stopPropagation()}>
+      <div style={{ position: 'absolute', top: land ? 6 : 10, right: land ? 6 : 10, display: 'flex', gap: 6, zIndex: 10 }} onPointerDown={e => e.stopPropagation()}>
         <button className={`vn-btn${auto ? ' on' : ''}`} onClick={() => setAuto(v => !v)}>AUTO</button>
         <button className={`vn-btn${skip ? ' on' : ''}`} onClick={() => setSkip(v => !v)} title="Skip to the next choice or the end">SKIP ▸▸</button>
         <button className="vn-btn" onClick={() => setShowLog(true)}>LOG</button>
       </div>
 
-      {/* text box */}
-      {st.line && (
-        <div style={{ position: 'absolute', left: '50%', bottom: tall ? 12 : 18, transform: 'translateX(-50%)', width: 'min(1040px, calc(100% - 20px))', zIndex: st.choice ? 8 : 5,
-          display: 'flex', gap: tall ? 8 : 12, alignItems: 'stretch' }}>
-          {!narr && speaker && !tall && <Portrait who={st.line.who} size={118} />}
-          <div style={{ flex: 1, minWidth: 0, position: 'relative', minHeight: tall ? 128 : 118,
-            background: narr ? 'rgba(6,10,18,0.86)' : `radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1.2px) 0 0/4px 4px, linear-gradient(${CODEC.green}, ${CODEC.greenDark})`,
-            border: `3px solid ${narr ? '#64748b' : CODEC.yellow}`, padding: tall ? '22px 14px 14px' : '24px 22px 16px', boxShadow: '0 6px 18px rgba(0,0,0,0.5)' }}>
-            {!narr && speaker?.name && (
-              <div style={{ position: 'absolute', top: -16, left: 14, background: '#0b1a12', border: `3px solid ${speaker.color ?? CODEC.yellow}`, color: speaker.color ?? CODEC.yellow,
-                fontWeight: 900, fontSize: tall ? 13 : 15, letterSpacing: 1.5, padding: '2px 12px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {tall && <Portrait who={st.line.who} size={26} border={speaker.color ?? CODEC.yellow} />}
-                {speaker.name}
+      {/* a sound line (-BOOM!-): the word, big, in the middle */}
+      {st.line && sfx && (
+        <div key={lineKey} className="vn-sfx-wrap" style={{ zIndex: 5 }}>
+          <span className="vn-sfx" style={{ fontSize: `min(${land ? 120 : 190}px, calc(${land ? 60 : 82}vw / ${(sfx.length * 0.74).toFixed(2)}))`, '--r': `${sfxTilt(sfx)}deg` }}>{sfx}</span>
+        </div>
+      )}
+
+      {/* narration: prose on a dark band, no box */}
+      {st.line && narr && !sfx && (
+        <div className="vn-prose" style={{ zIndex: st.choice ? 8 : 5, padding: tall ? '70px 20px 34px' : land ? '44px 40px 16px' : '110px 48px 44px' }}>
+          <div className="vn-prose-text" style={{ fontSize: S.prose, lineHeight: 1.45, maxWidth: tall ? 'none' : 860 }}>
+            <Typed pieces={pieces} shown={shown} />
+          </div>
+          {next1 && <div className="vn-next" style={{ position: 'absolute', right: tall ? 16 : 30, bottom: tall ? 12 : 18, color: '#cbd5e1', fontSize: 12 }}>▼</div>}
+        </div>
+      )}
+
+      {/* someone talking: their face and the codec box, their name on a tab */}
+      {st.line && !narr && (
+        <div style={{ position: 'absolute', left: '50%', bottom: tall ? 12 : land ? 8 : 20, transform: 'translateX(-50%)', width: 'min(1060px, calc(100% - 20px))', zIndex: st.choice ? 8 : 5,
+          display: 'flex', gap: land ? 10 : 14, alignItems: 'stretch' }}>
+          {S.face > 0 && speaker && <Portrait who={st.line.who} size={S.face} />}
+          <div className="vn-box" style={{ minHeight: S.box, padding: S.pad }}>
+            {speaker?.name && (
+              <div className="vn-name-wrap" style={{ position: 'absolute', top: tall ? -24 : land ? -17 : -21, left: tall ? 10 : 14 }}>
+                <div className="vn-name" style={{ '--c': speaker.color ?? CODEC.yellow, fontSize: S.name, paddingLeft: tall ? 4 : 12 }}>
+                  {tall && <Portrait who={st.line.who} size={34} border="#0a120d" />}
+                  {speaker.name}
+                </div>
               </div>
             )}
-            <div style={{ fontWeight: narr ? 500 : 700, fontSize: (tall ? 16 : 21) + (narr ? 5 : 0), lineHeight: narr ? 1.3 : 1.4, color: narr ? '#e2e8f0' : CODEC.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              fontFamily: narr ? 'var(--font-narration)' : undefined, letterSpacing: narr ? 0.5 : undefined }}>
-              {text.slice(0, shown)}<span style={{ opacity: 0 }}>{text.slice(shown)}</span>
+            <div key={lineKey} className={`vn-say${shout ? ' shout' : ''}${bigShout ? ' big' : ''}`}
+              style={{ fontWeight: 700, fontSize: Math.round(S.say * (bigShout ? 1.3 : 1)), lineHeight: 1.45 }}>
+              <Typed pieces={pieces} shown={shown} />
             </div>
-            {typed && !st.choice && <div className="vn-next" style={{ position: 'absolute', right: 12, bottom: 6, color: narr ? '#cbd5e1' : CODEC.yellow, fontSize: 14 }}>▼</div>}
+            {next1 && <div className="vn-next" style={{ position: 'absolute', right: 12, bottom: 7, color: CODEC.yellow, fontSize: 12 }}>▼</div>}
           </div>
         </div>
       )}
 
-      {/* choices */}
+      {/* choices: what you say back */}
       {st.choice && (
-        <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 7, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
-          background: 'rgba(3,6,12,0.55)', paddingBottom: st.line ? (tall ? 140 : 150) : 0 }}>
-          {st.choice.map((c, n) => (
-            <TapButton key={n} className="vn-choice" onClick={() => choose(c)} autoFocus={n === 0}>
-              <span style={{ opacity: 0.6, marginRight: 10 }}>{n + 1}</span>{c.text.replaceAll('{manager}', mgr)}
-            </TapButton>
-          ))}
+        <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(rgba(3,6,12,0.3), rgba(3,6,12,0.62))', boxSizing: 'border-box',
+          padding: `${land ? 34 : 50}px 14px ${st.line ? (narr ? (tall ? 190 : land ? 96 : 190) : (tall ? 160 : land ? 112 : 180)) : 20}px` }}>
+          <div style={{ width: 'min(620px, 100%)', display: 'flex', flexDirection: 'column', gap: land ? 8 : 11 }}>
+            <div className="vn-name-wrap" style={{ alignSelf: 'flex-start', marginBottom: 2 }}>
+              <div className="vn-name" style={{ '--c': CODEC.yellow, fontSize: S.name }}>{mgr}</div>
+            </div>
+            {st.choice.map((c, n) => (
+              <TapButton key={n} className="vn-choice vn-opt" style={{ fontSize: S.opt, padding: land ? '8px 14px' : undefined, animationDelay: `${n * 70}ms` }} onClick={() => choose(c)} autoFocus={n === 0}>
+                <span className="k">{n + 1}</span><span>{c.text.replaceAll('{manager}', mgr)}</span>
+              </TapButton>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* backlog */}
+      {/* backlog: everything said so far, newest at the bottom */}
       {showLog && (
-        <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 11, background: 'rgba(3,8,6,0.94)', display: 'flex', flexDirection: 'column', cursor: 'default' }}>
-          <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: `2px solid ${CODEC.yellow}55` }}>
-            <span style={{ color: CODEC.yellow, fontWeight: 900, letterSpacing: 2, flex: 1 }}>LOG</span>
+        <div onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 11, background: '#030806', display: 'flex', flexDirection: 'column', cursor: 'default' }}>
+          <div style={{ display: 'flex', alignItems: 'center', padding: land ? '6px 14px' : '12px 18px', borderBottom: `1px solid ${CODEC.yellow}40` }}>
+            <span style={{ color: CODEC.yellow, fontFamily: 'var(--font-dramatic)', fontWeight: 700, fontSize: land ? 20 : 26, flex: 1 }}>Log</span>
             <button className="vn-btn" onClick={() => setShowLog(false)}>CLOSE ✕</button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 900, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-            {[...st.log, ...(st.line ? [st.line] : [])].map((l, n) => {
-              const c = CAST[l.who];
-              return (
-                <div key={n} style={{ color: l.who === 'choice' ? '#93c5fd' : l.who === 'narrator' ? '#94a3b8' : CODEC.text, fontSize: l.who === 'narrator' ? 19 : 15, lineHeight: 1.4, fontFamily: l.who === 'narrator' ? 'var(--font-narration)' : undefined }}>
-                  {(l.as ?? c?.name) && <b style={{ color: c?.color, marginRight: 8, textTransform: 'uppercase' }}>{l.as ?? c.name}</b>}{l.text.replaceAll('{manager}', mgr)}
-                </div>
-              );
-            })}
-            {!st.log.length && !st.line && <div style={{ color: '#667' }}>Nothing yet.</div>}
+          <div ref={logRef} style={{ flex: 1, overflowY: 'auto', padding: tall ? '16px 16px 30px' : '20px 24px 40px' }}>
+            <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: tall ? 14 : 12 }}>
+              {[...st.log, ...(st.line && st.log[st.log.length - 1] !== st.line ? [st.line] : [])].map((l, n) => <LogRow key={n} l={l} mgr={mgr} tall={tall} />)}
+              {!st.log.length && !st.line && <div style={{ color: '#667' }}>Nothing yet.</div>}
+            </div>
           </div>
         </div>
       )}
@@ -318,6 +374,36 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
       {st.application && (
         <JobApplication initialName={profile?.name ?? ''} onSigned={p => { onSign?.(p); setSt(prev => run(steps, prev.i + 1, prev, signedRef.current)); }} />
       )}
+    </div>
+  );
+}
+
+// A line's text, typed out to `shown` letters (the rest is there but invisible, so the
+// words don't jump around as they appear). Key terms keep their colour (codecStyle.js).
+function Typed({ pieces, shown }) {
+  let left = shown;
+  return pieces.map((p, i) => {
+    const n = Math.max(0, Math.min(p.t.length, left));
+    left -= p.t.length;
+    return (
+      <span key={i} className={p.k ? `kt-${p.k}` : undefined}>
+        {p.t.slice(0, n)}{n < p.t.length && <span style={{ opacity: 0 }}>{p.t.slice(n)}</span>}
+      </span>
+    );
+  });
+}
+
+// One line of the backlog: the name in its colour (your answers under your name), then the words
+function LogRow({ l, mgr, tall }) {
+  const narr = l.who === 'narrator', mine = l.who === 'choice';
+  const c = CAST[l.who];
+  const name = mine ? mgr : (l.as ?? c?.name);
+  const words = (mine ? l.text.replace(/^▸\s*/, '') : l.text).replaceAll('{manager}', mgr);
+  if (narr) return <div style={{ paddingLeft: tall ? 0 : 168, color: '#9aa6b8', fontFamily: 'var(--font-narration)', fontStyle: 'italic', fontSize: tall ? 17 : 19, lineHeight: 1.4 }}>{words}</div>;
+  return (
+    <div style={{ display: tall ? 'block' : 'grid', gridTemplateColumns: '150px 1fr', columnGap: 18, alignItems: 'baseline' }}>
+      <div style={{ textAlign: tall ? 'left' : 'right', color: mine ? CODEC.yellow : (c?.color ?? '#cbd5e1'), fontFamily: 'var(--font-dramatic)', fontWeight: 700, fontSize: tall ? 16 : 18, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{name}</div>
+      <div style={{ color: mine ? '#fde68a' : CODEC.text, fontSize: tall ? 14 : 15, lineHeight: 1.45 }}>{mine && <span style={{ opacity: 0.6, marginRight: 6 }}>▸</span>}{words}</div>
     </div>
   );
 }
@@ -410,12 +496,22 @@ function EndingCard({ ending, onDone, tall }) {
   );
 }
 
-function Silhouette({ color, name }) {
+// No sprite yet: a dark standing figure, lit at the edges in their colour
+function Silhouette({ color }) {
+  const id = useId().replace(/:/g, '');
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <div style={{ position: 'absolute', left: '28%', right: '28%', top: '6%', aspectRatio: '1', borderRadius: '50%', background: `${color}55`, border: `3px solid ${color}aa` }} />
-      <div style={{ position: 'absolute', left: '12%', right: '12%', top: '34%', bottom: 0, borderRadius: '45% 45% 0 0', background: `${color}44`, border: `3px solid ${color}aa`, borderBottom: 'none' }} />
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: '12%', textAlign: 'center', color: '#fff', fontWeight: 900, fontSize: 14, letterSpacing: 1, textShadow: '0 1px 3px #000', opacity: 0.8 }}>{name}</div>
-    </div>
+    <svg viewBox="0 0 120 300" style={{ position: 'relative', display: 'block', height: '100%', width: 'auto', aspectRatio: '0.4', overflow: 'visible' }}>
+      <defs>
+        {/* lit from above: the edge light and the body both fade into the dark towards the feet */}
+        <linearGradient id={`b${id}`} gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="295"><stop offset="0" stopColor="#273246" /><stop offset=".55" stopColor="#141b27" /><stop offset="1" stopColor="#080b11" /></linearGradient>
+        <linearGradient id={`s${id}`} gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="295"><stop offset="0" stopColor={color} stopOpacity=".85" /><stop offset=".5" stopColor={color} stopOpacity=".4" /><stop offset=".95" stopColor={color} stopOpacity="0" /></linearGradient>
+        <radialGradient id={`g${id}`}><stop offset="0" stopColor={color} stopOpacity="0.17" /><stop offset="1" stopColor={color} stopOpacity="0" /></radialGradient>
+      </defs>
+      <ellipse cx="60" cy="125" rx="84" ry="150" fill={`url(#g${id})`} />
+      <g fill={`url(#b${id})`} stroke={`url(#s${id})`} strokeWidth="1.8" strokeLinejoin="round">
+        <path vectorEffect="non-scaling-stroke" d="M53 50 L53 60 C40 61 26 64 20 76 C16 92 15 106 14 122 L12 158 Q8 170 12 176 Q20 178 23 168 L25 158 L31 98 L35 140 L33 162 L37 224 L39 284 Q35 292 40 293 L55 293 Q57 289 55 284 L58 180 Q60 176 62 180 L65 284 Q63 289 65 293 L80 293 Q85 292 81 284 L83 224 L87 162 L85 140 L89 98 L95 158 L97 168 Q100 178 108 176 Q112 170 108 158 L106 122 C105 106 104 92 100 76 C94 64 80 61 67 60 L67 50 Z" />
+        <ellipse cx="60" cy="33" rx="16" ry="20" vectorEffect="non-scaling-stroke" />
+      </g>
+    </svg>
   );
 }
