@@ -36,6 +36,12 @@
 //     pause: true  → the fight stops until the player taps (for important lines)
 //     if:    'flag' → only when that flag is set
 //   rewards: { gems, coins } — first clear only
+//   steps: [...]  instead of intro/battle/outro, a level can chain any number of each, in order:
+//     { scene: 'id' }                                          a cutscene
+//     { battle: { ... }, codec: [...], name: 'The Road',       a fight (name: its title, else the level's)
+//       play: 37, playLevel: 30 }                              …that hands you this card (id in
+//                                                              characters.js) at this level; your
+//                                                              deck sits it out
 // }
 //
 // Everything below is SAMPLE content to show the format. Replace it freely.
@@ -59,8 +65,41 @@ export const CHAPTERS = [
         rewards: { gems: 10, coins: 500 },
       },
       {
+        // Ground Zero: the Doctor's briefing, Big Boy, then the road (as Ice, then Bonk: tutorials for
+        // their 6★ kits) and the city (as Astrec, Ramsf, then Reef)
+        id: 'c1-gz', name: 'Ground Zero', desc: 'The Doctor\'s plan, a tank called Big Boy, and the first of the highest-caliber Havoc.',
+        x: 32, y: 62, after: ['c1-outskirts'],
+        steps: [
+          { scene: 'c1-gz-arrival' },
+          { name: 'The Main Road — Ice', play: 37, playLevel: 30,
+            battle: { level: 2, kills: 10, elites: [], hordes: false, goal: 'hold them off: defeat 10 enemies' },
+            codec: [
+              { when: 'start', who: 'ice', pause: true, text: 'Click to build Freeze. Full meter: it freezes solid. Hold M1 and let go to Shatter everything frozen.' },
+              { when: 'kills 3', who: 'ice', text: 'Drag to draw a frost line. M2 for ice figures, Q to flash-freeze a crowd.' },
+            ] },
+          { name: 'The Main Road — Bonk', play: 38, playLevel: 30,
+            battle: { level: 2, kills: 10, elites: [], hordes: false, goal: 'hold them off: defeat 10 enemies' },
+            codec: [
+              { when: 'start', who: 'bonk', pause: true, text: 'Claw \'em! Every hit builds Bleed. Full meter, they hemorrhage. Hold M1 and let go: Rupture pops every bleeder at once!' },
+              { when: 'kills 3', who: 'bonk', text: 'M2 grabs one: carry it, slam it or throw it! Drag to rake \'em, Q for Bloodletting.' },
+            ] },
+          { scene: 'c1-gz-chase' },
+          { name: 'The City — Astrec', play: 40, playLevel: 30,
+            battle: { level: 3, kills: 14, goal: 'the swarm: defeat 14 enemies' },
+            codec: [{ when: 'start', who: 'astrec', text: 'The less HP I got, the harder I hit! Hold M1 to brace and hit back, M2 makes \'em go all in, Q patches me up. Bring it!' }] },
+          { name: 'The City — Ramsf', play: 39, playLevel: 30,
+            battle: { level: 3, kills: 14, goal: 'the swarm: defeat 14 enemies' },
+            codec: [{ when: 'start', who: 'ramsf', text: 'Tap M2 just before a hit lands to parry it. Hold M2 for a rift. Q sends out my shadow.' }] },
+          { name: 'The City — Reef', play: 41, playLevel: 30,
+            battle: { level: 3, kills: 14, goal: 'the swarm: defeat 14 enemies' },
+            codec: [{ when: 'start', who: 'reef', text: 'Whatever we kill, its soul is mine. M2 calls them back up. Hold M2 to choose which.' }] },
+          { scene: 'c1-gz-swarm-out' },
+        ],
+        rewards: { gems: 15, coins: 1000 },
+      },
+      {
         id: 'c1-street', name: 'Main Street', desc: 'Bigger ones show up. Watch their wind-ups.',
-        x: 40, y: 70, after: ['c1-outskirts'],
+        x: 40, y: 70, after: ['c1-gz'],
         intro: 'c1-street-in',
         battle: { level: 2, kills: 12, elites: ['bonk'], goal: 'defeat 12 enemies' },
         codec: [

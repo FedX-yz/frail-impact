@@ -5,6 +5,7 @@ import { SCENES } from './scenes';
 import { CAST } from './cast';
 import { makeEndlessStage, MODIFIERS } from '../combat/stages';
 import { ENEMY_TYPES } from '../combat/enemies';
+import { CHARACTERS } from '../data/characters';
 
 const BASE = import.meta.env.BASE_URL;
 // 'story/bg/city.png' → full URL for the site
@@ -91,17 +92,23 @@ export function checkStory() {
       ids.add(n.id);
       (n.after ?? []).forEach(a => { if (!ch.nodes.some(x => x.id === a) && !findNode(a)) out.push(`${at}: "after" points to unknown node "${a}"`); });
       ['intro', 'outro'].forEach(k => { if (n[k] && !SCENES[n[k]]) out.push(`${at}: ${k} scene "${n[k]}" not found in scenes.js`); });
-      if (!n.battle && !n.intro && !n.outro) out.push(`${at}: has no battle and no scenes`);
-      const b = n.battle;
-      if (b) {
-        if (b.boss && ENEMY_TYPES[b.boss]?.tier !== 'boss') out.push(`${at}: boss "${b.boss}" isn't a boss in enemies.js`);
-        [...(b.enemies ?? []), ...(b.elites ?? [])].forEach(e => { if (!ENEMY_TYPES[e]) out.push(`${at}: unknown enemy "${e}"`); });
-        if (b.modifier && !MODIFIERS[b.modifier]) out.push(`${at}: unknown modifier "${b.modifier}"`);
+      if (!n.battle && !n.intro && !n.outro && !n.steps?.length) out.push(`${at}: has no battle and no scenes`);
+      // a level with steps: check each one; otherwise its one battle and codec
+      const parts = n.steps ? n.steps.map((x, i) => ({ ...x, at: `${at} step ${i + 1}` })) : [{ battle: n.battle, codec: n.codec, at }];
+      for (const part of parts) {
+        if (part.scene && !SCENES[part.scene]) out.push(`${part.at}: scene "${part.scene}" not found in scenes.js`);
+        if (part.play != null && !CHARACTERS.some(c => c.id === part.play)) out.push(`${part.at}: plays card ${part.play}, which doesn't exist`);
+        const b = part.battle;
+        if (b) {
+          if (b.boss && ENEMY_TYPES[b.boss]?.tier !== 'boss') out.push(`${part.at}: boss "${b.boss}" isn't a boss in enemies.js`);
+          [...(b.enemies ?? []), ...(b.elites ?? [])].forEach(e => { if (!ENEMY_TYPES[e]) out.push(`${part.at}: unknown enemy "${e}"`); });
+          if (b.modifier && !MODIFIERS[b.modifier]) out.push(`${part.at}: unknown modifier "${b.modifier}"`);
+        }
+        (part.codec ?? []).forEach((l, i) => {
+          castOk(l.who, `${part.at} codec line ${i + 1}`);
+          if (!WHEN_TYPES.has(parseWhen(l.when).type)) out.push(`${part.at} codec line ${i + 1}: don't understand when "${l.when}"`);
+        });
       }
-      (n.codec ?? []).forEach((l, i) => {
-        castOk(l.who, `${at} codec line ${i + 1}`);
-        if (!WHEN_TYPES.has(parseWhen(l.when).type)) out.push(`${at} codec line ${i + 1}: don't understand when "${l.when}"`);
-      });
     }
   }
   for (const [id, steps] of Object.entries(SCENES)) {

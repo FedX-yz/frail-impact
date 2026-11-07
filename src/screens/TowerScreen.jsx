@@ -16,7 +16,9 @@ import { withIcons } from '../utils/withIcons';
 const BASE = import.meta.env.BASE_URL;
 const MAP_ASPECT = 16 / 9;
 
-const kindOf = (n) => (!n.battle ? 'story' : n.battle.boss ? 'boss' : 'battle');
+// (a level with steps: its first fight stands for it; a boss anywhere in it makes it a boss level)
+const fightsOf = (n) => (n.steps ? n.steps.filter(x => x.battle).map(x => x.battle) : n.battle ? [n.battle] : []);
+const kindOf = (n) => { const f = fightsOf(n); return !f.length ? 'story' : f.some(b => b.boss) ? 'boss' : 'battle'; };
 const ICON = { story: 'book', battle: 'swords', boss: 'skull' };   // components/Icon.jsx
 
 // The Tower: chapter maps made of nodes. Pick a node → play its level.
@@ -244,7 +246,7 @@ export default function TowerScreen({ navigate, story, setStory, stats, deck, de
 
 function NodeCard({ node, story, mobile, onPlay, onClose }) {
   const cleared = !!story.cleared[node.id];
-  const b = node.battle;
+  const fights = fightsOf(node), b = fights.find(x => x.boss) ?? fights[0];
   const kind = kindOf(node);
   const mod = b?.modifier && MODIFIERS[b.modifier];
   const r = node.rewards ?? {};
@@ -261,6 +263,7 @@ function NodeCard({ node, story, mobile, onPlay, onClose }) {
       {node.desc && <div style={{ color: '#d1fae5', fontSize: 13, fontFamily: 'var(--font-ui)' }}>{node.desc}</div>}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
         {b && <span className="tw-chip">LV {b.level ?? 1}</span>}
+        {fights.length > 1 && <span className="tw-chip">⚔ {fights.length} stages</span>}
         {b?.boss && <span className="tw-chip" style={{ borderColor: '#ff6b4a', color: '#ffb4a2' }}><Icon name="skull" /> {ENEMY_TYPES[b.boss]?.name}</span>}
         {mod && <span className="tw-chip" style={{ borderColor: mod.color, color: mod.color }} title={mod.desc}>◆ {mod.name}</span>}
         {(node.intro || node.outro) && <span className="tw-chip"><Icon name="book" /> cutscene</span>}

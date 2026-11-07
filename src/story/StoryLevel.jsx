@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import BattleArena from '../combat/BattleArena';
 import { createBattle, fmt } from '../combat/engine';
+import { computePlayerStats } from '../combat/stats';
+import { CHARACTERS } from '../data/characters';
 import { ENEMY_TYPES } from '../combat/enemies';
 import { makeStoryStage, parseWhen, testFlag } from './story';
 import { CodecPopup } from './Codec';
@@ -32,12 +34,32 @@ function triggered(w, s, ev) {
   }
 }
 
-// One story level: intro cutscene → battle (with codec lines) → outro cutscene → results.
-export default function StoryLevel({ node, story, stats, mainCard, mobile, portrait, devMode, onReward, onComplete, onLeave, profile, onSign }) {
+// A level's steps, in order: { scene } or { battle, codec, play, name }. Most levels are just
+// intro → battle → outro (chapters.js); a level with node.steps can chain several of each.
+function levelSteps(node) {
+  if (node.steps) return node.steps;
+  return [node.intro && { scene: node.intro }, node.battle && { battle: node.battle, codec: node.codec }, node.outro && { scene: node.outro }].filter(Boolean);
+}
+// a fight that hands you a card (step.play: card id, at step.playLevel): your deck sits it out
+function borrowedStats(id, level = 30) {
+  const card = CHARACTERS.find(c => c.id === id);
+  if (!card) return null;
+  return { card, stats: computePlayerStats({ deck: { main: card, supports: [] }, cardInventory: { [id]: { level } } }) };
+}
+
+// One story level: its steps (cutscenes and battles with codec lines), then the results.
+export default function StoryLevel({ node, story, stats: deckStats, mainCard: deckMain, mobile, portrait, devMode, onReward, onComplete, onLeave, profile, onSign }) {
   const firstClear = useRef(!story.cleared[node.id]).current;
-  const first = node.intro ? 'intro' : node.battle ? 'battle' : node.outro ? 'outro' : 'result';
-  const [phase, setPhase] = useState(first);
+  const steps = useRef(levelSteps(node)).current;
+  const [at, setAt] = useState(0);
+  const step = steps[at] ?? null;
+  const phase = !step ? 'result' : step.scene ? 'scene' : 'battle';
   const [flags, setFlags] = useState(() => ({ ...story.flags }));
+  // this fight's card: one it hands you, or your deck's
+  const lent = useRef({});
+  const borrowed = step?.play != null ? (lent.current[at] ??= borrowedStats(step.play, step.playLevel)) : null;
+  const stats = borrowed?.stats ?? deckStats, mainCard = borrowed?.card ?? deckMain;
+  const battle = step?.battle ?? null;
 
   // ── Battle ────────────────────────────────────────────────────────────────
   const handlers = useRef({});
@@ -48,18 +70,24 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
   const fired = useRef(new Set());
   const events = useRef({ hit: false, ult: false });
 
-  const afterBattle = useCallback(() => setPhase(node.outro ? 'outro' : 'result'), [node.outro]);
-  const afterScene = useCallback((which) => (f) => {
+  // on to the next step (a new fight gets a fresh battle)
+  const next = useCallback(() => {
+    setEngine(null); setLost(false); setMenu(false); setQueue([]);
+    fired.current = new Set(); events.current = { hit: false, ult: false };
+    setAt(i => i + 1);
+  }, []);
+  const afterBattle = next;
+  const afterScene = useCallback((f) => {
     if (f.__ending) { onLeave(); return; }   // a bad ending (scenes.js { ending }): back to the map, nothing saved
     setFlags(f);
-    if (which === 'intro') setPhase(node.battle ? 'battle' : node.outro ? 'outro' : 'result');
-    else setPhase('result');
-  }, [node.battle, node.outro, onLeave]);
+    next();
+  }, [next, onLeave]);
 
   useEffect(() => {
     if (phase !== 'battle' || engine) return;
-    setEngine(createBattle({ stageNum: node.battle?.level ?? 1, stats, makeStage: () => makeStoryStage(node), callbacks: handlers }));
-  }, [phase, engine, node, stats]);
+    const stepNode = { ...node, name: step.name ?? node.name, battle };
+    setEngine(createBattle({ stageNum: battle?.level ?? 1, stats, makeStage: () => makeStoryStage(stepNode), callbacks: handlers }));
+  }, [phase, engine, node, step, battle, stats]);
   useEffect(() => { engine?.setStats(stats); }, [engine, stats]);
 
   handlers.current = {
@@ -70,7 +98,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
   };
 
   // codec lines: check the triggers a few times a second
-  const lines = node.codec ?? NO_LINES;
+  const lines = step?.codec ?? NO_LINES;
   useEffect(() => {
     if (!engine || phase !== 'battle') return;
     const id = setInterval(() => {
@@ -117,19 +145,20 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
 
   // ── Screens ───────────────────────────────────────────────────────────────
   let body = null;
-  if (phase === 'intro' || phase === 'outro') {
-    body = <VNPlayer key={phase} sceneId={node[phase]} flags={flags} onEnd={afterScene(phase)} mobile={mobile} portrait={portrait} profile={profile} onSign={onSign} />;
+  if (phase === 'scene') {
+    body = <VNPlayer key={`s${at}`} sceneId={step.scene} flags={flags} onEnd={afterScene} mobile={mobile} portrait={portrait} profile={profile} onSign={onSign} />;
   } else if (phase === 'battle' && engine) {
     const codecH = current ? (mobile ? 54 : 78) + 8 : 0;
-    const boss = node.battle?.boss ? ENEMY_TYPES[node.battle.boss]?.name : null;
+    const boss = battle?.boss ? ENEMY_TYPES[battle.boss]?.name : null;
+    const fights = steps.filter(x => x.battle).length, nth = steps.slice(0, at + 1).filter(x => x.battle).length;
     body = (
       <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#0b0f1c', fontFamily: 'var(--font-ui)', userSelect: 'none',
         cursor: mobile ? 'auto' : `url(${BASE}ui/mouse.png) 0 0, auto` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: mobile ? '6px 8px' : '8px 14px', background:'var(--bar)', borderBottom: `2px solid ${CODEC.yellow}`, flexShrink: 0 }}>
           <button className="vn-btn" onClick={() => { playPress(); setMenu(true); }} title="Pause (Esc)">❚❚ PAUSE</button>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: CODEC.yellow, fontFamily: CODEC.font, fontWeight: 900, letterSpacing: 1, fontSize: mobile ? 13 : 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
-            {!mobile && <div style={{ color: '#778', fontSize: 11 }}>LV {node.battle?.level ?? 1}{boss ? ` · boss: ${boss}` : ''}</div>}
+            <div style={{ color: CODEC.yellow, fontFamily: CODEC.font, fontWeight: 900, letterSpacing: 1, fontSize: mobile ? 13 : 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.name ?? node.name}{fights > 1 ? ` · ${nth}/${fights}` : ''}</div>
+            {!mobile && <div style={{ color: '#778', fontSize: 11 }}>LV {battle?.level ?? 1}{boss ? ` · boss: ${boss}` : ''}{borrowed ? ` · playing as ${borrowed.card.name}${borrowed.card.subtitle ? ` (${borrowed.card.subtitle})` : ''}` : ''}</div>}
           </div>
           {devMode && <button className="vn-btn" style={{ borderColor: '#a855f7', color: '#e9d5ff' }} onClick={() => engine.dev.win()}>🛠 WIN</button>}
         </div>
@@ -144,7 +173,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
             <div style={{ width: 'min(360px, 100%)', background: `linear-gradient(${CODEC.green}, ${CODEC.greenDark})`, border: `3px solid ${CODEC.yellow}`, padding: 20,
               display: 'flex', flexDirection: 'column', gap: 10, fontFamily: CODEC.font, boxShadow: '0 10px 40px rgba(0,0,0,0.6)' }}>
               <div style={{ color: lost ? '#ff6b4a' : CODEC.yellow, fontWeight: lost ? 400 : 900, fontSize: lost ? 34 : 26, letterSpacing: 3, textAlign: 'center', fontFamily: lost ? 'var(--font-glitch)' : undefined }}>{lost ? 'DEFEATED' : 'PAUSED'}</div>
-              {lost && <div style={{ color: '#d1fae5', fontSize: 13, textAlign: 'center', marginBottom: 4 }}>Train or change your deck, then come back — or try again now.</div>}
+              {lost && <div style={{ color: '#d1fae5', fontSize: 13, textAlign: 'center', marginBottom: 4 }}>{borrowed ? 'Try again: get a feel for the card first.' : 'Train or change your deck, then come back — or try again now.'}</div>}
               {!lost && <TapButton className="vn-choice" style={{ width: '100%' }} onClick={() => { playPress(); setMenu(false); }}>▶ Resume</TapButton>}
               <TapButton className="vn-choice" style={{ width: '100%' }} onClick={retry}>↻ Retry</TapButton>
               <TapButton className="vn-choice" style={{ width: '100%' }} onClick={leave}>⌂ Back to map</TapButton>
@@ -159,7 +188,7 @@ export default function StoryLevel({ node, story, stats, mainCard, mobile, portr
     body = (
       <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'radial-gradient(ellipse at 50% 35%, #1d2b44, #06080f 75%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: CODEC.font }}>
         <div style={{ width: 'min(420px, 100%)', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
-          <div style={{ color: '#4ade80', fontWeight: 900, fontSize: mobile ? 28 : 38, letterSpacing: 4, textShadow: '0 0 24px #16a34a' }}>{node.battle ? 'CLEAR!' : 'COMPLETE'}</div>
+          <div style={{ color: '#4ade80', fontWeight: 900, fontSize: mobile ? 28 : 38, letterSpacing: 4, textShadow: '0 0 24px #16a34a' }}>{steps.some(x => x.battle) ? 'CLEAR!' : 'COMPLETE'}</div>
           <div style={{ color: CODEC.yellow, fontWeight: 900, fontSize: 18, letterSpacing: 1 }}>{node.name}</div>
           {got ? (
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
