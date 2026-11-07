@@ -66,7 +66,8 @@ export function createReefPlatinum(ctx) {
   const st = () => s.kit.reef ?? (s.kit.reef = { souls: [], pick: null, minions: [], command: null, pents: [], sigils: [], pcd: 0, seance: null, qcd: 0, qcdMax: 0,
     wheel: null, lsBudget: 0, cutin: null, floats: 0, hexT: 0 });
   const alive = e => e && e.hp > 0 && s.enemies.includes(e);
-  const legion = () => s.ult.active?.type === 'legion';
+  // (not while it's ending: what the finale kills mustn't rise after the army is gone)
+  const legion = () => s.ult.active?.type === 'legion' && !s.ult.active.ending;
   const U = () => s.stats.ult ?? {};
   const P = () => s.player.pos ?? { x: s.W / 2, y: s.H / 2 };
   const label = (text, x, y, color, big = false) => { const r = st(); if (r.floats++ < 3) floater(text, x, y, color, big); };
@@ -208,8 +209,7 @@ export function createReefPlatinum(ctx) {
   // ── M1 released: the end of a command, or a Blood Sigil ──────────────────
   function release(held, x, y, press0) {
     const sk = skill(), r = st();
-    r.command = r.cmdHold ? r.command : r.command;   // (the summons keep at it until it dies)
-    r.cmdHold = false;
+    r.cmdHold = false;   // (the command stays: the summons keep at it until it dies)
     const d = press0?.reef;
     if (!sk || !d?.drag) return;
     // the line you drew (if it never closed) stays as a sigil
@@ -276,6 +276,7 @@ export function createReefPlatinum(ctx) {
   }
   function endUlt(act) {
     if (act.type !== 'legion') return;
+    act.ending = true;
     const r = st(), u = U(), army = r.minions.length, souls = soulsTotal(r);
     // the army collapses into a pentagram over the whole arena
     r.minions.forEach(m => effect({ kind: 'crumble', x: m.x, y: m.y, r: K(m.size * 0.7), life: 0.5 }));
