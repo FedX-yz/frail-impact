@@ -171,6 +171,25 @@ export const SKILLS = {
                    passive: { type: 'offering', soulDmg: 0.04, maxSouls: 10, lv2At: 5, lv3At: 10,
                               lv1: { soulDmg: 0.025 }, si: { soulDmg: 0.006 },
                               desc: 'Offering: an enemy you\'ve parried that then dies gives a Soul for his Master (up to {maxSouls}). Every Soul: +{soulDmg} DMG. {lv2At} Souls and his ult becomes Hell Drums; {lv3At} and you can call Ascent of the Master. Souls carry over from stage to stage until you fall.' } },
+  // 6★ Reef (Platinum): necromancy (reefPlatinum.js)
+  last_rites:    { type: 'necro', style: 'platinum',
+                   lifesteal: 0.04, lsCap: 0.05,                    // passive: lifesteal (share of damage dealt; most per second, of max HP)
+                   soulCap: 20, maxOut: 5, minionLife: 20, atkRate: 0.8,   // Soul Harvest / Summon
+                   basicPct: 0.7, elitePct: 1.4, bossSumPct: 3.5, basicHp: 0.3, eliteHp: 0.7, bossHp: 2,
+                   hexDur: 4, hexPct: 0.4,                          // M1: Hex
+                   drainPct: 1.2,                                   // hold M1: Command
+                   sigilDur: 4, sigilLen: 900,                      // drag: Blood Sigil
+                   pentCd: 2, pentDur: 3, pentPct: 3, pentTick: 0.8, pentMin: 50, pentMax: 260,   // drag in a loop: Pentagram
+                   cooldown: 14, seanceR: 150, seancePct: 3, seanceDur: 4,   // Q: Séance
+                   lv1: { lifesteal: 0.025, basicPct: 0.45, elitePct: 0.9, bossSumPct: 2.2, hexPct: 0.25, drainPct: 0.7, pentPct: 1.8, pentTick: 0.5, seancePct: 1.8, cooldown: 18 },
+                   si: { lifesteal: 0.004, basicPct: 0.08, elitePct: 0.15, bossSumPct: 0.35, hexPct: 0.05, drainPct: 0.15, pentPct: 0.4, pentTick: 0.1, seancePct: 0.4, cooldown: -0.5 },
+                   desc: 'LAST RITES. Every enemy he kills, its soul is his (kept by kind, up to {soulCap}; elites\' are stronger, a boss\'s is rare and huge), and a share of all damage he deals heals him ({lifesteal}, up to {lsCap} of max HP a second). '
+                     + 'M2: SUMMON. Tap and your chosen soul comes back as its monster at your cursor, fighting for you ({basicPct} / {elitePct} / {bossSumPct} click DMG a hit for basic / elite / boss) for {minionLife}s or until it\'s killed; up to {maxOut} at once. HOLD M2: the soul wheel, every kind you have: let go on one (or click it). '
+                     + 'CLICK: HEX. What you hit is cursed for {hexDur}s ({hexPct} click DMG a second). '
+                     + 'HOLD M1 on an enemy: COMMAND. Everything you\'ve summoned goes for it, and while you hold he drains it ({drainPct} click DMG a second, healing twice as much). '
+                     + 'DRAG: BLOOD SIGIL. What you draw stays on the ground for {sigilDur}s and hexes whatever crosses it. Draw a loop back to where you started and it becomes a PENTAGRAM: everything inside takes {pentPct} click DMG at once, then {pentTick} every 0.5s for {pentDur}s ({pentCd}s cooldown). '
+                     + 'Q: SÉANCE. A ritual circle at your cursor ({seanceR} range) tears a ghost out of every enemy inside ({seancePct} click DMG, healing you), and for {seanceDur}s what dies inside gives two souls. {cooldown}s cooldown.',
+                   passive: null },
   // 6★ Astrec (Platinum): sent in first because he can't stay dead (astrecPlatinum.js)
   death_wish:    { type: 'deathwish', style: 'platinum',
                    t1: 0.3, t2: 0.6, t3: 1, cleave: 0.5, cleaveR: 110, shock: 0.6, shockR: 150,   // Death Wish: the tiers
@@ -279,6 +298,9 @@ export const ULTS = {
   no_retreat:     { type: 'noretreat', dur: 8, bonus: 0.3, charge: 1.1,
                     si: { dur: 0.5, bonus: 0.08 },
                     desc: 'NO RETREAT. For {dur}s Astrec is at the top tier of Death Wish whatever his HP (crits, cleave, shockwaves) with +{bonus} DMG on top, and nothing can take him below 1 HP. Not Yet\'s lock doesn\'t apply.' },
+  legion:         { type: 'legion', dur: 12, bigMult: 2, ls: 3, markBonus: 0.25, finale: 10, finaleSoul: 0.6, finaleArmy: 0.4, charge: 1.2,
+                    si: { dur: 0.8, finale: 2, finaleSoul: 0.1, finaleArmy: 0.06 },
+                    desc: 'LEGION. For {dur}s every soul he has comes up at once (they aren\'t spent), twice the size and twice as strong; whatever dies rises on his side there and then; nothing takes him below 1 HP; lifesteal ×{ls}; your hits mark enemies (+{markBonus} DMG from the army). Then the army collapses into a pentagram over the whole arena: everything takes {finale} click DMG, +{finaleSoul} for every soul he holds and +{finaleArmy} for every one in the army, and he\'s healed in full.' },
   open_arms:      { type: 'openarms', dur: 10, armPct: 0.5, armRate: 0.5,           // lv1 (0+ Souls): Manic Puppeteer
                     drumsDur: 8, gates: 3, gatePull: 230, soulEvery: 0.4, soulPct: 1.2,   // lv2 (5+): Hell Drums
                     masterDur: 5, masterTick: 0.5, masterPct: 2.5, masterFinale: 12, cost: 0.5,   // lv3 (10, tap twice): Ascent of the Master
@@ -333,13 +355,13 @@ export const ULT_CD_PER_SI = 0.08;
 
 // How a number is shown in descriptions
 const PCT_KEYS = new Set(['per', 'devour', 'deerHeal', 'share', 'slash', 'cut', 'heal', 'maxHeal', 'pct', 'chance', 'bonus', 'rate', 'dmg', 'threshold', 'bossPct', 'maxPctHp', 'healPctHp',
-  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal', 't1', 't2', 't3', 'reviveHp', 'braceDR', 'breachCost', 'exposed', 'soulDmg']);
-const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct', 'shock', 'counterMin', 'counterPer', 'counterMax', 'breachPct', 'parryPct', 'reflectPct', 'stringPct', 'torPct', 'armPct', 'riftPct', 'clonePct', 'soulPct', 'masterPct', 'masterFinale']);
+  'window', 'dps', 'perSoul', 'autoPct', 'cost', 'rage', 'max', 'feed', 'steal', 't1', 't2', 't3', 'reviveHp', 'braceDR', 'breachCost', 'exposed', 'soulDmg', 'lifesteal', 'lsCap', 'basicHp', 'eliteHp', 'bossHp', 'markBonus']);
+const MULT_KEYS = new Set(['qPct', 'figPct', 'storm', 'shatter', 'dogPct', 'toadPct', 'nuePct', 'oxPct', 'serpentPct', 'tigerPct', 'elephantPct', 'gunPct', 'finale', 'perStack', 'gaze', 'slam', 'crunch', 'cleave', 'dps', 'maxBite', 'throwPct', 'minPct', 'mult', 'collapse', 'burn', 'base', 'perSpirit', 'crush', 'hemoDps', 'rakePct', 'grabPct', 'slamPct', 'shock', 'counterMin', 'counterPer', 'counterMax', 'breachPct', 'parryPct', 'reflectPct', 'stringPct', 'torPct', 'armPct', 'riftPct', 'clonePct', 'soulPct', 'masterPct', 'masterFinale', 'basicPct', 'elitePct', 'bossSumPct', 'hexPct', 'drainPct', 'pentPct', 'pentTick', 'seancePct', 'finale', 'finaleSoul', 'finaleArmy']);
 function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR' || key === 'breachLen' || key === 'stringLen' || key === 'gustR' || key === 'armR' || key === 'riftR' || key === 'riftPull' || key === 'gunR' || key === 'cloneR' || key === 'gatePull' || key === 'maxSouls' || key === 'lv2At' || key === 'lv3At' || key === 'gates') return String(Math.round(v));
+  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR' || key === 'breachLen' || key === 'stringLen' || key === 'gustR' || key === 'armR' || key === 'riftR' || key === 'riftPull' || key === 'gunR' || key === 'cloneR' || key === 'gatePull' || key === 'maxSouls' || key === 'lv2At' || key === 'lv3At' || key === 'gates' || key === 'soulCap' || key === 'maxOut' || key === 'seanceR' || key === 'pentMin' || key === 'pentMax' || key === 'sigilLen') return String(Math.round(v));
   if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));
@@ -393,7 +415,7 @@ const LABELS = { radius: 'range', pct: 'DMG', interval: 'every', shots: 'shots',
   bossPct: 'boss bite', maxPctHp: 'max heal', healPctHp: 'heal',
   window: 'ratio window', dps: 'burn', cap: 'max spirits', perSoul: 'per spirit', lag: 'aim lag', autoPct: 'auto DMG',
   collapse: 'collapse', burn: 'burn', perSpirit: 'per spirit', cooldown: 'cooldown', dogPct: 'dog bite', toadPct: 'tongue', nuePct: 'Nue', oxPct: 'Ox', deerHeal: 'Deer heal', serpentPct: 'Serpent', tigerPct: 'Tiger', elephantPct: 'Elephant', gunPct: 'pistols', finale: 'world slash', domainDur: 'garden', perStack: 'per stack', devour: 'devour under', per: 'per stack', gaze: 'gaze', crunch: 'bite', links: 'links', share: 'shared', slash: 'cut', throwPct: 'throw', cut: 'slice', heal: 'heal', maxHeal: 'max heal', freeze: 'freeze', targets: 'targets', width: 'width', punches: 'punches/s', hp: 'HP', crush: 'crush', chill: 'freeze/click', qPct: 'Q DMG', qRadius: 'Q range', figPct: 'figure blast', wallLen: 'frost line', chain: 'chain frost', storm: 'storm', shatter: 'shatter',
-  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal', t1: 'tier I', t2: 'tier II', t3: 'tier III', shock: 'shockwave', counterPer: 'hit back', counterMax: 'max hit back', braceDR: 'brace', breachPct: 'breach', breachLen: 'breach length', parryWin: 'parry window', parryPct: 'parry strike', reflectPct: 'reflect', stringPct: 'strings', torPct: 'tornado', torDur: 'tornado time', armPct: 'per arm', exposed: 'exposed', riftPct: 'rift', riftDur: 'rift time', clonePct: 'shadow', gunDur: 'gunslinger time', soulDmg: 'per soul', soulPct: 'wicked soul', masterPct: 'purge', masterFinale: 'finale' };
+  bleed: 'bleed/click', hemoDps: 'hemorrhage', rage: 'rage', rakePct: 'rake', slamPct: 'slam', max: 'bloodlust', splash: 'splash', feed: 'feed', steal: 'lifesteal', t1: 'tier I', t2: 'tier II', t3: 'tier III', shock: 'shockwave', counterPer: 'hit back', counterMax: 'max hit back', braceDR: 'brace', breachPct: 'breach', breachLen: 'breach length', parryWin: 'parry window', parryPct: 'parry strike', reflectPct: 'reflect', stringPct: 'strings', torPct: 'tornado', torDur: 'tornado time', armPct: 'per arm', exposed: 'exposed', riftPct: 'rift', riftDur: 'rift time', clonePct: 'shadow', gunDur: 'gunslinger time', soulDmg: 'per soul', soulPct: 'wicked soul', masterPct: 'purge', masterFinale: 'finale', lifesteal: 'lifesteal', basicPct: 'basic summon', elitePct: 'elite summon', bossSumPct: 'boss summon', hexPct: 'hex', drainPct: 'drain', pentPct: 'pentagram', pentTick: 'pentagram pulse', seancePct: 'séance', finaleSoul: 'finale per soul', finaleArmy: 'finale per risen' };
 export function describeSiStep(kit, si) {
   if (!kit?.si || si >= 4) return '';
   const a = scaleKit(kit, si), b = scaleKit(kit, si + 1);

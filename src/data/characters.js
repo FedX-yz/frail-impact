@@ -616,6 +616,39 @@ export const CHARACTERS = [
     passive: null,
   },
   {
+    id: 41,
+    name: 'refabiba',
+    subtitle: 'Last Rites',
+    rarity: 6,
+    series: 'platinum',
+    unpullable: true,                // not in any pull yet (being tried out)
+    element: 'Occult',
+    color: '#d946ef',
+    image:           `${BASE}story/cast/reef.png`,   // no card art yet: his story art stands in
+    characterImage:  `${BASE}story/cast/reef.png`,
+    cardArt:         `${BASE}story/cast/reef.png`,
+    sprite:          `${BASE}story/cast/reef.png`,
+    burstArt:        `${BASE}story/cast/reef.png`,   // placeholder: the art for Legion
+    burstFocus:      [42, 15],
+    portraitFocus:   [42, 14, 3],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/6star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 2200, atk: 235, def: 95 },   // lives off what he deals: less HP than Astrec, more than Ramsf
+    skill: {
+      name: 'Last Rites',
+      description: 'Kills give him their souls; M2 summons them back to fight (hold for the soul wheel). Lifesteal, Hex clicks, hold M1 to command, drag a sigil (a loop makes a pentagram), Q Séance.',
+      effect: 'last_rites',
+    },
+    ult: {
+      name: 'Legion',
+      description: 'Every soul he has rises at once, twice as strong; what dies joins them; he can\'t drop below 1 HP. Ends in a pentagram over the whole arena.',
+      effect: 'legion',
+      cooldown: 30,
+    },
+    passive: null,
+  },
+  {
     id: 40,
     name: 'Astrec',
     subtitle: 'Death Wish',

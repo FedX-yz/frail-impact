@@ -20,6 +20,7 @@ import { createIcePlatinum } from './icePlatinum';
 import { createBonkPlatinum } from './bonkPlatinum';
 import { createAstrecPlatinum } from './astrecPlatinum';
 import { createRamsfPlatinum } from './ramsfPlatinum';
+import { createReefPlatinum } from './reefPlatinum';
 import { CHARACTERS } from '../data/characters';
 
 // Every skill has a main move (its `style`: click / special / charge / hold / drag) and a
@@ -338,6 +339,7 @@ export function createKitRuntime(api) {
     if (skill()?.type === 'zero') ice.onClick(e, auto);            // 6★ Ice: every click builds Freeze
     if (skill()?.type === 'boil') bonk.onClick(e, auto);           // 6★ Bonk: every click builds Bleed
     if (skill()?.type === 'deathwish') astrec.onClick(e, auto);    // 6★ Astrec: Death Wish's cleave and shockwaves
+    if (skill()?.type === 'necro') reef.onClick(e, auto);          // 6★ Reef: Hex
   }
   // Stephen: a crit click slices a line through the target
   function onCritClick(e) {
@@ -356,6 +358,7 @@ export function createKitRuntime(api) {
   // true = swallow the click (you're suspended while Mahoraga fights)
   function onPointerDown(x, y) {
     if (skill()?.type === 'marionette' && !s.mahoraga) ramsf.onPointerDown(x, y);   // 6★ Ramsf: Shadow Gunslinger's guns (the click still happens)
+    if (skill()?.type === 'necro' && !s.mahoraga && reef.onPointerDown(x, y)) return true;   // 6★ Reef: a click on the soul wheel picks from it
     // Mahoraga out: you don't fight — you watch (the usual kit) or command it (the other one)
     if (s.mahoraga) return s.mahoraga.v2 ? ts.commandMahoraga(x, y) : true;
     if (ts.busy()) return true;                          // Bio's hands are busy with a hand sign
@@ -383,6 +386,7 @@ export function createKitRuntime(api) {
     // Ten Shadows: hits you land yourself pour into the shadow meter
     const tsk = skill();
     if (tsk?.type === 'tenshadows') ts.onDamage(tsk, dmg);
+    if (tsk?.type === 'necro') reef.onDamage(e, dmg);   // 6★ Reef: lifesteal
     const en = s.kit.entangle;
     if (!en || linked || dmg <= 0 || !en.ids.includes(e.id)) return;
     let n = 0;
@@ -481,6 +485,7 @@ export function createKitRuntime(api) {
       case 'boil': return bonk.press(x, y);           // 6★ Bonk: grab (hold to carry, let go to throw / slam)
       case 'deathwish': return astrec.drawFire(x, y); // 6★ Astrec: Draw Fire
       case 'marionette': return ramsf.press(x, y);    // 6★ Ramsf: Parry
+      case 'necro': return reef.press(x, y);          // 6★ Reef: Summon (decided on release / by holding)
       case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
         if (!startCooldown(sk, x, y)) return false;
         s.kit.maws = s.kit.maws ?? [];
@@ -512,6 +517,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'tenshadows') { ts.release(sk); return; }
     if (sk?.type === 'zero') { ice.m2Release(held); return; }
     if (sk?.type === 'boil') { bonk.m2Release(held); return; }
+    if (sk?.type === 'necro') { reef.m2Release(held, x, y); return; }   // 6★ Reef: a tap summons; the wheel's choice
     if (sk?.style !== 'charge' || held < CHARGE_HOLD) return;   // a tap only stocks up (done on press)
     fire(x, y);
   }
@@ -578,6 +584,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'boil') { bonk.release(held, x, y, press); return; }  // 6★ Bonk: Rupture (or the end of a claw rake)
     if (sk?.type === 'deathwish') { astrec.release(held, x, y, press); return; }  // 6★ Astrec: Brace's hit back (or the end of a Breach)
     if (sk?.type === 'marionette') { ramsf.release(held, x, y, press); return; }  // 6★ Ramsf: Wingbeat (or Strings, after a drag)
+    if (sk?.type === 'necro') { reef.release(held, x, y, press); return; }        // 6★ Reef: the end of a command, or a Blood Sigil
     if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
     const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
@@ -625,6 +632,7 @@ export function createKitRuntime(api) {
     if (sk.type === 'boil') return bonk.m2Info();
     if (sk.type === 'deathwish') return astrec.m2Info();
     if (sk.type === 'marionette') return ramsf.m2Info();
+    if (sk.type === 'necro') return reef.m2Info();
     if (sk.style === 'special') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
     if (sk.type === 'souls')    return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
     if (sk.type === 'crawlers') return { kind: 'count', n: s.kit.crawlN, max: Math.round(sk.cap), color: '#c084fc' };
@@ -640,6 +648,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'tenshadows') ts.onKill(sk, e);   // Bio: what his shikigami kill tops up the meter
     if (sk?.type === 'boil') bonk.onKill(e);           // 6★ Bonk: Bloodlust feeds on what dies hemorrhaging
     if (sk?.type === 'marionette') ramsf.onKill(e);    // 6★ Ramsf: Offering (parried, then killed → a Soul)
+    if (sk?.type === 'necro') reef.onKill(e);          // 6★ Reef: Soul Harvest
     // Sorcerer Killer charges from kills, not damage
     const u = s.stats.ult;
     if (u?.chargeOn === 'kills' && !s.ult.active) {
@@ -763,6 +772,9 @@ export function createKitRuntime(api) {
       case 'openarms':       // 6★ Ramsf: Obey Your Master, by Souls: Manic Puppeteer / Hell Drums / Ascent (ramsfPlatinum.js)
         ramsf.ult(u);
         return true;
+      case 'legion':         // 6★ Reef: every soul he has comes up at once, then the pentagram (reefPlatinum.js)
+        reef.ult(u);
+        return true;
       default: return false;
     }
   }
@@ -778,6 +790,7 @@ export function createKitRuntime(api) {
     if (act.type === 'redmist') bonk.endUlt(act);
     if (act.type === 'noretreat') astrec.endUlt(act);
     if (act.type === 'openarms' || act.type === 'helldrums' || act.type === 'ascent') ramsf.endUlt(act);
+    if (act.type === 'legion') reef.endUlt(act);
     if (act.type === 'shrine') { effect({ kind: 'flash', color: '#450a0a', life: 0.6 }); shake(0.3); }   // the domain collapses
   }
   // Room 16's ult: you picked one of the three skills
@@ -800,16 +813,17 @@ export function createKitRuntime(api) {
   const astrec = createAstrecPlatinum({ s, api, K, dist, distToSegment, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius, heavy });
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze, Bonk's Bloodletting, Astrec's Second Wind); null = Q is M2 as usual
   const ramsf = createRamsfPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
+  const reef = createReefPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
   // 6★ Ramsf: with 10 Souls the ult waits for a second tap (engine.activateUlt); his Souls' damage bonus
   const ultTap = () => (skill()?.type === 'marionette' ? ramsf.ultTap() : null);
   const soulMult = () => (skill()?.type === 'marionette' ? ramsf.soulMult() : 1);
-  const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : t === 'marionette' ? ramsf.qInfo() : null; };
-  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.gunslinger(x, y) : false; }
+  const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : t === 'marionette' ? ramsf.qInfo() : t === 'necro' ? reef.qInfo() : null; };
+  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.gunslinger(x, y) : t === 'necro' ? reef.seance(x, y) : false; }
   const exposedBonus = e => (skill()?.type === 'marionette' ? ramsf.exposedBonus(e) : 0);
   // 6★ Astrec: how much of a hit gets through (Brace), how fast enemies attack (Draw Fire), and Not Yet
   const hurtMult = () => (skill()?.type === 'deathwish' ? astrec.hurtMult() : 1);
   const attackRate = () => (skill()?.type === 'deathwish' ? astrec.attackRate() : 1);
-  const undying = () => skill()?.type === 'deathwish' && astrec.cheatDeath();
+  const undying = () => (skill()?.type === 'deathwish' && astrec.cheatDeath()) || reef.cheatDeath();
 
   // ── Every frame ──────────────────────────────────────────────────────────
   function update(dt) {
@@ -998,6 +1012,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'deathwish' || astrec.active()) astrec.update(dt, live);
     // 6★ Ramsf: the parry window, the arms on your cursor, Strings, the tornado
     if (sk?.type === 'marionette' || ramsf.active()) ramsf.update(dt, live);
+    if (sk?.type === 'necro' || reef.active()) reef.update(dt, live);
 
     // Doro's fire arrows land
     if (kit.arrows?.length) {
@@ -1258,6 +1273,7 @@ export function createKitRuntime(api) {
     bonk.reset();
     astrec.reset(why);
     ramsf.reset(why);
+    reef.reset(why);
     // 6★ Ice's Absolute Zero is a time stop: it ends with the stage (its storm with it)
     if (s.ult.active?.type === 'absolutezero') s.ult.active = null;
     s.choosing = null;
@@ -1273,7 +1289,7 @@ export function createKitRuntime(api) {
     hitMahoraga: (raw, kind) => (s.mahoraga?.v2 ? ts : bio).hitMahoraga(raw, kind),
     // Bio: the phone's thumb on the SPECIAL button, and how fast the world runs (the hand-sign wheel slows it)
     signAim: (dx, dy) => ts.signAim(dx, dy), timeScale: () => ts.timeScale() * (skill()?.type === 'marionette' ? ramsf.timeScale() : 1),   // (Bio's sign wheel / 6★ Ramsf's slow motion after a parry)
-    cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
+    cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()) || reef.cheatDeath(),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
     hurtMult, attackRate, undying, exposedBonus, ultTap, soulMult,
     update, reset, origin, slide,
     skill2, skill2Info,
