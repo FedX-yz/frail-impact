@@ -3,7 +3,7 @@
 // animation frame and draws `engine.state`. Positions are arena pixels; sizes
 // are design px × state.k so the same fight works on a phone and a PC.
 // ─────────────────────────────────────────────────────────────────────────────
-import { STEAL, stealPose } from './steal';
+import { STEAL, STEPS, stealBoss } from './steal';
 import { sheetLife, warmSheets } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
@@ -1583,12 +1583,9 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       s.enemies = []; s.bossInfo = null;
       s.hitStop = 0.12; shake(0.5); sfx('bigKill');
     }
-    if (!st.chomped && st.t >= STEAL.chomp) {
-      st.chomped = true;
-      st.mouth = stealPose(st, s.W, s.H).mouth;
-      { for (let i = 0; i < 3; i++) effect({ kind: 'shards', x: st.mouth.x + rand(-st.r, st.r), y: st.mouth.y, r: st.r * 1.2, n: 18, color: '#bef264' }); }   // (sprayed up from out of the shot)
-      shake(0.7); sfx('bigKill');
-    }
+    if (!st.grabbed) { const b = stealBoss(st, s.W, s.H), e = s.enemies.find(x => x.id === st.id); if (e) { e.x = b.x; e.y = b.y; } }   // (it sinks, weak)
+    for (const at of STEPS) if (st.t >= at && st.t - dt < at) { shake(0.35); sfx('boom'); }   // his steps as he runs off
+    if (!st.chomped && st.t >= STEAL.chomp) st.chomped = true;   // (out of sight: only the score's eating sounds)
     if (st.t >= STEAL.end) { stageClear(); s.banner = null; s.phaseT = 0.4; }
   }
 

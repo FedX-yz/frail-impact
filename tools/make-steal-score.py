@@ -2,8 +2,9 @@
 the cutscene's beats. Writes public/audio/music/redgiant_reveal.mp3. Swap that file for a real
 track any time (same name), keeping the hits roughly where these are:
   0.0 everything stops (a low boom, a drone starts)    1.4 his eyes open (8 glassy pings)
-  3.3 the snatch (a hit)    4.7 he eats it (a crunch)    5.6 his eyes on you (a screech)
-  6.0 he laughs (the drone pulses)    6.6 black (it dies away)
+  2.6 his hands open (strings swell)    3.3 they clap shut on it (a hit)
+  4.45 4.85 5.22 5.56 his steps as he runs off (booms, going away)
+  5.7-7.0 out of sight, eating (crunching, chewing)    7.7 black (it dies away)
 usage: python3 tools/make-steal-score.py"""
 import numpy as np, subprocess, wave, os
 SR = 44100
@@ -43,13 +44,11 @@ def noise_hit(at, dur, cutoff, amp):
 # the drone: low beating saws, a filter opening slowly as he rises
 saw = lambda f: 2 * ((t * f) % 1) - 1
 drone = (saw(41.2) + saw(43.0) * 0.8 + np.sin(2 * np.pi * 55 * t) * 0.6 + saw(61.7) * 0.35)
-drone *= env(0.0, 7.6, attack=1.6, release=1.6)
+drone *= env(0.0, 7.9, attack=1.6, release=1.4)
 cut = 90 + 520 * np.clip((t - 0.2) / 2.6, 0, 1) ** 1.5
-cut = np.where(t > 4.7, cut * 0.75, cut)
+cut = np.where(t > 4.4, cut * 0.7, cut)
 drone = lowpass(drone, cut) * 0.14
-# he laughs: the drone pulses
-laugh = 1 - 0.6 * env(6.0, 6.9, 0.05, 0.2) * (0.5 + 0.5 * np.sin(2 * np.pi * 7 * t))
-out += drone * laugh
+out += drone
 # the ground rumbling as he rises
 rumble = lowpass(rng.standard_normal(n), 70) * 1.6 * env(0.3, 2.9, 0.9, 0.5)
 out += rumble
@@ -61,21 +60,31 @@ for i, f in enumerate([1661, 1760, 1865, 1568, 1976, 1480, 2093, 1397]):
     e = np.zeros(n); i0 = int(a * SR); k = np.arange(n - i0) / SR
     e[i0:] = np.minimum(1, k / 0.04) * np.exp(-k * 1.4)
     out += (np.sin(2 * np.pi * f * t) + 0.3 * np.sin(2 * np.pi * f * 2.01 * t)) * e * 0.05
-# a held breath, then the snatch: a big hit and a stab of strings
-out += boom(3.3, 52, 2.2, 1.0) + noise_hit(3.3, 0.5, 2400, 0.55)
+# 2.6: his hands open: strings swell; 3.3 the clap shuts them off
 strings = sum(saw(f * (1 + 0.004 * np.sin(2 * np.pi * 5.5 * t + j))) for j, f in enumerate([220, 233.1, 311.1, 329.6]))
-rise = np.clip((t - 3.6) / 1.1, 0, 1)
-strings = lowpass(strings * (1 + 0.5 * rise), 900 + 2400 * rise) * 0.05 * (env(3.3, 4.75, 0.01, 0.05) * (0.6 + 0.8 * rise))
-out += strings
-# 4.7: he eats it: a wet crunch
-out += noise_hit(4.7, 0.35, 1500, 0.7) + boom(4.7, 60, 1.6, 0.7)
-# 5.0..: his eyes go red: a low brass-like swell, dissonant
-brass = lowpass(saw(49) + saw(51.9) + saw(73.4) * 0.6, 300 + 300 * np.clip((t - 5) / 1.5, 0, 1)) * 0.16 * env(5.0, 7.6, 0.8, 1.2)
-out += brass
-# 5.6: his eyes on you: a screech
-e = env(5.6, 6.5, 0.02, 0.5)
-sweep = 2 * np.pi * np.cumsum(2600 + 900 * np.clip((t - 5.6) / 0.9, 0, 1)) / SR
-out += (np.sin(sweep) + 0.5 * np.sin(sweep * 1.007)) * e * 0.045
+rise = np.clip((t - 2.6) / 0.7, 0, 1)
+out += lowpass(strings, 600 + 3000 * rise) * 0.05 * rise * env(2.6, 3.32, 0.3, 0.02)
+# 3.3: the clap: a huge slap and a boom
+out += boom(3.3, 50, 2.4, 1.7) + noise_hit(3.3, 0.25, 5000, 1.8) + noise_hit(3.3, 0.6, 900, 0.9)
+# squeezing: a low tremolo
+trem = lowpass(saw(55) + saw(58.3), 260) * (0.5 + 0.5 * np.sin(2 * np.pi * 9 * t)) * 0.12 * env(3.35, 4.3, 0.1, 0.3)
+out += trem
+# his steps as he runs off, going away
+for i, at in enumerate([4.45, 4.85, 5.22, 5.56]):
+    g = 0.55 * (0.78 ** i)
+    out += boom(at, 38, 1.8, g) + noise_hit(at, 0.3, 300, 0.4 * g)
+# out of sight: eating. Wet crunches and chewing, a little muffled (far off)
+eat = np.zeros(n)
+at = 5.7
+while at < 7.0:
+    big = rng.random() < 0.3
+    eat += noise_hit(at, 0.12 if not big else 0.22, 1800 if big else 1100, 0.55 if big else 0.32)
+    if big: eat += boom(at, 90, 0.4, 0.25)
+    at += rng.uniform(0.14, 0.32)
+chew = lowpass(rng.standard_normal(n), 400) * (0.5 + 0.5 * np.sin(2 * np.pi * 3.2 * t)) ** 3 * env(5.7, 7.1, 0.2, 0.4) * 0.9
+out += lowpass(eat + chew, 2200) * 0.9
+# a low growl under the eating
+out += lowpass(saw(46) + saw(46.7), 180) * (0.6 + 0.4 * np.sin(2 * np.pi * 1.3 * t)) * 0.18 * env(5.6, 7.6, 0.5, 0.8)
 # a long dark reverb over it all
 ir_len = int(2.6 * SR); k = np.arange(ir_len) / SR
 ir = rng.standard_normal(ir_len) * np.exp(-k * 2.4); ir[0] = 1

@@ -4,17 +4,18 @@
 //   0.0  everything stops; black bars, the light goes red and dark, the ground starts to rumble
 //   0.4  something huge rises slowly over the city — a silhouette, one hand gripping the rooftops
 //   1.4  its eyes open, one by one, and fix on the boss
-//   2.6  both hands come up around it and clamp shut on it (GRAB)
-//   3.7  he drags it down out of the shot and goes down after it: an empty, dark frame
-//   4.7  out of sight, he eats it (CHOMP): the crunch, green spraying up from below
-//   5.4  his head rises back into view up to the eyes, red now, staring at you; he laughs
-//   6.6  black (END)
+//   2.6  his hands come up either side of it, open...
+//   3.0  ...and clap shut around it, palms together (GRAB: it's gone, in his grasp)
+//   3.9  he draws his clasped hands in to his chest
+//   4.3  and runs off with it, out of the shot, the ground shaking with every step
+//   5.6  out of sight: the sounds of him eating it (CHOMP)
+//   6.8  black (END)
 // He stands still like something that doesn't need to move (GiantRig still): only his eyes, his
 // arm reaching (from the shoulder, within what his joints allow) and his body leaning into it.
 import { GIANT_RIG as R } from './giantRig';
 import { GIANT_MOUTH } from './giantArm';
 
-export const STEAL = { grab: 3.3, chomp: 4.7, end: 7.4 };
+export const STEAL = { grab: 3.3, chomp: 5.7, end: 7.7 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const mixP = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
@@ -23,42 +24,60 @@ const mixP = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k 
 const overshoot = x => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + 2.2 * Math.pow(x - 1, 3) + 1.2 * Math.pow(x - 1, 2));
 const seg = (t, a, b) => (t - a) / (b - a);
 
+// how his hands turn to meet palm to palm (degrees, each hand's own turn on its wrist)
+export const CLASP_TWIST = { l: 34, r: -34 };
+// his heavy steps as he runs off (s): engine.js shakes the ground on each
+export const STEPS = [4.45, 4.85, 5.22, 5.56];
+
+// The boss, nearly dead, sinks as he rises (to where his hands can close on it: in front of his chest)
+export function stealBoss(st, W, H) {
+  const k = ease(seg(st.t, 0.2, 2.4));
+  const x = clamp(st.x, W * 0.27, W * 0.73), y = Math.max(st.y, H * 0.56);
+  return { x: st.x + (x - st.x) * k, y: st.y + (y - st.y) * k };
+}
+const CHEST = [393, 420];   // where his two hands meet comfortably (art units): the clasp
+
 export function stealPose(st, W, H) {
-  const t = st.t, sc = H * 1.12 / 716;
-  const sd = st.x < W / 2 ? 'l' : 'r', out = sd === 'l' ? -1 : 1, other = sd === 'l' ? 'r' : 'l';
-  // he stands just inside the boss
-  const cx = clamp(st.x - out * W * 0.16, W * 0.3, W * 0.7), left = cx - 393 * sc;
-  // up over the city → down out of the shot after it → back up to the eyes
-  const up = H * 0.13 - 26 * sc, peek = H * 0.66 - 172 * sc, gone = H * 1.15;
-  const rise = up + (1 - ease(seg(t, 0.4, 2.5))) * H * 0.95;
-  const laughBob = t > 6.0 && t < 6.9 ? Math.abs(Math.sin((t - 6.0) * 11)) * 6 * sc * (1 - seg(t, 6.0, 6.9)) : 0;
-  const top = t < 3.7 ? rise : t < 5.4 ? up + (gone - up) * ease(seg(t, 3.7, 4.5)) : gone + (peek - gone) * ease(seg(t, 5.4, 6.4)) + laughBob;
+  const t = st.t;
+  const boss = stealBoss(st, W, H), end = stealBoss({ ...st, t: 9 }, W, H);
+  // as big as he can be with his head in the shot and his chest right behind where the boss ends up
+  const sc = clamp((end.y - H * 0.1) / (CHEST[1] - 26), H * 0.55 / 716, H * 1.15 / 716);
+  const cx0 = end.x;
+  const away = cx0 < W / 2 ? -1 : 1;                               // he runs off the nearer side
+  const run = ease(seg(t, 4.3, 5.7));
+  const cx = cx0 + away * run * (W * 0.5 + 393 * sc * 1.2);
+  const bob = t > 4.3 && t < 5.8 ? -Math.abs(Math.sin((t - 4.3) * Math.PI / 0.38)) * 16 * sc : 0;   // (up and down with each stride)
+  const left = cx - CHEST[0] * sc;
+  const up = end.y - CHEST[1] * sc;
+  const top = up + (1 - ease(seg(t, 0.4, 2.5))) * H * 0.95 + bob;
   const L = { left, top, sc };
   const px = ([x, y]) => ({ x: left + x * sc, y: top + y * sc });
-  const REST = { l: [200, 700], r: [890, 700] };   // hands hanging down, out of the shot
-  const boss = { x: st.x, y: st.y }, r = st.r * 0.36;
-  // both hands: come up either side of it, clamp shut on it, hold it (it struggles), drag it down
-  const side = h => (h === 'l' ? -1 : 1);
+  const REST = { l: [200, 700], r: [890, 700] };                  // hands hanging down, out of the shot
+  const roof = { x: clamp(cx0 + W * 0.3, W * 0.06, W * 0.94), y: H * 0.5 };   // (his right hand grips the rooftops while he rises)
+  const half = 62 * sc;                                            // half a hand's width: palms meet in the middle
+  const clasp = boss;
+  const chest = px([393, 470]);   // (drawn in a little closer once he's got it)
   const hand = h => {
-    const rest = px(REST[h]);
-    const cock = { x: boss.x + side(h) * W * 0.13, y: boss.y + H * 0.06 };
-    const shut = { x: boss.x + side(h) * r, y: boss.y + Math.sin(t * 40 + side(h)) * 2 };
-    const down = { x: shut.x, y: H * 1.4 };
-    if (t < 2.6) return h === other ? mixP(rest, { x: clamp(cx - out * W * 0.3, W * 0.06, W * 0.94), y: H * 0.5 }, ease(seg(t, 0.9, 2.3))) : rest;   // (the far hand grips the rooftops while he rises)
-    const from = h === other ? { x: clamp(cx - out * W * 0.3, W * 0.06, W * 0.94), y: H * 0.5 } : rest;
-    if (t < 2.95) return mixP(from, cock, ease(seg(t, 2.6, 2.95)));
-    if (t < STEAL.grab) return mixP(cock, shut, overshoot(seg(t, 2.95, STEAL.grab)));
-    if (t < 3.7) return shut;
-    return mixP(shut, down, ease(seg(t, 3.7, 4.3)) ** 1.4);
+    const sgn = h === 'l' ? -1 : 1;
+    const rest = h === 'r' && t < 2.6 ? mixP(px(REST.r), roof, ease(seg(t, 0.9, 2.3))) : px(REST[h]);
+    const from = h === 'r' ? roof : px(REST.l);
+    const open = { x: clasp.x + sgn * W * 0.16, y: clasp.y + H * 0.02 };
+    const shut = { x: clasp.x + sgn * half, y: clasp.y };
+    let at, tw = 0;
+    if (t < 2.6) at = rest;
+    else if (t < 3.0) { at = mixP(from, open, ease(seg(t, 2.6, 3.0))); tw = CLASP_TWIST[h] * 0.6 * ease(seg(t, 2.6, 3.0)); }
+    else if (t < STEAL.grab) { at = mixP(open, shut, overshoot(seg(t, 3.0, STEAL.grab))); tw = CLASP_TWIST[h] * (0.6 + 0.4 * ease(seg(t, 3.0, STEAL.grab))); }
+    else if (t < 3.9) { at = { x: shut.x + Math.sin(t * 38) * 1.5, y: shut.y + Math.sin(t * 31) * 1.5 }; tw = CLASP_TWIST[h]; }   // (squeezing)
+    else { const c = mixP(clasp, chest, ease(seg(t, 3.9, 4.35))); at = { x: c.x + sgn * half, y: c.y }; tw = CLASP_TWIST[h]; }
+    return { at, twist: tw };
   };
-  const hands = { l: { at: hand('l') }, r: { at: hand('r') } };
-  const held = mixP(hands.l.at, hands.r.at, 0.5);
-  // the body leans into it and bends down with the drag
-  const reach = ease(seg(t, 2.6, 3.2)) * (1 - ease(seg(t, 5.4, 6.0)));
-  const lean = out * 14 * reach, dip = 30 * reach;
-  // eyes: open one by one, on the boss, then on you when he comes back up
+  const hands = { l: hand('l'), r: hand('r') };
+  // he hunches over his catch, then leans into the run
+  const hunch = ease(seg(t, 3.3, 3.9)) * (1 - ease(seg(t, 5.6, 6.2)));
+  const lean = away * 22 * ease(seg(t, 4.2, 4.6)), dip = 16 * hunch;
   const eyesLit = R.eyes.map((_, i) => ease(seg(t, 1.4 + i * 0.13, 1.75 + i * 0.13)) * (0.88 + 0.12 * Math.sin(t * 6 + i * 1.7)));
-  const look = t < 5.0 ? held : { x: W / 2, y: H * 1.2 };
-  const state = { lean, dip, mad: t > 5.0, warn: t > 5.8 && t < 6.8, laugh: t > 6.0 && t < 6.8 };
-  return { L, sd, at: held, held, hands, look, state, mouth: { x: held.x, y: H * 1.02 }, eyesLit, light: 0.15 + 0.45 * ease(seg(t, 0.6, 2.8)) };
+  // eyes: the boss, his catch, then a glance back at you as he goes
+  const look = t < 4.2 ? clasp : t < 4.7 ? { x: W / 2, y: H * 1.2 } : { x: cx + away * W, y: H * 0.4 };
+  const state = { lean, dip, mad: t > 3.3, warn: t > 4.2 && t < 4.7 };
+  return { L, at: clasp, hands, look, state, eyesLit, light: 0.15 + 0.45 * ease(seg(t, 0.6, 2.8)), gone: run >= 1 };
 }

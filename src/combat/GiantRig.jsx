@@ -73,7 +73,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
   for (const sd of ['l', 'r']) {
     const A = ARMS[sd], h = hands[sd];
     const S = [A.S[0] + bx, A.S[1] + by - lift];
-    arms[sd] = { pose: poseArm(sd, S, h?.at ? toArt(h.at) : idle[sd], mem[sd], idle.twist[sd]), h };
+    arms[sd] = { pose: poseArm(sd, S, h?.at ? toArt(h.at) : idle[sd], mem[sd], h?.twist ?? idle.twist[sd]), h };   // (h.twist: turn the hand on its wrist, degrees)
   }
   const dimmed = f => (far ? `${FAR}${f ? ` ${f}` : ''}` : shade ? `${shade}${f ? ` ${f}` : ''}` : f);
   const handFilter = h => dimmed(h?.down ? 'brightness(0.45) saturate(0.6)' : h?.hurt ? 'brightness(1.9)' : h?.frozen ? 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)' : undefined);
