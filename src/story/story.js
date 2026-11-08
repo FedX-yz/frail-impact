@@ -55,6 +55,7 @@ export function makeStoryStage(node) {
     bg: asset(b.bg) ?? undefined,
     killTarget: b.kills ?? base.killTarget,
     boss: b.boss ?? null,
+    steal: b.steal ?? null,   // the Red Giant takes the boss at this much HP left (0.15 = 15%)
     basics: b.enemies ?? base.basics,
     elites,
     eliteCap: elites.length ? base.eliteCap : 0,

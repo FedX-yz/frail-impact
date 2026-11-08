@@ -1503,6 +1503,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (e.hp <= 0 || e.down > 0 || !s.enemies.includes(e)) return 0; // dead / downed / cleared
     if (e.type.acidOnly && !acid) return 0;   // a Swarm King swarm: only its acid hurts it
     if (e.hidden) return 0;                   // the Swarm King, off the screen
+    if (e.stolen) return 0;                   // a story boss the Red Giant is taking (stage.steal)
     if (e.sealed) {   // the Devourer behind its seal: break the weak spots first
       if (s.time - (e.sealHitT ?? -9) > 0.4) { e.sealHitT = s.time; floater(e.sealWord ?? 'SEALED', e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, '#fda4af', true); sfx('shield'); }
       return 0;
@@ -1540,6 +1541,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     }
 
     e.hp -= dmg; e.hurt = 0.12;
+    // story: a boss that gets its kill stolen. At this much HP left the Red Giant's hand comes down
+    if (s.stage.steal && e.tier === 'boss' && !e.type.nextPhase && s.phase === 'boss' && e.hp <= e.maxHp * s.stage.steal) {
+      e.hp = Math.max(1, e.hp); startSteal(e);
+    }
     rt.onDamage(e, dmg, linked);
     if (crit && !quiet) sheetFx('crit', e.x + rand(-K(14), K(14)), e.y + rand(-K(14), K(14)), K(84));
     if (!quiet) floater(`${crit ? 'CRIT ' : ''}${label}-${fmt(dmg)}`, e.x + rand(-10, 10), e.y - e.size * s.k * 0.5, color ?? (crit ? '#ff4444' : '#ffd84a'), crit, null, crit ? 'crit' : null);
@@ -1551,6 +1556,37 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       else killEnemy(e);
     }
     return dmg;
+  }
+
+  // ── A stolen kill (story: stage.steal) ───────────────────────────────────
+  // The boss is nearly dead and everything stops; the Red Giant's hand comes down on it from above
+  // (BattleArena → StealHand), crushes it at STEAL.crush, lifts away, and the fight ends
+  const STEAL = { crush: 0.6, end: 2.6 };
+  function startSteal(e) {
+    s.phase = 'steal'; e.stolen = true; e.lunge = null;
+    s.steal = { t: 0, id: e.id, x: e.x, y: e.y, r: drawnSize(e), crushed: false };
+    s.attacks = []; s.shots = []; s.globs = []; s.bolts = []; s.gas = null; s.hazards = []; s.player.stuck = null;
+    s.enemies = s.enemies.filter(x => x === e || x.tier === 'boss');
+    s.timeStop = 0;
+    sfx('shield');
+  }
+  function updateSteal(dt) {
+    const st = s.steal;
+    st.t += dt;
+    if (!st.crushed && st.t >= STEAL.crush) {
+      st.crushed = true;
+      const e = s.enemies.find(x => x.id === st.id);
+      effect({ kind: 'shards', x: st.x, y: st.y, r: st.r * 0.9, n: 16, color: '#b91c1c' });
+      effect({ kind: 'burst', x: st.x, y: st.y, r: st.r * 0.8, color: '#ef4444' });
+      if (e) killEnemy(e, { silent: true });
+      s.enemies = []; s.bossInfo = null;
+      s.hitStop = 0.22; shake(0.9); sfx('bigKill');
+      s.banner = { text: 'KILL STOLEN!', sub: 'the Red Giant takes it', t: 2.4, bad: true };
+    }
+    if (st.t >= STEAL.end) {
+      stageClear();
+      s.banner = { text: 'KILL STOLEN!', sub: 'the Red Giant takes it', t: 3, bad: true };
+    }
   }
 
   // Hydra: a head at 0 HP goes down; all heads down at once = dead
@@ -1738,7 +1774,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
 
   function pointerDown(x, y) { asYou(() => pointerDownNow(x, y)); }
   function pointerDownNow(x, y) {
-    if (s.paused || s.choosing) return;
+    if (s.paused || s.choosing || s.phase === 'steal') return;
     ({ x, y } = setPos(x, y));   // (dragged by the Hydra's tongue: your click lands where it dragged you)
     if (s.player.stuck && s.phase !== 'defeat' && s.phase !== 'clear') { spider.stuckClick(); return; }   // in a web trap: clicks tear you free
     pointerHold(true);
@@ -1780,7 +1816,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // specialUp (letting go) releases it all.
   function special(x, y) { return asYou(() => specialNow(x, y)); }
   function specialNow(x, y) {
-    if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return false;
+    if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.phase === 'steal' || s.mahoraga) return false;
     if (x != null) setPos(x, y);
     const P = s.player.pos;
     if (!P) return false;
@@ -1790,7 +1826,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // Q on kits with a second skill (6★ Ice's Flash Freeze): at the cursor. false = Q is just M2
   function skill2(x, y) {
     if (!rt.skill2Info()) return false;
-    if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.mahoraga) return true;
+    if (s.paused || s.choosing || s.phase === 'defeat' || s.phase === 'clear' || s.phase === 'steal' || s.mahoraga) return true;
     if (x != null) setPos(x, y);
     const P = s.player.pos;
     if (P) asYou(() => rt.skill2(P.x, P.y));
@@ -1824,7 +1860,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Ult ─────────────────────────────────────────────────────────────────
   function activateUlt() {
     const u = s.stats.ult;
-    if (!u || s.paused || s.choosing || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear') return false;
+    if (!u || s.paused || s.choosing || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear' || s.phase === 'steal') return false;
     const blocked = rt.ultBlocked();   // e.g. Uzumaki without enough spirits
     if (blocked) { const P = s.player.pos ?? { x: s.W / 2, y: s.H / 2 }; floater(`needs ${blocked}`, P.x, P.y - K(40), '#e879f9', true); return false; }
     if (rt.ultTap() === 'wait') return false;   // 6★ Ramsf with 10 Souls: waiting to see if a second tap comes
@@ -1918,7 +1954,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     cb('onDefeat', s.stageNum);
   }
   function loadStage(n) {
-    s.stageNum = n; s.stage = makeStage(n); s.giantFall = null;
+    s.stageNum = n; s.stage = makeStage(n); s.giantFall = null; s.steal = null;
     s.timeStop = 0;
     rt.reset('load');
     s.phase = 'fight'; s.kills = 0; s.bossInfo = null; s.over = null; s.combo.n = 0;
@@ -1983,8 +2019,10 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (expired) { s.floaters = s.floaters.filter(f => f.t < 1.1); s.floaterVer++; }
     s.effects.forEach(f => { f.t += dt; });
     if (s.giantFall) { s.giantFall.t += dt; if (s.giantFall.t > 3) s.giantFall = null; }
+    if (s.steal && s.phase !== 'steal') s.steal.t += dt;   // (the hand lifting away during the clear)
     s.effects = s.effects.filter(f => f.t < (f.life ?? 0.5));
     s.enemies.forEach(e => { e.hurt = Math.max(0, e.hurt - dt); if (e.attackT > 0) e.attackT -= dt; });
+    if (s.phase === 'steal') { updateSteal(dt); return; }   // everything else holds still
 
     if (s.phase !== 'defeat' && pl.hp > 0 && !M('noRegen', false)) heal(s.stats.regen * dt);
 

@@ -103,6 +103,15 @@ export const CHAPTERS = [
             battle: { level: 3, kills: 20, goal: 'the swarm: defeat 20 enemies' },
             codec: [{ when: 'start', who: 'reef', text: 'Whatever we kill, its soul is mine. M2 calls them back up. Hold M2 to choose which.' }] },
           { scene: 'c1-gz-swarm-out' },
+          // Astrec alone against the swarm's source, feeding on the giant. Near the end the giant
+          // grabs it himself (steal: at 15% HP left the Red Giant's hand comes down on it)
+          { name: 'The Source — Astrec', play: 40, playLevel: 1, playStats: CITY,
+            battle: { level: 3, kills: 5, elites: [], hordes: false, boss: 'swarmking', steal: 0.15, goal: 'find the source of the swarm',
+                      tweak: { giantNear: 3 } },
+            codec: [
+              { when: 'boss', who: 'astrec', pause: true, text: 'It\'s hiding behind its bugs! Lead the swarms into its own acid and the shield\'s gone. Then it\'s MINE!' },
+            ] },
+          { scene: 'c1-gz-stolen' },
         ],
         rewards: { gems: 15, coins: 1000 },
       },

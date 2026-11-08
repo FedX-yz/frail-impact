@@ -65,6 +65,7 @@ export const CAST = {
   dave:    { name: 'Dave',     color: '#fdba74', portrait: 'story/cast/dave-icon.png', sprite: 'story/cast/dave.png', height: 0.66 },
   // The Doctor: the voice on the laptop. The same robot voice as the hospital's unknown caller
   // (it's him), and the same dub when that's made
+  redgiant: { name: 'Red Giant', color: '#ef4444', portrait: 'enemies/giant/head.png', sprite: null },   // (too big for the stage: only his face on the codec)
   doctor:  { name: 'The Doctor', color: '#9ca3af', portrait: null, sprite: null, call: true, voice: { dir: 'audio/voice/stranger', preset: 'creepy' },
     dub: { dir: 'audio/dub/stranger', engine: 'elevenlabs', id: null } },
   hox:     { name: 'HOX',      color: '#ef4444', portrait: 'characters/hoxthankyou.gif', sprite: 'characters/hoxthankyou.gif' },

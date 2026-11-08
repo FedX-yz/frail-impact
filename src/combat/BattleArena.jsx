@@ -504,6 +504,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           {s.ambush && <SpiderRig r={s.ambush.rig} z={7} />}
           <MaimRing m={s.spiderMaim} k={k} />
           {s.giantFall && <GiantFall f={s.giantFall} t={s.time} />}
+          {s.steal && <StealHand st={s.steal} H={s.H} />}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
@@ -933,6 +934,25 @@ function GiantBody({ b, s }) {
   return <GiantRig L={b.gl} t={s.time} look={s.mahoraga ?? s.player.pos} hands={hands} state={state} />;
 }
 // killed: he topples back down behind the city (the boss explosion plays over it)
+// Story: the Red Giant steals the kill (engine.js → startSteal). His hand drops from above, fingers
+// down, onto the boss (crush at 0.6 s), holds it, then lifts away with it
+const STEAL_HAND = { src: `${BASE}enemies/giant/hand.png`, w: 240, h: 326 };
+function StealHand({ st, H }) {
+  const t = st.t, h = Math.max(H * 0.62, st.r * 1.5), w = h * STEAL_HAND.w / STEAL_HAND.h;
+  const land = st.y - h * 0.62;                                   // where its top sits once down
+  const fall = Math.min(1, t / 0.6), lift = Math.max(0, (t - 1.6) / 0.9);
+  const y = t < 0.6 ? -h + (land + h) * fall * fall : land - (land + h * 1.1) * lift * lift;
+  const squeeze = t > 0.6 && t < 1.6 ? 1 - 0.05 * Math.sin((t - 0.6) * 14) * Math.max(0, 1 - (t - 0.6)) : 1;
+  const shadow = Math.min(1, t / 0.6) * (1 - lift);
+  return (
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 30, overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', left: st.x - w * 0.6, top: st.y - h * 0.08, width: w * 1.2, height: h * 0.16, borderRadius: '50%',
+        background: 'radial-gradient(closest-side, rgba(0,0,0,0.6), transparent)', opacity: shadow, transform: `scale(${0.5 + shadow * 0.5})` }} />
+      <img src={STEAL_HAND.src} alt="" draggable={false} style={{ position: 'absolute', left: st.x - w / 2, top: y, width: w, height: h,
+        transform: `rotate(180deg) scaleY(${squeeze})`, transformOrigin: '50% 62%', filter: 'drop-shadow(0 18px 24px rgba(0,0,0,0.6))' }} />
+    </div>
+  );
+}
 function GiantFall({ f, t }) {
   const p = Math.min(1, f.t / 2.6), e = p * p;
   return (
