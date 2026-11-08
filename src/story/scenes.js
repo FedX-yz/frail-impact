@@ -66,7 +66,7 @@ export const SCENES = {
       'In the face of this merciless enemy, humanity was forced to hasten their technology advancements to get an upper hand against the Havoc. Thanks to those efforts, today fending off Havoc hordes became much more manageable, {em:but still on the edge.}',
     ] },
     { crawl: ['{title:JUNE 9TH 2020}'] },
-    { bg: null },
+    { bg: 'story/bg/drive-morning.jpg' },
     { music: 'audio/story/drive.mp3' },
     { ambience: 'audio/story/amb/wind.mp3' },
     { sfx: 'car_drive', delay: 1.2, hold: false },   // a car passing: sets the scene
@@ -80,10 +80,15 @@ export const SCENES = {
     { music: 'audio/story/hospital.mp3' },
     { ambience: 'audio/story/amb/night.mp3' },
     { sfx: 'car_arrive', delay: 0.3 },
+    { bg: 'story/bg/hospital-night.jpg' },
     'You reach the location. It\'s a run-down hospital, how welcoming. There\'s a single window lit up.',
     { sfx: 'door_creak', delay: 0.3 },
     { sfx: 'footsteps', delay: 3.2 },   // once the door's open
-    'You enter the building and try to go to the lit up room. There\'s no electricity, so you stumble your way over there. Inside that room...',
+    { bg: 'story/bg/hospital-corridor.jpg' },
+    'You enter the building and try to go to the lit up room.',
+    { bg: 'story/bg/hospital-door.jpg' },
+    'There\'s no electricity, so you stumble your way over there. Inside that room...',
+    { bg: 'story/bg/hospital-room.jpg' },
     { music: 'audio/story/birthday.mp3' },
     'You find balloons with rainbow letters spelling out "Happy Birthday!", and a birthday cake with a candle lit on a table.',
     ['stranger', 'Happy birthday, dear guest.'],
@@ -146,7 +151,7 @@ export const SCENES = {
     ['stranger', 'Oh, and you may take the cake.'],
     { choice: [{ text: 'Ok, thanks!' }] },
     { hide: 'all' },
-    { bg: null },   // [ ] outside the hospital, cake in hand (same picture slot as ending 1)
+    { bg: 'story/bg/hospital-hall.jpg' },   // on the way out, cake in hand
     { music: 'audio/story/cake.mp3' },
     { ambience: null },
     'You exit the abandoned hospital with your birthday cake!',
@@ -164,7 +169,7 @@ export const SCENES = {
     { shake: true },
     { ambience: 'audio/story/amb/wind.mp3' },
     { hide: 'all' },
-    { bg: null },   // [ ] a picture of you outside the hospital goes here
+    { bg: 'story/bg/hospital-night.jpg' },   // thrown out
     'You get out of the abandoned hospital.',
     { choice: [{ text: 'What the fuck was his deal?' }] },
     'You can\'t believe you bought some of the words that insane man said. Absolute maniac.',
@@ -323,7 +328,7 @@ export const SCENES = {
     { bg: 'story/bg/bus-interior.jpg' },
     { sfx: 'bus_idle', hold: false },
     'The bus arrives at ground zero after a few hours. Everyone gets up from their seats and goes outside.',
-    { bg: null },   // [ ] CG of the scenery (send the picture)
+    { bg: 'story/bg/ground-zero.jpg' },   // stand-in (a Zenless Zone Zero screenshot): swap for your own picture
     { show: 'bonk', at: 'left' }, { show: 'astrec', at: 'right' },
     ['bonk', 'Hell of a view innit? Can you imagine what\'s hiding there?!'],
     ['astrec', 'Don\'t even mention it bro, I\'m getting the feels already...'],
