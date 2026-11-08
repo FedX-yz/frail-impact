@@ -64,7 +64,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
   // the head: follows the body and the pose, sways, leans a little toward you
   const hd = R.head, pv = hd.pivot;
   const lean = P ? Math.max(-4, Math.min(4, (P[0] - pv[0]) / 60)) : 0;
-  const headRot = still ? 0 : Math.sin(t * 0.9) * 1.2 + idle.tilt + wl * 0.3 + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0) + (state.laugh ? Math.sin(t * 22) * 2.5 : 0);
+  const headRot = still ? (state.laugh ? Math.sin(t * 22) * 2.5 : 0) + wl * 0.3 : Math.sin(t * 0.9) * 1.2 + idle.tilt + wl * 0.3 + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0) + (state.laugh ? Math.sin(t * 22) * 2.5 : 0);
   const headDx = bx + idle.head[0], headDy = by + idle.head[1] - lift + (state.warn ? -3 : 0);
   // the arms
   const arms = {};

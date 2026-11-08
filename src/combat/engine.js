@@ -3,6 +3,7 @@
 // animation frame and draws `engine.state`. Positions are arena pixels; sizes
 // are design px × state.k so the same fight works on a phone and a PC.
 // ─────────────────────────────────────────────────────────────────────────────
+import { STEAL, stealPose } from './steal';
 import { sheetLife, warmSheets } from './sheetFx.js';
 import { BAL, speedHpMult } from './balance';
 import { GIANT_ART, ENEMY_TYPES, AFFIXES, ATTACK_DMG, DEBUFFS } from './enemies';
@@ -1559,13 +1560,13 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── A stolen kill (story: stage.steal) ───────────────────────────────────
-  // The boss is nearly dead and everything stops: an in-game cutscene (BattleArena → StealScene).
-  // The Red Giant rises behind the fight, his hand comes down on the boss and crushes it
-  // (STEAL.crush), he eats it, the screen goes dark (STEAL.end) and the story goes on. No words.
-  const STEAL = { crush: 1.3, chomp: 3.4, end: 4.7 };
+  // The boss is nearly dead and everything stops: an in-game cutscene (BattleArena → StealGiant /
+  // StealFront). The light goes, something huge rises behind the city, its eyes open one by one
+  // and fix on the boss; a hand snatches it (STEAL.grab), carries it to his mouth, he eats it
+  // (STEAL.chomp), turns his eyes to you, and the screen goes dark (STEAL.end). No words.
   function startSteal(e) {
     s.phase = 'steal'; e.stolen = true; e.lunge = null;
-    s.steal = { t: 0, id: e.id, x: e.x, y: e.y, r: drawnSize(e), crushed: false, chomped: false };
+    s.steal = { t: 0, id: e.id, x: e.x, y: e.y, r: drawnSize(e), img: e.img, grabbed: false, chomped: false };
     s.attacks = []; s.shots = []; s.globs = []; s.bolts = []; s.gas = null; s.hazards = []; s.player.stuck = null;
     s.enemies = s.enemies.filter(x => x === e || x.tier === 'boss');
     s.timeStop = 0; s.banner = null;
@@ -1574,19 +1575,20 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function updateSteal(dt) {
     const st = s.steal;
     st.t += dt;
-    if (st.t > 0.25 && st.t < 0.9) shake(0.04 + (st.t - 0.25) * 0.12);   // the rumble before he shows
-    if (!st.crushed && st.t >= STEAL.crush) {
-      st.crushed = true;
+    if (st.t > 0.4 && st.t < 2.6) shake(0.03 + Math.min(1, (st.t - 0.4) / 2) * 0.07);   // the rumble as he rises
+    if (!st.grabbed && st.t >= STEAL.grab) {   // snatched: it's in his hand now (drawn there)
+      st.grabbed = true;
       const e = s.enemies.find(x => x.id === st.id);
-      effect({ kind: 'shards', x: st.x, y: st.y, r: st.r * 1.1, n: 22, color: '#bef264' });
-      effect({ kind: 'burst', x: st.x, y: st.y, r: st.r * 0.9, color: '#a3e635' });
-      effect({ kind: 'flash', color: '#ffffff', life: 0.22 });
       if (e) killEnemy(e, { silent: true });
       s.enemies = []; s.bossInfo = null;
-      s.hitStop = 0.3; shake(1); sfx('bigKill');
+      s.hitStop = 0.12; shake(0.5); sfx('bigKill');
     }
-    if (st.crushed && st.t < 2.4 && Math.random() < dt * 6) effect({ kind: 'shards', x: st.x + rand(-st.r * 0.3, st.r * 0.3), y: st.y + st.r * 0.2, r: st.r * 0.5, n: 4, color: '#bef264' });   // dripping
-    if (!st.chomped && st.t >= STEAL.chomp) { st.chomped = true; shake(0.45); sfx('bigKill'); }
+    if (!st.chomped && st.t >= STEAL.chomp) {
+      st.chomped = true;
+      st.mouth = stealPose(st, s.W, s.H).mouth;
+      { effect({ kind: 'shards', x: st.mouth.x, y: st.mouth.y, r: st.r * 0.9, n: 20, color: '#bef264' }); }
+      shake(0.7); sfx('bigKill');
+    }
     if (st.t >= STEAL.end) { stageClear(); s.banner = null; s.phaseT = 0.4; }
   }
 
