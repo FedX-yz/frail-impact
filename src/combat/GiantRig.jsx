@@ -48,20 +48,23 @@ function dart(i, t, rate) {
 // far: he's far away behind the city (dark, eyes lit, nobody fighting him: his hands follow his idle poses)
 const FAR = 'brightness(0.4) saturate(1.15)';
 // still: he doesn't move at all (only his eyes can); noArms: just his body and head
+// state.dip: he bends forward this much (art units: shoulders and head go down with it)
+// layer: 'arm' = only his `arm` side's arm, 'back' = everything but it — two of them with the same
+// props draw him split (his body behind the fight, that arm in front) with one and the same pose
 const REST = { l: R.arms.l.hand.c, r: R.arms.r.hand.c, twist: { l: 0, r: 0 }, head: [0, 0], tilt: 0, body: [0, 0] };
-export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false, still = false, noArms = false }) {
+export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false, still = false, noArms = false, layer = 'all', arm = 'l' }) {
   const mem = useRef({ l: {}, r: {} }).current;   // which way each elbow is bent
   const toArt = p => [(p.x - L.left) / L.sc, (p.y - L.top) / L.sc];
   const idle = still ? REST : giantIdlePose(t, state.mad);   // (the engine rests his hands on the same poses)
   const breath = still ? 0 : Math.sin(t * 1.5);
   const lift = breath * 5;                            // shoulders and head rise as he breathes in (with the chest)
   // (lean: he shifts his weight toward a hand that's attacking: engine.js → placeGiant)
-  const wl = state.lean ?? 0, bx = idle.body[0] + wl, by = idle.body[1] + Math.abs(wl) * 0.25;
+  const wl = state.lean ?? 0, dip = state.dip ?? 0, bx = idle.body[0] + wl, by = idle.body[1] + Math.abs(wl) * 0.25 + dip;
   const P = look ? toArt(look) : null;
   // the head: follows the body and the pose, sways, leans a little toward you
   const hd = R.head, pv = hd.pivot;
   const lean = P ? Math.max(-4, Math.min(4, (P[0] - pv[0]) / 60)) : 0;
-  const headRot = still ? 0 : Math.sin(t * 0.9) * 1.2 + idle.tilt + wl * 0.3 + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0);
+  const headRot = still ? 0 : Math.sin(t * 0.9) * 1.2 + idle.tilt + wl * 0.3 + lean + (state.mad ? Math.sin(t * 13) * 0.6 : 0) + (state.laugh ? Math.sin(t * 22) * 2.5 : 0);
   const headDx = bx + idle.head[0], headDy = by + idle.head[1] - lift + (state.warn ? -3 : 0);
   // the arms
   const arms = {};
@@ -123,22 +126,11 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
           <radialGradient id="giantEyeMad"><stop offset="0%" stopColor="#fff1f2" stopOpacity="0.95" /><stop offset="45%" stopColor="#f43f5e" stopOpacity="0.6" /><stop offset="100%" stopColor="#be123c" stopOpacity="0" /></radialGradient>
         </defs>
       </svg>
-      {R.order.map(k => parts[k] ?? null)}
+      {(layer === 'arm' ? [`${arm}upper`, `${arm}lower`, `${arm}hand`] : layer === 'back' ? R.order.filter(k => !k.startsWith(arm) || k === 'body') : R.order).map(k => parts[k] ?? null)}
     </div>
   );
 }
 
-// One of his arms on its own, posed to reach `at` (arena px) from its shoulder at rest. With
-// <GiantRig still noArms> on the same L, his body can sit behind the fight and the arm in front of it
-export function GiantArm({ L, sd, at, dim }) {
-  const mem = useRef({}).current;
-  const pose = poseArm(sd, ARMS[sd].S, [(at.x - L.left) / L.sc, (at.y - L.top) / L.sc], mem);
-  return (
-    <div className="giant-rig" style={{ width: R.size[0], height: R.size[1], transform: `translate(${L.left}px, ${L.top}px) scale(${L.sc})`, filter: dim }}>
-      <Piece {...pose.upper} /><Piece {...pose.lower} /><Piece {...pose.hand} />
-    </div>
-  );
-}
 export const GIANT_RIG_CSS = `
   .giant-rig { position:absolute; left:0; top:0; z-index:5; pointer-events:none; transform-origin:0 0; }
   .giant-rig img { max-width:none; max-height:none; }

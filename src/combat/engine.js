@@ -1562,7 +1562,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // The boss is nearly dead and everything stops: an in-game cutscene (BattleArena → StealScene).
   // The Red Giant rises behind the fight, his hand comes down on the boss and crushes it
   // (STEAL.crush), he eats it, the screen goes dark (STEAL.end) and the story goes on. No words.
-  const STEAL = { crush: 1.25, chomp: 3.15, end: 4.4 };
+  const STEAL = { crush: 1.3, chomp: 3.4, end: 4.7 };
   function startSteal(e) {
     s.phase = 'steal'; e.stolen = true; e.lunge = null;
     s.steal = { t: 0, id: e.id, x: e.x, y: e.y, r: drawnSize(e), crushed: false, chomped: false };
@@ -1574,7 +1574,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   function updateSteal(dt) {
     const st = s.steal;
     st.t += dt;
-    if (st.t > 0.25 && st.t < 1.1) shake(0.05);   // the ground trembling as he rises
+    if (st.t > 0.25 && st.t < 0.9) shake(0.04 + (st.t - 0.25) * 0.12);   // the rumble before he shows
     if (!st.crushed && st.t >= STEAL.crush) {
       st.crushed = true;
       const e = s.enemies.find(x => x.id === st.id);
@@ -1585,7 +1585,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       s.enemies = []; s.bossInfo = null;
       s.hitStop = 0.3; shake(1); sfx('bigKill');
     }
-    if (st.crushed && st.t < 2.3 && Math.random() < dt * 6) effect({ kind: 'shards', x: st.x + rand(-st.r * 0.3, st.r * 0.3), y: st.y + st.r * 0.2, r: st.r * 0.5, n: 4, color: '#bef264' });   // dripping
+    if (st.crushed && st.t < 2.4 && Math.random() < dt * 6) effect({ kind: 'shards', x: st.x + rand(-st.r * 0.3, st.r * 0.3), y: st.y + st.r * 0.2, r: st.r * 0.5, n: 4, color: '#bef264' });   // dripping
     if (!st.chomped && st.t >= STEAL.chomp) { st.chomped = true; shake(0.45); sfx('bigKill'); }
     if (st.t >= STEAL.end) { stageClear(); s.banner = null; s.phaseT = 0.4; }
   }

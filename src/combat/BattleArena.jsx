@@ -2,7 +2,7 @@ import { SHEET_FX } from './sheetFx.js';
 import { Children, Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES, GIANT_ART } from './enemies';
-import { GiantRig, GiantArm, GIANT_RIG_CSS } from './GiantRig';
+import { GiantRig, GIANT_RIG_CSS } from './GiantRig';
 import { GIANT_MOUTH } from './giantArm';
 import { SpiderRig, SpiderGround, MaimRing, SPIDER_CSS } from './SpiderRig';
 import { SKILLS, describeKit } from './kits';
@@ -803,7 +803,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           <div key={f.id} style={{ position: 'absolute', inset: 0, background: f.color, opacity: 0.45 * Math.max(0, 1 - f.t / (f.life ?? 0.5)), pointerEvents: 'none', zIndex: 12 }} />
         ))}
 
-        {s.steal && <StealFront st={s.steal} W={s.W} H={s.H} />}
+        {s.steal && <StealFront st={s.steal} W={s.W} H={s.H} t={s.time} />}
         {/* Mahoraga: everything else goes grey; you watch it (the usual kit) or command it (the other one) */}
         {s.mahoraga && (s.mahoraga.v2 ? <MahoragaLayer s={s} k={k} /> : <MahoragaClassic m={s.mahoraga} k={k} />)}
         <WorldCuts effects={s.effects} k={k} />
@@ -938,40 +938,57 @@ function GiantBody({ b, s }) {
   return <GiantRig L={b.gl} t={s.time} look={s.mahoraga ?? s.player.pos} hands={hands} state={state} />;
 }
 // killed: he topples back down behind the city (the boss explosion plays over it)
-// Story: the Red Giant steals the kill (engine.js → startSteal), as a cutscene. Black bars close in,
-// he rises behind the fight (StealGiant: his body, behind the enemies), his arm reaches over it and
-// comes down on the boss (StealFront: the arm, in front), he lifts it to his mouth, the screen goes dark.
-// Times match engine.js → STEAL.
+// Story: the Red Giant steals the kill (engine.js → startSteal), as a cutscene. Nobody's seen him
+// all fight. Everything stops, black bars close in, the ground rumbles and a shadow falls, then
+// he bursts up out of nowhere, already reaching, and his hand slams down on the boss. He holds
+// it, carries it to his mouth, eats it, laughs, and it all goes black. Times match engine.js → STEAL.
+// He's drawn split, one pose: his body behind the fight (StealGiant), the reaching arm in front
+// (StealFront). His body follows the reach: he leans to that side and bends down to the ground.
 const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-function stealLayout(st, W, H) {
-  const sc = H * 1.02 / 716, left = W / 2 - 393 * sc;                 // (393: his body's middle, in art units)
-  const rise = ease((st.t - 0.15) / 0.95);
-  const top = H * 0.13 - 26 * sc + (1 - rise) * H * 0.8;            // (26: the top of his head)
-  return { left, top, sc, sd: st.x < W / 2 ? 'l' : 'r' };
+const easeOut = x => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 3));
+const mixP = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+function stealPose(st, W, H) {
+  const t = st.t, sc = H * 1.0 / 716;
+  const sd = st.x < W / 2 ? 'l' : 'r', out = sd === 'l' ? -1 : 1;
+  // stand him so that hand comes down in front of him at an easy reach: its shoulder a little
+  // to the inside of the boss
+  const shoulderX = sd === 'l' ? 110 : 678, mid = 393;
+  const left = Math.max(W * 0.28, Math.min(W * 0.72, st.x - out * W * 0.12 - (shoulderX - mid) * sc)) - mid * sc;
+  const rise = easeOut((t - 0.6) / 0.38);                       // up from below in one go
+  const top = H * 0.12 - 26 * sc + (1 - rise) * H * 1.05;
+  const L = { left, top, sc };
+  const mouth = { x: left + GIANT_MOUTH[0] * sc, y: top + GIANT_MOUTH[1] * sc };
+  // the hand: raised over it as he comes up, slams down, holds it, carries it up to his mouth
+  const above = { x: st.x + out * W * 0.04, y: st.y - H * 0.36 }, on = { x: st.x, y: st.y };
+  const at = t < 0.95 ? above : t < 1.3 ? mixP(above, on, Math.pow((t - 0.95) / 0.35, 2)) : t < 2.4 ? on : mixP(on, mouth, ease((t - 2.4) / 0.75));
+  // his body goes with the hand: leaning out and bending down while it's on the ground, back up to eat
+  const down = ease((t - 0.95) / 0.4) * (1 - ease((t - 2.3) / 0.8));
+  const state = { lean: out * 34 * down, dip: 46 * down, mad: t > 3.4, laugh: t > 3.45 && t < 4.3 };
+  const rest = sd === 'l' ? [1010, 640] : [120, 650];   // the other hand leans on the city
+  const hands = { [sd]: { at }, [sd === 'l' ? 'r' : 'l']: { at: { x: left + rest[0] * sc, y: top + rest[1] * sc } } };
+  return { L, sd, at, hands, state, show: t > 0.6 };
 }
 function StealGiant({ st, W, H, t }) {
-  const L = stealLayout(st, W, H);
+  const P = stealPose(st, W, H);
+  if (!P.show) return null;
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-      <GiantRig L={L} t={t} look={{ x: st.x, y: st.y }} still noArms state={{ mad: st.t > 3.15 }} dim="brightness(0.82)" />
+      <GiantRig L={P.L} t={t} look={P.at} hands={P.hands} state={P.state} layer="back" arm={P.sd} dim="brightness(0.85)" />
     </div>
   );
 }
-function StealFront({ st, W, H }) {
-  const t = st.t, L = stealLayout(st, W, H);
-  const above = { x: st.x, y: st.y - H * 0.38 }, on = { x: st.x, y: st.y };
-  const mouth = { x: L.left + GIANT_MOUTH[0] * L.sc, y: L.top + GIANT_MOUTH[1] * L.sc };
-  const mix = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
-  // the hand: hovers over it while he rises, slams down, holds it, carries it up to his mouth
-  const at = t < 0.95 ? above : t < 1.25 ? mix(above, on, Math.pow((t - 0.95) / 0.3, 2)) : t < 2.3 ? on : mix(on, mouth, ease((t - 2.3) / 0.85));
-  const bars = ease(t / 0.45) * 0.12, dark = ease((t - 0.3) / 0.8) * 0.35 * (1 - ease((t - 1.25) / 0.4)) + ease((t - 3.6) / 0.8);
+function StealFront({ st, W, H, t }) {
+  const k = st.t, P = stealPose(st, W, H);
+  const bars = ease(k / 0.45) * 0.12;
+  // a shadow falls before he shows (then the light comes back), and black at the end
+  const dark = Math.min(1, ease((k - 0.2) / 0.45) * 0.45 * (1 - ease((k - 1.3) / 0.6)) + ease((k - 4.0) / 0.6));
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 13, overflow: 'hidden' }}>
-      {/* his shadow falling over everything as he leans in (then black at the end) */}
-      <div style={{ position: 'absolute', inset: 0, background: '#000', opacity: Math.min(1, dark) }} />
-      {t < 3.95 && <GiantArm L={L} sd={L.sd} at={at} dim="brightness(0.88)" />}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(#000, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.3))', opacity: dark }} />
+      {P.show && k < 4.4 && <GiantRig L={P.L} t={t} look={P.at} hands={P.hands} state={P.state} layer="arm" arm={P.sd} dim="brightness(0.9)" />}
       <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${bars * 100}%`, background: '#000' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${bars * 100}%`, background: '#000' }} />
+      {k > 4.0 && <div style={{ position: 'absolute', inset: 0, background: '#000', opacity: ease((k - 4.0) / 0.6) }} />}
     </div>
   );
 }
