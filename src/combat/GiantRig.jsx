@@ -49,10 +49,12 @@ function dart(i, t, rate) {
 const FAR = 'brightness(0.4) saturate(1.15)';
 // still: he doesn't move at all (only his eyes can); noArms: just his body and head
 // state.dip: he bends forward this much (art units: shoulders and head go down with it)
+// shade: a filter for his skin only (not his eyes); eyesLit: how lit each eye's glow is (0..1),
+// instead of the fight's open/closed glows; front: 'l' / 'r' draws that arm over his face
 // layer: 'arm' = only his `arm` side's arm, 'back' = everything but it — two of them with the same
 // props draw him split (his body behind the fight, that arm in front) with one and the same pose
 const REST = { l: R.arms.l.hand.c, r: R.arms.r.hand.c, twist: { l: 0, r: 0 }, head: [0, 0], tilt: 0, body: [0, 0] };
-export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false, still = false, noArms = false, layer = 'all', arm = 'l' }) {
+export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false, still = false, noArms = false, layer = 'all', arm = 'l', shade = null, eyesLit = null, front = null }) {
   const mem = useRef({ l: {}, r: {} }).current;   // which way each elbow is bent
   const toArt = p => [(p.x - L.left) / L.sc, (p.y - L.top) / L.sc];
   const idle = still ? REST : giantIdlePose(t, state.mad);   // (the engine rests his hands on the same poses)
@@ -73,7 +75,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
     const S = [A.S[0] + bx, A.S[1] + by - lift];
     arms[sd] = { pose: poseArm(sd, S, h?.at ? toArt(h.at) : idle[sd], mem[sd], idle.twist[sd]), h };
   }
-  const dimmed = f => (far ? `${FAR}${f ? ` ${f}` : ''}` : f);
+  const dimmed = f => (far ? `${FAR}${f ? ` ${f}` : ''}` : shade ? `${shade}${f ? ` ${f}` : ''}` : f);
   const handFilter = h => dimmed(h?.down ? 'brightness(0.45) saturate(0.6)' : h?.hurt ? 'brightness(1.9)' : h?.frozen ? 'grayscale(1) brightness(1.45) sepia(1) hue-rotate(165deg) saturate(1.9)' : undefined);
   const armFilter = h => dimmed(h?.down ? 'brightness(0.6) saturate(0.7)' : undefined);
   const parts = {
@@ -112,8 +114,9 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
       })}
       <svg viewBox={`0 0 ${hd.w} ${hd.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}>
         {R.eyes.map((e, i) => (
-          <circle key={i} className={`giant-eye${far ? ' far' : ''}${state.warn ? ' warn' : state.open || far ? ' open' : ''}${state.mad ? ' mad' : ''}${state.hit ? ' hit' : ''}`}
-            cx={e.c[0] - hx} cy={e.c[1] - hy} r={e.big ? 36 : 17} fill={`url(#${state.mad ? 'giantEyeMad' : 'giantEye'})`} />
+          <circle key={i} className={`giant-eye${far ? ' far' : ''}${eyesLit ? '' : state.warn ? ' warn' : state.open || far ? ' open' : ''}${state.mad ? ' mad' : ''}${state.hit ? ' hit' : ''}`}
+            style={eyesLit ? { opacity: eyesLit[i] ?? 0, transition: 'none' } : undefined}
+            cx={e.c[0] - hx} cy={e.c[1] - hy} r={(e.big ? 36 : 17) * (eyesLit ? 1.35 : 1)} fill={`url(#${state.mad ? 'giantEyeMad' : 'giantEye'})`} />
         ))}
       </svg>
     </div>
@@ -126,7 +129,8 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
           <radialGradient id="giantEyeMad"><stop offset="0%" stopColor="#fff1f2" stopOpacity="0.95" /><stop offset="45%" stopColor="#f43f5e" stopOpacity="0.6" /><stop offset="100%" stopColor="#be123c" stopOpacity="0" /></radialGradient>
         </defs>
       </svg>
-      {(layer === 'arm' ? [`${arm}upper`, `${arm}lower`, `${arm}hand`] : layer === 'back' ? R.order.filter(k => !k.startsWith(arm) || k === 'body') : R.order).map(k => parts[k] ?? null)}
+      {(layer === 'arm' ? [`${arm}upper`, `${arm}lower`, `${arm}hand`] : layer === 'back' ? R.order.filter(k => !k.startsWith(arm) || k === 'body')
+        : front ? [...R.order.filter(k => !k.startsWith(front) || k === 'body'), `${front}upper`, `${front}lower`, `${front}hand`] : R.order).map(k => parts[k] ?? null)}
     </div>
   );
 }

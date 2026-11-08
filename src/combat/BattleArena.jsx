@@ -8,7 +8,7 @@ import { SpiderRig, SpiderGround, MaimRing, SPIDER_CSS } from './SpiderRig';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
 import { getSettings } from '../utils/settings';
-import { bossMusic, bossSongKey } from '../utils/sfx';
+import { bossMusic, bossSongKey, playCue, preloadCue } from '../utils/sfx';
 import { CursorArt } from '../components/GameCursor';
 import { CURSOR_SIZES, trackHp } from '../utils/cursor';
 import FocusImg from '../components/FocusImg';
@@ -47,6 +47,7 @@ const STATUS_PORTRAITS = {
 // right; it eases to a stop while a boss is out), using the *_loop pictures (each painting + its mirror image, so it repeats seamlessly).
 const SCROLL = true;
 const LOOP_ASPECT = 4800 / 1682;   // width / height of the *_loop pictures
+const STEAL_SCORE = `${BASE}audio/music/redgiant_reveal.mp3`;   // the stolen kill's score (tools/make-steal-score.py)
 const PARALLAX = [
   { src: `${BASE}backgrounds/city_sky.png`,  loop: `${BASE}backgrounds/city_sky_loop.png`,  depth: 6,  speed: 8 },
   { src: `${BASE}backgrounds/city_far.png`,  loop: `${BASE}backgrounds/city_far_loop.png`,  depth: 14, speed: 22 },
@@ -138,9 +139,17 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
     const was = bossWas.current;
     bossWas.current = bossSong;
     if (bossSong) bossMusic(was === 'mount' ? 'resume' : was ? 'switch' : 'start', engine.state.bossMusic);
-    else if (was && was !== 'mount') bossMusic('stop');
+    else if (was && was !== 'mount') bossMusic(engine.state.phase === 'steal' ? 'cut' : 'stop');   // (a stolen kill: silence at once)
   }, [bossSong, engine]);
   useEffect(() => () => { const w = bossWas.current; if (w && w !== 'mount') bossMusic('pause'); }, []);
+  // a stolen kill (steal.js): the boss music cuts out, the cutscene's own score plays
+  const stealing = !!engine.state.steal;
+  useEffect(() => { if (engine.state.stage.steal) preloadCue(STEAL_SCORE); }, [engine]);
+  useEffect(() => {
+    if (!stealing) return;
+    const stop = playCue(STEAL_SCORE);
+    return () => setTimeout(stop, 2500);   // (lets it ring into the next scene a little)
+  }, [stealing]);
 
   // E = ult
   useEffect(() => {
@@ -946,19 +955,12 @@ function StealGiant({ st, W, H, t }) {
   const held = st.t >= STEAL.grab && st.t < STEAL.chomp;
   return (   // (isolate: the rig's own z-index stays in here, behind the fight)
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', isolation: 'isolate' }}>
-      <GiantRig L={P.L} t={t} look={P.look} hands={P.hands} state={P.state} still dim={`brightness(${P.light.toFixed(2)}) saturate(0.85)`} />
+      <GiantRig L={P.L} t={t} look={P.look} hands={P.hands} state={P.state} still front={P.sd} eyesLit={P.eyesLit}
+        shade={`brightness(${P.light.toFixed(2)}) saturate(0.85)`} />
       {held && st.img && (
         <img src={st.img} alt="" draggable={false} style={{ position: 'absolute', zIndex: 6, left: P.at.x - st.r * 0.42, top: P.at.y - st.r * 0.42, width: st.r * 0.84, height: st.r * 0.84,
           objectFit: 'contain', filter: `brightness(${P.light.toFixed(2)})`, transform: `rotate(${Math.sin(st.t * 9) * 8 - 20}deg)` }} />
       )}
-      {/* his eyes burn through the dark */}
-      {P.eyes.map((e, i) => {
-        const o = P.eyeOpen(i);
-        return o > 0 && (
-          <div key={i} style={{ position: 'absolute', zIndex: 6, left: e.x - e.r * 1.7, top: e.y - e.r * 1.7, width: e.r * 3.4, height: e.r * 3.4, borderRadius: '50%', opacity: o * (0.95 + Math.sin(st.t * 5 + i * 1.7) * 0.05),
-            background: `radial-gradient(circle, ${P.state.mad ? '#fff1f2' : '#fbffe8'} 0%, ${P.state.mad ? 'rgba(255,40,80,0.85)' : 'rgba(210,255,120,0.75)'} 14%, ${P.state.mad ? 'rgba(220,20,60,0.25)' : 'rgba(163,230,53,0.2)'} 34%, transparent 62%)` }} />
-        );
-      })}
     </div>
   );
 }

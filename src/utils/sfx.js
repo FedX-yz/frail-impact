@@ -313,7 +313,7 @@ export function bossMusic(cmd, song = null) {
     b.timer = setTimeout(() => { if (b.on) playBoss(song, 0.5); }, 320);
   } else if (b.on) {
     b.on = false;
-    const sec = cmd === 'pause' ? 0.25 : 2;
+    const sec = cmd === 'pause' ? 0.25 : cmd === 'cut' ? 0.15 : 2;   // (cut: gone at once, for a cutscene)
     fadeBoss(0, sec);
     b.timer = setTimeout(() => {
       if (b.on) return;
@@ -323,6 +323,27 @@ export function bossMusic(cmd, song = null) {
   }
 }
 export const bossSongKey = songKey;
+
+// A one-off piece of music (a cutscene's score), through the music volume. load(src) fetches it
+// ahead; play(src) starts it and returns stop() (a short fade)
+const cues = {};
+const loadCue = src => (cues[src] ??= fetch(src).then(r => r.arrayBuffer()).then(a => _audioCtx.decodeAudioData(a)).catch(() => null));
+export function preloadCue(src) { loadCue(src); }
+export function playCue(src) {
+  if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  const gain = _audioCtx.createGain(); gain.connect(musicBus);
+  let node = null, stopped = false;
+  loadCue(src).then(buf => {
+    if (!buf || stopped) return;
+    node = _audioCtx.createBufferSource(); node.buffer = buf; node.connect(gain); node.start();
+  });
+  return () => {
+    stopped = true;
+    const t = _audioCtx.currentTime;
+    gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(0.0001, t + 0.5);
+    setTimeout(() => { try { node?.stop(); } catch { /* already over */ } gain.disconnect(); }, 600);
+  };
+}
 
 export const playClose = () => playSFX(`${BASE}sounds/ui_close.mp3`);
 export const playPress = () => {
