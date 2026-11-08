@@ -271,7 +271,7 @@ export default function VNPlayer({ sceneId, flags, onEnd, mobile, portrait, prof
           const c = CAST[a.id] ?? {};
           const src = asset((a.mood && c.moods?.[a.mood]) || c.sprite);
           const talking = st.line?.who === a.id;
-          const dim = st.line && !narr && !talking;
+          const dim = st.line && !narr && !talking && !c.lit;
           const part = (c.height ?? 1) < 1;   // a bust: its cut edge sinks behind the text box
           return (
             <div key={a.id} className="vn-actor" style={{ position: 'absolute', bottom: tall ? (part ? '18%' : '26%') : 0, left: `${POS[a.at] ?? 50}%`,

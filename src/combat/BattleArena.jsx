@@ -2,7 +2,8 @@ import { SHEET_FX } from './sheetFx.js';
 import { Children, Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BAL } from './balance';
 import { AFFIXES, ENEMY_TYPES, GIANT_ART } from './enemies';
-import { GiantRig, GIANT_RIG_CSS } from './GiantRig';
+import { GiantRig, GiantArm, GIANT_RIG_CSS } from './GiantRig';
+import { GIANT_MOUTH } from './giantArm';
 import { SpiderRig, SpiderGround, MaimRing, SPIDER_CSS } from './SpiderRig';
 import { SKILLS, describeKit } from './kits';
 import { SKILL_NAMES } from './kitRuntime';
@@ -353,6 +354,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
               backgroundImage: `url(${l.loop})`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x', backgroundPosition: 'left bottom', willChange: 'transform' }} />}
           </div>
         </Fragment>))}
+        {s.steal && <StealGiant st={s.steal} W={s.W} H={s.H} t={s.time} />}
         <div style={{ position: 'absolute', inset: 0, transform: `translate(${shakeX}px,${shakeY}px)` }}>
           <div style={{ position: 'absolute', inset: 0, background: s.stage.bg ? 'rgba(10,14,30,0.45)' : 'rgba(10,14,30,0.22)', pointerEvents: 'none' }} />
 
@@ -504,7 +506,6 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           {s.ambush && <SpiderRig r={s.ambush.rig} z={7} />}
           <MaimRing m={s.spiderMaim} k={k} />
           {s.giantFall && <GiantFall f={s.giantFall} t={s.time} />}
-          {s.steal && <StealHand st={s.steal} H={s.H} />}
 
           {/* ── Enemies ──────────────────────────────────────────────── */}
           {drawList.map(e => {
@@ -802,6 +803,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
           <div key={f.id} style={{ position: 'absolute', inset: 0, background: f.color, opacity: 0.45 * Math.max(0, 1 - f.t / (f.life ?? 0.5)), pointerEvents: 'none', zIndex: 12 }} />
         ))}
 
+        {s.steal && <StealFront st={s.steal} W={s.W} H={s.H} />}
         {/* Mahoraga: everything else goes grey; you watch it (the usual kit) or command it (the other one) */}
         {s.mahoraga && (s.mahoraga.v2 ? <MahoragaLayer s={s} k={k} /> : <MahoragaClassic m={s.mahoraga} k={k} />)}
         <WorldCuts effects={s.effects} k={k} />
@@ -821,6 +823,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         <ReefScreen s={s} mainCard={mainCard} mobile={mobile} />
         {s.kit.found && <ComboToast f={s.kit.found} />}
 
+        <div style={s.steal ? { opacity: 0, pointerEvents: 'none' } : undefined}>{/* (a cutscene: no HUD) */}
         <StageBarView {...stageBarProps(s, bossParts)} />
 
         <ComboMeter n={s.combo.n} left={s.combo.n ? Math.max(0, 1 - s.combo.t / BAL.COMBO_WINDOW) : 0} k={k} top={comboTop} />
@@ -882,9 +885,10 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Extra layers from the screen using the arena (story mode: codec popups) */}
         {children}
+        </div>
 
         {/* The battle cursor, above everything (the system arrow is hidden over the arena) */}
-        {gcOn && P && (
+        {gcOn && P && !s.steal && (
           <div ref={cursorRef} style={{ position: 'absolute', left: 0, top: 0, zIndex: 40, pointerEvents: 'none', transform: `translate3d(${P.x}px, ${P.y}px, 0)`,
             visibility: cursorIn.current ? 'visible' : 'hidden' }}>
             <CursorArt theme={gcTheme} size={CURSOR_SIZES[prefs.cursorSize] ?? CURSOR_SIZES.m} skill={skillRing} ult={ultRing}
@@ -934,22 +938,40 @@ function GiantBody({ b, s }) {
   return <GiantRig L={b.gl} t={s.time} look={s.mahoraga ?? s.player.pos} hands={hands} state={state} />;
 }
 // killed: he topples back down behind the city (the boss explosion plays over it)
-// Story: the Red Giant steals the kill (engine.js → startSteal). His hand drops from above, fingers
-// down, onto the boss (crush at 0.6 s), holds it, then lifts away with it
-const STEAL_HAND = { src: `${BASE}enemies/giant/hand.png`, w: 240, h: 326 };
-function StealHand({ st, H }) {
-  const t = st.t, h = Math.max(H * 0.62, st.r * 1.5), w = h * STEAL_HAND.w / STEAL_HAND.h;
-  const land = st.y - h * 0.62;                                   // where its top sits once down
-  const fall = Math.min(1, t / 0.6), lift = Math.max(0, (t - 1.6) / 0.9);
-  const y = t < 0.6 ? -h + (land + h) * fall * fall : land - (land + h * 1.1) * lift * lift;
-  const squeeze = t > 0.6 && t < 1.6 ? 1 - 0.05 * Math.sin((t - 0.6) * 14) * Math.max(0, 1 - (t - 0.6)) : 1;
-  const shadow = Math.min(1, t / 0.6) * (1 - lift);
+// Story: the Red Giant steals the kill (engine.js → startSteal), as a cutscene. Black bars close in,
+// he rises behind the fight (StealGiant: his body, behind the enemies), his arm reaches over it and
+// comes down on the boss (StealFront: the arm, in front), he lifts it to his mouth, the screen goes dark.
+// Times match engine.js → STEAL.
+const ease = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+function stealLayout(st, W, H) {
+  const sc = H * 1.02 / 716, left = W / 2 - 393 * sc;                 // (393: his body's middle, in art units)
+  const rise = ease((st.t - 0.15) / 0.95);
+  const top = H * 0.13 - 26 * sc + (1 - rise) * H * 0.8;            // (26: the top of his head)
+  return { left, top, sc, sd: st.x < W / 2 ? 'l' : 'r' };
+}
+function StealGiant({ st, W, H, t }) {
+  const L = stealLayout(st, W, H);
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 30, overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', left: st.x - w * 0.6, top: st.y - h * 0.08, width: w * 1.2, height: h * 0.16, borderRadius: '50%',
-        background: 'radial-gradient(closest-side, rgba(0,0,0,0.6), transparent)', opacity: shadow, transform: `scale(${0.5 + shadow * 0.5})` }} />
-      <img src={STEAL_HAND.src} alt="" draggable={false} style={{ position: 'absolute', left: st.x - w / 2, top: y, width: w, height: h,
-        transform: `rotate(180deg) scaleY(${squeeze})`, transformOrigin: '50% 62%', filter: 'drop-shadow(0 18px 24px rgba(0,0,0,0.6))' }} />
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+      <GiantRig L={L} t={t} look={{ x: st.x, y: st.y }} still noArms state={{ mad: st.t > 3.15 }} dim="brightness(0.82)" />
+    </div>
+  );
+}
+function StealFront({ st, W, H }) {
+  const t = st.t, L = stealLayout(st, W, H);
+  const above = { x: st.x, y: st.y - H * 0.38 }, on = { x: st.x, y: st.y };
+  const mouth = { x: L.left + GIANT_MOUTH[0] * L.sc, y: L.top + GIANT_MOUTH[1] * L.sc };
+  const mix = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+  // the hand: hovers over it while he rises, slams down, holds it, carries it up to his mouth
+  const at = t < 0.95 ? above : t < 1.25 ? mix(above, on, Math.pow((t - 0.95) / 0.3, 2)) : t < 2.3 ? on : mix(on, mouth, ease((t - 2.3) / 0.85));
+  const bars = ease(t / 0.45) * 0.12, dark = ease((t - 0.3) / 0.8) * 0.35 * (1 - ease((t - 1.25) / 0.4)) + ease((t - 3.6) / 0.8);
+  return (
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 13, overflow: 'hidden' }}>
+      {/* his shadow falling over everything as he leans in (then black at the end) */}
+      <div style={{ position: 'absolute', inset: 0, background: '#000', opacity: Math.min(1, dark) }} />
+      {t < 3.95 && <GiantArm L={L} sd={L.sd} at={at} dim="brightness(0.88)" />}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${bars * 100}%`, background: '#000' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${bars * 100}%`, background: '#000' }} />
     </div>
   );
 }
@@ -968,7 +990,7 @@ const GIANT_FAR = { 1: { h: 0.6, eye: 0.37 }, 2: { h: 0.85, eye: 0.31 }, 3: { h:
 function GiantFar({ s, giantRef }) {
   const lv = s.stage.giantNear ?? 0, cfg = GIANT_FAR[lv];
   if (!cfg || !s.H) return null;
-  const gone = s.enemies.some(e => e.type.kind === 'giant') || !!s.giantFall || s.phase === 'clear' && lv === 4;
+  const gone = s.enemies.some(e => e.type.kind === 'giant') || !!s.giantFall || !!s.steal || s.phase === 'clear' && lv === 4;
   // his body and head, small and dark, standing still. Only his eyes move: from stage 9 (the
   // last two before he rises), they follow your cursor.
   const [AW, AH] = GIANT_ART.size, sc = s.H * cfg.h / AH, w = AW * sc;

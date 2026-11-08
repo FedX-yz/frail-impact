@@ -1559,34 +1559,35 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   }
 
   // ── A stolen kill (story: stage.steal) ───────────────────────────────────
-  // The boss is nearly dead and everything stops; the Red Giant's hand comes down on it from above
-  // (BattleArena → StealHand), crushes it at STEAL.crush, lifts away, and the fight ends
-  const STEAL = { crush: 0.6, end: 2.6 };
+  // The boss is nearly dead and everything stops: an in-game cutscene (BattleArena → StealScene).
+  // The Red Giant rises behind the fight, his hand comes down on the boss and crushes it
+  // (STEAL.crush), he eats it, the screen goes dark (STEAL.end) and the story goes on. No words.
+  const STEAL = { crush: 1.25, chomp: 3.15, end: 4.4 };
   function startSteal(e) {
     s.phase = 'steal'; e.stolen = true; e.lunge = null;
-    s.steal = { t: 0, id: e.id, x: e.x, y: e.y, r: drawnSize(e), crushed: false };
+    s.steal = { t: 0, id: e.id, x: e.x, y: e.y, r: drawnSize(e), crushed: false, chomped: false };
     s.attacks = []; s.shots = []; s.globs = []; s.bolts = []; s.gas = null; s.hazards = []; s.player.stuck = null;
     s.enemies = s.enemies.filter(x => x === e || x.tier === 'boss');
-    s.timeStop = 0;
-    sfx('shield');
+    s.timeStop = 0; s.banner = null;
+    rt.reset('clear');
   }
   function updateSteal(dt) {
     const st = s.steal;
     st.t += dt;
+    if (st.t > 0.25 && st.t < 1.1) shake(0.05);   // the ground trembling as he rises
     if (!st.crushed && st.t >= STEAL.crush) {
       st.crushed = true;
       const e = s.enemies.find(x => x.id === st.id);
-      effect({ kind: 'shards', x: st.x, y: st.y, r: st.r * 0.9, n: 16, color: '#b91c1c' });
-      effect({ kind: 'burst', x: st.x, y: st.y, r: st.r * 0.8, color: '#ef4444' });
+      effect({ kind: 'shards', x: st.x, y: st.y, r: st.r * 1.1, n: 22, color: '#bef264' });
+      effect({ kind: 'burst', x: st.x, y: st.y, r: st.r * 0.9, color: '#a3e635' });
+      effect({ kind: 'flash', color: '#ffffff', life: 0.22 });
       if (e) killEnemy(e, { silent: true });
       s.enemies = []; s.bossInfo = null;
-      s.hitStop = 0.22; shake(0.9); sfx('bigKill');
-      s.banner = { text: 'KILL STOLEN!', sub: 'the Red Giant takes it', t: 2.4, bad: true };
+      s.hitStop = 0.3; shake(1); sfx('bigKill');
     }
-    if (st.t >= STEAL.end) {
-      stageClear();
-      s.banner = { text: 'KILL STOLEN!', sub: 'the Red Giant takes it', t: 3, bad: true };
-    }
+    if (st.crushed && st.t < 2.3 && Math.random() < dt * 6) effect({ kind: 'shards', x: st.x + rand(-st.r * 0.3, st.r * 0.3), y: st.y + st.r * 0.2, r: st.r * 0.5, n: 4, color: '#bef264' });   // dripping
+    if (!st.chomped && st.t >= STEAL.chomp) { st.chomped = true; shake(0.45); sfx('bigKill'); }
+    if (st.t >= STEAL.end) { stageClear(); s.banner = null; s.phaseT = 0.4; }
   }
 
   // Hydra: a head at 0 HP goes down; all heads down at once = dead

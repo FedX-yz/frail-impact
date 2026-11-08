@@ -24,6 +24,7 @@
 //     call:     optional: true = they're only ever heard over a call — their face is a
 //               moving voice line instead of a picture
 //     icon:     optional: 'group' = the face is a few people (for lines said by several)
+//     lit:      optional: true = never dimmed when someone else talks (a monster in the shot)
 //   }
 //
 // Leave portrait/sprite as null and a placeholder is drawn instead, so the
@@ -65,6 +66,7 @@ export const CAST = {
   dave:    { name: 'Dave',     color: '#fdba74', portrait: 'story/cast/dave-icon.png', sprite: 'story/cast/dave.png', height: 0.66 },
   // The Doctor: the voice on the laptop. The same robot voice as the hospital's unknown caller
   // (it's him), and the same dub when that's made
+  swarmking: { name: 'The Swarm King', color: '#a3e635', portrait: null, sprite: 'enemies/swarmking_host.png', lit: true },   // (the bleeding giant the swarm feeds on)
   redgiant: { name: 'Red Giant', color: '#ef4444', portrait: 'enemies/giant/head.png', sprite: null },   // (too big for the stage: only his face on the codec)
   doctor:  { name: 'The Doctor', color: '#9ca3af', portrait: null, sprite: null, call: true, voice: { dir: 'audio/voice/stranger', preset: 'creepy' },
     dub: { dir: 'audio/dub/stranger', engine: 'elevenlabs', id: null } },

@@ -16,6 +16,8 @@
 import { GIANT_RIG as R } from './giantRig';
 
 export const RAD = Math.PI / 180;
+// where his mouth is, in art units (a hand goes there to eat: the stolen kill, BattleArena)
+export const GIANT_MOUTH = [383, 236];
 export const rot = ([x, y], a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
 export const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
 export const add = (a, b) => [a[0] + b[0], a[1] + b[1]];

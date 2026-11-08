@@ -128,6 +128,17 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
   );
 }
 
+// One of his arms on its own, posed to reach `at` (arena px) from its shoulder at rest. With
+// <GiantRig still noArms> on the same L, his body can sit behind the fight and the arm in front of it
+export function GiantArm({ L, sd, at, dim }) {
+  const mem = useRef({}).current;
+  const pose = poseArm(sd, ARMS[sd].S, [(at.x - L.left) / L.sc, (at.y - L.top) / L.sc], mem);
+  return (
+    <div className="giant-rig" style={{ width: R.size[0], height: R.size[1], transform: `translate(${L.left}px, ${L.top}px) scale(${L.sc})`, filter: dim }}>
+      <Piece {...pose.upper} /><Piece {...pose.lower} /><Piece {...pose.hand} />
+    </div>
+  );
+}
 export const GIANT_RIG_CSS = `
   .giant-rig { position:absolute; left:0; top:0; z-index:5; pointer-events:none; transform-origin:0 0; }
   .giant-rig img { max-width:none; max-height:none; }

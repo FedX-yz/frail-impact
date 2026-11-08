@@ -528,9 +528,10 @@ export const SCENES = {
     { hide: 'all' },
     'He vanishes out of sight in those streets.',
     'Astrec scouts the place and starts to notice a struggling deep voice gets ever closer. Eventually he finds the source of that endless swarm.',
+    { show: 'swarmking', at: 'center' },
     { shake: true },
     'A bleeding giant sat down in the middle of the road, still towering over the buildings, while swarms eat it alive.',
-    { show: 'astrec', at: 'center' },
+    { show: 'swarmking', at: 'right' }, { show: 'astrec', at: 'left' },
     ['astrec', 'Oh my... sweet sweet heaven.'],
   ],
 
