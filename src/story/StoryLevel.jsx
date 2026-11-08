@@ -40,11 +40,18 @@ function levelSteps(node) {
   if (node.steps) return node.steps;
   return [node.intro && { scene: node.intro }, node.battle && { battle: node.battle, codec: node.codec }, node.outro && { scene: node.outro }].filter(Boolean);
 }
-// a fight that hands you a card (step.play: card id, at step.playLevel): your deck sits it out
-function borrowedStats(id, level = 30) {
+// a fight that hands you a card (step.play: card id, at step.playLevel): your deck sits it out.
+// The card comes on its own: no supports, sets, HQ upgrades or superimpositions. step.playStats
+// ({ click, hp }) pins its click damage and max HP (its kit works the same, just from those numbers),
+// so a 6★ in an early fight doesn't one-shot everything
+function borrowedStats(id, level = 30, pin = null) {
   const card = CHARACTERS.find(c => c.id === id);
   if (!card) return null;
-  return { card, stats: computePlayerStats({ deck: { main: card, supports: [] }, cardInventory: { [id]: { level } } }) };
+  const make = (multiplier = 1) => computePlayerStats({ deck: { main: card, supports: [] }, cardInventory: { [id]: { level } }, multiplier });
+  let stats = make();
+  if (pin?.click) stats = make(pin.click / stats.clickDmg);
+  if (pin?.hp) stats = { ...stats, maxHp: pin.hp };
+  return { card, stats };
 }
 
 // One story level: its steps (cutscenes and battles with codec lines), then the results.
@@ -57,7 +64,7 @@ export default function StoryLevel({ node, story, stats: deckStats, mainCard: de
   const [flags, setFlags] = useState(() => ({ ...story.flags }));
   // this fight's card: one it hands you, or your deck's
   const lent = useRef({});
-  const borrowed = step?.play != null ? (lent.current[at] ??= borrowedStats(step.play, step.playLevel)) : null;
+  const borrowed = step?.play != null ? (lent.current[at] ??= borrowedStats(step.play, step.playLevel, step.playStats)) : null;
   const stats = borrowed?.stats ?? deckStats, mainCard = borrowed?.card ?? deckMain;
   const battle = step?.battle ?? null;
 

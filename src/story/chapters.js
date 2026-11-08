@@ -41,11 +41,20 @@
 //     { battle: { ... }, codec: [...], name: 'The Road',       a fight (name: its title, else the level's)
 //       play: 37, playLevel: 30 }                              …that hands you this card (id in
 //                                                              characters.js) at this level; your
-//                                                              deck sits it out
+//                                                              deck sits it out (and nothing from
+//                                                              endless — upgrades, supports — comes)
+//       playStats: { click: 12, hp: 800 }                      …fighting with this click damage and
+//                                                              max HP instead of the card's own
 // }
 //
 // Everything below is SAMPLE content to show the format. Replace it freely.
 // ─────────────────────────────────────────────────────────────────────────────
+// Ground Zero's tutorial fights: the lent 6★ cards fight at a new player's strength (their own
+// numbers would one-shot everything there and the kits would never get going). The city has big
+// ones (elites) too, so a bit more there
+const ROAD = { click: 12, hp: 800 };
+const CITY = { click: 20, hp: 1200 };
+
 export const CHAPTERS = [
   {
     id: 'c1',
@@ -71,27 +80,27 @@ export const CHAPTERS = [
         x: 32, y: 62, after: ['c1-outskirts'],
         steps: [
           { scene: 'c1-gz-arrival' },
-          { name: 'The Main Road — Ice', play: 37, playLevel: 30,
-            battle: { level: 2, kills: 10, elites: [], hordes: false, goal: 'hold them off: defeat 10 enemies' },
+          { name: 'The Main Road — Ice', play: 37, playLevel: 1, playStats: ROAD,
+            battle: { level: 2, kills: 16, elites: [], hordes: false, goal: 'hold them off: defeat 16 enemies' },
             codec: [
               { when: 'start', who: 'ice', pause: true, text: 'Click to build Freeze. Full meter: it freezes solid. Hold M1 and let go to Shatter everything frozen.' },
               { when: 'kills 3', who: 'ice', text: 'Drag to draw a frost line. M2 for ice figures, Q to flash-freeze a crowd.' },
             ] },
-          { name: 'The Main Road — Bonk', play: 38, playLevel: 30,
-            battle: { level: 2, kills: 10, elites: [], hordes: false, goal: 'hold them off: defeat 10 enemies' },
+          { name: 'The Main Road — Bonk', play: 38, playLevel: 1, playStats: ROAD,
+            battle: { level: 2, kills: 16, elites: [], hordes: false, goal: 'hold them off: defeat 16 enemies' },
             codec: [
               { when: 'start', who: 'bonk', pause: true, text: 'Claw \'em! Every hit builds Bleed. Full meter, they hemorrhage. Hold M1 and let go: Rupture pops every bleeder at once!' },
               { when: 'kills 3', who: 'bonk', text: 'M2 grabs one: carry it, slam it or throw it! Drag to rake \'em, Q for Bloodletting.' },
             ] },
           { scene: 'c1-gz-chase' },
-          { name: 'The City — Astrec', play: 40, playLevel: 30,
-            battle: { level: 3, kills: 14, goal: 'the swarm: defeat 14 enemies' },
+          { name: 'The City — Astrec', play: 40, playLevel: 1, playStats: CITY,
+            battle: { level: 3, kills: 20, goal: 'the swarm: defeat 20 enemies' },
             codec: [{ when: 'start', who: 'astrec', text: 'The less HP I got, the harder I hit! Hold M1 to brace and hit back, M2 makes \'em go all in, Q patches me up. Bring it!' }] },
-          { name: 'The City — Ramsf', play: 39, playLevel: 30,
-            battle: { level: 3, kills: 14, goal: 'the swarm: defeat 14 enemies' },
+          { name: 'The City — Ramsf', play: 39, playLevel: 1, playStats: CITY,
+            battle: { level: 3, kills: 20, goal: 'the swarm: defeat 20 enemies' },
             codec: [{ when: 'start', who: 'ramsf', text: 'Tap M2 just before a hit lands to parry it. Hold M2 for a rift. Q sends out my shadow.' }] },
-          { name: 'The City — Reef', play: 41, playLevel: 30,
-            battle: { level: 3, kills: 14, goal: 'the swarm: defeat 14 enemies' },
+          { name: 'The City — Reef', play: 41, playLevel: 1, playStats: CITY,
+            battle: { level: 3, kills: 20, goal: 'the swarm: defeat 20 enemies' },
             codec: [{ when: 'start', who: 'reef', text: 'Whatever we kill, its soul is mine. M2 calls them back up. Hold M2 to choose which.' }] },
           { scene: 'c1-gz-swarm-out' },
         ],
