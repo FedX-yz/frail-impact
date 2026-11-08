@@ -50,7 +50,7 @@ const FAR = 'brightness(0.4) saturate(1.15)';
 // still: he doesn't move at all (only his eyes can); noArms: just his body and head
 // state.dip: he bends forward this much (art units: shoulders and head go down with it)
 // shade: a filter for his skin only (not his eyes); eyesLit: how lit each eye's glow is (0..1),
-// instead of the fight's open/closed glows; front: 'l' / 'r' draws that arm over his face
+// instead of the fight's open/closed glows; front: 'l' / 'r' / 'both' draws that arm (or both) over his face
 // layer: 'arm' = only his `arm` side's arm, 'back' = everything but it — two of them with the same
 // props draw him split (his body behind the fight, that arm in front) with one and the same pose
 const REST = { l: R.arms.l.hand.c, r: R.arms.r.hand.c, twist: { l: 0, r: 0 }, head: [0, 0], tilt: 0, body: [0, 0] };
@@ -130,7 +130,7 @@ export function GiantRig({ L, t, look, hands = {}, state = {}, dim, far = false,
         </defs>
       </svg>
       {(layer === 'arm' ? [`${arm}upper`, `${arm}lower`, `${arm}hand`] : layer === 'back' ? R.order.filter(k => !k.startsWith(arm) || k === 'body')
-        : front ? [...R.order.filter(k => !k.startsWith(front) || k === 'body'), `${front}upper`, `${front}lower`, `${front}hand`] : R.order).map(k => parts[k] ?? null)}
+        : front ? [...R.order.filter(k => k === 'body' || k === 'head' || !(front === 'both' || k.startsWith(front))), ...(front === 'both' ? ['l', 'r'] : [front]).flatMap(sd => [`${sd}upper`, `${sd}lower`, `${sd}hand`])] : R.order).map(k => parts[k] ?? null)}
     </div>
   );
 }

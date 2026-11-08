@@ -955,11 +955,11 @@ function StealGiant({ st, W, H, t }) {
   const held = st.t >= STEAL.grab && st.t < STEAL.chomp;
   return (   // (isolate: the rig's own z-index stays in here, behind the fight)
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', isolation: 'isolate' }}>
-      <GiantRig L={P.L} t={t} look={P.look} hands={P.hands} state={P.state} still front={P.sd} eyesLit={P.eyesLit}
+      <GiantRig L={P.L} t={t} look={P.look} hands={P.hands} state={P.state} still front="both" eyesLit={P.eyesLit}
         shade={`brightness(${P.light.toFixed(2)}) saturate(0.85)`} />
       {held && st.img && (
-        <img src={st.img} alt="" draggable={false} style={{ position: 'absolute', zIndex: 6, left: P.at.x - st.r * 0.42, top: P.at.y - st.r * 0.42, width: st.r * 0.84, height: st.r * 0.84,
-          objectFit: 'contain', filter: `brightness(${P.light.toFixed(2)})`, transform: `rotate(${Math.sin(st.t * 9) * 8 - 20}deg)` }} />
+        <img src={st.img} alt="" draggable={false} style={{ position: 'absolute', zIndex: 5, left: P.held.x - st.r * 0.5, top: P.held.y - st.r * 0.5, width: st.r, height: st.r,
+          objectFit: 'contain', filter: `brightness(${P.light.toFixed(2)})`, transform: `rotate(${Math.sin(st.t * 23) * 6}deg) scale(${1 + Math.sin(st.t * 31) * 0.03})` }} />
       )}
     </div>
   );

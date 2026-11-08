@@ -1586,7 +1586,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (!st.chomped && st.t >= STEAL.chomp) {
       st.chomped = true;
       st.mouth = stealPose(st, s.W, s.H).mouth;
-      { effect({ kind: 'shards', x: st.mouth.x, y: st.mouth.y, r: st.r * 0.9, n: 20, color: '#bef264' }); }
+      { for (let i = 0; i < 3; i++) effect({ kind: 'shards', x: st.mouth.x + rand(-st.r, st.r), y: st.mouth.y, r: st.r * 1.2, n: 18, color: '#bef264' }); }   // (sprayed up from out of the shot)
       shake(0.7); sfx('bigKill');
     }
     if (st.t >= STEAL.end) { stageClear(); s.banner = null; s.phaseT = 0.4; }
