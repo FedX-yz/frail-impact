@@ -28,6 +28,8 @@ import { AstrecOver, AstrecEffect, AstrecScreen, ASTREC_CSS } from './AstrecFx';
 import { ASTREC_EFFECTS, astrecChips } from './astrecPlatinum';
 import { RamsfGround, RamsfOver, RamsfEffect, RamsfScreen, RAMSF_CSS } from './RamsfFx';
 import { RAMSF_EFFECTS, ramsfChips } from './ramsfPlatinum';
+import { BoiOver, BoiEffect, BoiScreen, BOI_CSS } from './BoiFx';
+import { BOI_EFFECTS, boiChips, hairFilter } from './boiPlatinum';
 import { ReefGround, ReefOver, ReefEffect, ReefScreen, REEF_CSS } from './ReefFx';
 import { REEF_EFFECTS, reefChips } from './reefPlatinum';
 
@@ -626,6 +628,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
             <AstrecOver s={s} k={k} P={P} time={s.time} />
             {/* 6★ Ramsf: the parry window, Strings, wings, the rift, his shadow and guns, Hell Drums, the doll arms */}
             <RamsfOver s={s} k={k} P={P} time={s.time} />
+            {/* 6★ Boi: the aura, the Ki ring, the beam, the Spirit Bomb */}
+            <BoiOver s={s} k={k} P={P} time={s.time} />
             {/* 6★ Reef: the risen, the command tether, what you're drawing, the soul wheel */}
             <ReefOver s={s} k={k} P={P} time={s.time} />
             {curSkill?.type === 'tenshadows' && !touchMode && !ringsOn && P && !s.mahoraga && !s.kit.sign?.open && <ShadowGauge s={s} sk={curSkill} P={P} />}
@@ -829,6 +833,8 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
         <AstrecScreen s={s} mainCard={mainCard} mobile={mobile} />
         {/* 6★ Ramsf: a parry's hit on the screen's edge, Open Arms */}
         <RamsfScreen s={s} mainCard={mainCard} mobile={mobile} />
+        {/* 6★ Boi: the form on the edge, the cut-in when he goes up, Ultra Boi */}
+        <BoiScreen s={s} mainCard={mainCard} mobile={mobile} />
         <ReefScreen s={s} mainCard={mainCard} mobile={mobile} />
         {s.kit.found && <ComboToast f={s.kit.found} />}
 
@@ -865,7 +871,7 @@ export default function BattleArena({ engine, mainCard, mobile, children, comboT
 
         {/* Status frame (portrait / ult orb / HP) — your art, on PC and phone */}
         <StatusFrame frameRef={frameRef} mobile={mobile} mainCard={mainCard}
-          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd} ultActive={!!s.ult.active}
+          hpRatio={Math.round(hpRatio * 400) / 400} charge={Math.floor(charge * 100) / 100} ult={ult} ultReady={!!ultReady} cd={ultCd} ultActive={!!s.ult.active} again={s.ult.active?.type === 'ultraboi' && !s.kit.boi?.thrown} portraitFilter={curSkill?.type === 'saiyan' ? hairFilter(s) : undefined}
           onUlt={onUlt} hp={Math.ceil(pl.hp)} maxHp={pl.maxHp} blocked={ult && charge >= 1 && !ultCd ? s.ult.blocked : null}
           spKind={sp?.kind} spColor={sp?.color} spHint={sp?.hint} onSpecial={onSpecial} onSpecialMove={onSpecialMove}
           spFill={!sp ? 0 : sp.kind === 'cd' ? Math.round((1 - (sp.cdMax ? sp.cd / sp.cdMax : 0)) * 40) / 40 : Math.round((sp.fill ?? sp.n / sp.max) * 40) / 40}
@@ -1365,6 +1371,7 @@ function EffectShape({ f, k }) {
   if (BONK_EFFECTS.has(f.kind)) return <BonkEffect f={f} k={k} />;  // 6★ Bonk's
   if (ASTREC_EFFECTS.has(f.kind)) return <AstrecEffect f={f} k={k} />;  // 6★ Astrec's
   if (RAMSF_EFFECTS.has(f.kind)) return <RamsfEffect f={f} k={k} />;  // 6★ Ramsf's
+  if (BOI_EFFECTS.has(f.kind)) return <BoiEffect f={f} k={k} />;      // 6★ Boi's
   if (REEF_EFFECTS.has(f.kind)) return <ReefEffect f={f} k={k} />;    // 6★ Reef's
   const p = Math.min(1, f.t / (f.life ?? 0.5));
   if (f.kind === 'beam') return (
@@ -1675,6 +1682,7 @@ function KitChip({ s, sk, cur, mobile }) {
   if (cur?.type === 'deathwish') astrecChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'marionette') ramsfChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'necro') reefChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
+  if (cur?.type === 'saiyan') boiChips(s, cur, mobile).forEach(([key, color, text]) => out.push(<Chip key={key} color={color}>{text}</Chip>));
   if (cur?.type === 'crawlers') out.push(<Chip key="c" color="#c084fc">✋ {s.kit.crawlN}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go to release' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'platinum') out.push(<Chip key="p" color="#f472b6">👊 {s.kit.punches}/{Math.round(cur.cap)}{s.player.m2 && s.time - s.player.m2.t0 >= 1 ? ' · let go: ORA' : ' · hold to charge'}</Chip>);
   if (cur?.type === 'firetrail') out.push(<Chip key="f" color="#fb923c">✂ {s.player.held ? 'CUTTING' : 'hold + drag to cut'}</Chip>);
@@ -1691,7 +1699,7 @@ const Chip = ({ color, children }) => (
   <div style={{ background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}`, color, borderRadius: 12, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{Children.map(children, c => withIcons(c))}</div>
 );
 
-const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, ultActive = false, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spBtn, spHint, onSpecial, onSpecialMove, q, onSkill2 }) {
+const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRatio, charge, ult, ultReady, cd, ultActive = false, again = false, portraitFilter, onUlt, hp, maxHp, blocked, spKind, spColor, spFill, spText, spBtn, spHint, onSpecial, onSpecialMove, q, onSkill2 }) {
   return (
     <div ref={frameRef} style={{ position: 'absolute', left: '2%', bottom: mobile ? '6%' : '4%', zIndex: 14, width: mobile ? '46%' : '30%', maxWidth: mobile ? 190 : 300, aspectRatio: '919 / 677' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -1731,6 +1739,7 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
             position: 'absolute', left: '2%', top: '4%', width: '54%', height: '84%', overflow: 'hidden', pointerEvents: 'none',
             WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
             maskImage: 'radial-gradient(ellipse 72% 70% at 50% 42%, #000 55%, transparent 100%)',
+            filter: portraitFilter,   // (6★ Boi: his hair goes gold in a form)
           }}>
             <FocusImg src={mainCard.sprite || mainCard.cardArt} focus={mainCard.portraitFocus} at={[40, 46]} />   {/* left of the ult orb */}
           </div>
@@ -1763,7 +1772,7 @@ const StatusFrame = memo(function StatusFrame({ frameRef, mobile, mainCard, hpRa
           title={ult ? `${ult.name} — fills from damage you deal, ${Math.round(ult.cooldown)}s cooldown after use` : mainCard?.ult ? 'Ult unlocks at LV50' : 'No ult'}
           style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 900, fontSize: 'clamp(11px,1.6vw,18px)', textShadow: '0 0 8px #000', cursor: ultReady ? 'pointer' : 'default', textAlign: 'center' }}>
-          {!ult ? (mainCard?.ult ? 'LV50' : '—') : blocked ? <span style={{ fontSize: '0.8em' }}>{withIcons(blocked)}</span> : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
+          {!ult ? (mainCard?.ult ? 'LV50' : '—') : again ? <span style={{ fontSize: '0.75em', color: '#bfdbfe' }}>{mobile ? 'THROW' : 'E: THROW'}</span> : blocked ? <span style={{ fontSize: '0.8em' }}>{withIcons(blocked)}</span> : ultReady ? (mobile ? 'TAP' : 'E') : cd ? (
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
               <span>{cd}s</span>
               <span style={{ fontSize: '0.6em', opacity: 0.8 }}>{Math.floor(charge * 100)}%</span>
@@ -1809,6 +1818,7 @@ ${ICE_CSS}
 ${BONK_CSS}
 ${ASTREC_CSS}
 ${RAMSF_CSS}
+${BOI_CSS}
 ${REEF_CSS}
   .mad-aura { position:absolute; inset:-10%; border-radius:50%; pointer-events:none; z-index:-1;
     background: radial-gradient(circle, rgba(126,34,206,0.35), rgba(76,29,149,0.15) 55%, transparent 72%); box-shadow: 0 0 14px rgba(168,85,247,0.6); }

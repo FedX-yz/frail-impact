@@ -1483,6 +1483,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
     if (blood?.type === 'bloodlust') dmg *= 1 + blood.max * Math.min(1, Math.max(0, (1 - s.player.hp / s.player.maxHp) / 0.9));
     if (s.kit.bonk?.rage > 0 && cs?.type === 'boil') dmg *= 1 + cs.rage;
     if (cs?.type === 'deathwish' && s.kit.astrec) dmg *= 1 + s.kit.astrec.bonus;   // 6★ Astrec: Death Wish's tiers
+    if (cs?.type === 'saiyan' && s.kit.boi) dmg *= s.kit.boi.mult;                 // 6★ Boi: his form (or Ultra), Saiyan Blood, winded
     if (s.frenzy > 0) dmg *= 2;
     if (s.player.debuffs.weak > 0) dmg *= DEBUFFS.weak.dmg;   // a Hexer got you
     if (s.ult.active?.type === 'transform') dmg *= s.ult.active.clickMult;
@@ -1860,6 +1861,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
   // ── Ult ─────────────────────────────────────────────────────────────────
   function activateUlt() {
     const u = s.stats.ult;
+    if (u && s.ult.active && !s.paused && !s.choosing && s.phase !== 'steal' && rt.ultAgain()) return true;   // 6★ Boi: the Spirit Bomb, thrown
     if (!u || s.paused || s.choosing || s.ult.charge < 1 || s.ult.cd > 0 || s.ult.active || s.phase === 'defeat' || s.phase === 'clear' || s.phase === 'steal') return false;
     const blocked = rt.ultBlocked();   // e.g. Uzumaki without enough spirits
     if (blocked) { const P = s.player.pos ?? { x: s.W / 2, y: s.H / 2 }; floater(`needs ${blocked}`, P.x, P.y - K(40), '#e879f9', true); return false; }
@@ -2134,6 +2136,7 @@ export function createBattle({ stageNum = 1, kills = 0, stats, makeStage = makeE
       if (e.grabbed) continue;   // in 6★ Bonk's claw: it goes where he carries it, and can't act
       if (e.kb) { rt.slide(e, dt); if (!s.enemies.includes(e)) continue; }   // thrown by Jerry's repel (or 6★ Bonk)
       if (e.frozen > 0) { e.frozen -= dt; continue; }
+      if (e.blind > 0) { e.blind -= dt; continue; }   // 6★ Boi's Solar Flare: it can't see to move or attack
       // affixes that act every frame
       if (e.affix === 'regen' && e.hp < e.maxHp && s.time - e.lastHit > 1.5) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.06 * dt);
       if (e.affix === 'toxic' && s.phase !== 'clear') {

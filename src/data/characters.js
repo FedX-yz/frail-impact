@@ -543,7 +543,7 @@ export const CHARACTERS = [
 
   // ── 6★ Platinum Series (the good guys; a Gold Series for the bad guys comes later).
   // The Platinum Series (6★). Ice is pulled on the secret Platinum banner only (bannerOnly).
-  // Bonk, Ramsf and the 6★ Astrec have their kits (being tried out: still `unpullable`).
+  // Bonk, Ramsf, the 6★ Astrec and the 6★ Boi have their kits (being tried out: still `unpullable`).
   // `unpullable` keeps them out of every pull. No framed cards yet: their full-body art stands in.
   {
     id: 37,
@@ -677,6 +677,39 @@ export const CHARACTERS = [
       name: 'No Retreat',
       description: 'Top tier of Death Wish whatever his HP, and nothing can take him below 1 HP.',
       effect: 'no_retreat',
+      cooldown: 30,
+    },
+    passive: null,
+  },
+  {
+    id: 42,
+    name: 'Boiyoujustgotoofed',
+    subtitle: 'Limit Breaker',
+    rarity: 6,
+    series: 'platinum',
+    unpullable: true,                // not in any pull yet (being tried out)
+    element: 'Lightning',
+    color: '#facc15',
+    image:           `${BASE}sprites/boiyoujustgotoofed.png`,   // placeholder: his 5★ cut-out until the 6★ art is drawn
+    characterImage:  `${BASE}sprites/boiyoujustgotoofed.png`,
+    cardArt:         `${BASE}sprites/boiyoujustgotoofed.png`,
+    sprite:          `${BASE}sprites/boiyoujustgotoofed.png`,
+    burstArt:        `${BASE}sprites/boiyoujustgotoofed.png`,   // placeholder: the art in the cut-in when he goes up a form
+    burstFocus:      [36, 12],
+    portraitFocus:   [36, 15, 3.2],
+    voiceLine:       null,
+    animationVideo:  `${BASE}animations/6star.mp4`,
+    resultVideo:     null,
+    stats: { hp: 2000, atk: 240, def: 95 },   // hits hardest of the Platinum cards, once he's gone up
+    skill: {
+      name: 'Limit Breaker',
+      description: 'Clicks build Ki. Hold M1 to power up and let go on a full bar to go Super, Super 2, Super 3 (each burns Ki). Drag to Rush, M2 Ki Blast / hold for the beam, Q Solar Flare. Comes back stronger from low HP.',
+      effect: 'limit_breaker',
+    },
+    ult: {
+      name: 'Ultra Boi',
+      description: 'Dodges every hit and counters, every click a teleport strike. Kills charge a Spirit Bomb: tap again to throw it.',
+      effect: 'ultra_boi',
       cooldown: 30,
     },
     passive: null,

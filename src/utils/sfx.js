@@ -494,11 +494,20 @@ const SYNTH = {
   dive:    () => { sweep('sine', [[0, 1900], [0.3, 320]], 0.32, 0.1); crunch(1800, 0.3, 0.12, 0.7); },
   fart:    () => { flutter(105, 62, 1.25, 0.32); crunch(140, 1.1, 0.35, 1.2, 0.02); crunch(420, 0.5, 0.12, 2, 0.05); },
   worldslash: () => { crunch(6500, 0.5, 0.6, 0.4); crunch(300, 0.9, 0.6, 0.4, 0.04); tone('sine', 1900, 180, 0.55, 0.2); tone('sine', 60, 30, 0.9, 0.3, 0.05); },
+  // 6★ Boi: powering up (a roaring rumble that keeps climbing), going up a form, a Ki blast,
+  // the beam charging and firing, the aura's sparks, Solar Flare
+  powerUp:   () => { crunch(180, 0.65, 0.3, 0.5); sweep('sawtooth', [[0, 70], [0.6, 95]], 0.62, 0.07, 0, 8); crunch(2400, 0.6, 0.06, 0.7); },
+  transform: () => { sweep('sawtooth', [[0, 90], [0.35, 420], [0.55, 380]], 0.6, 0.12, 0, 10); crunch(5200, 0.4, 0.3, 0.6, 0.3); crunch(140, 0.9, 0.6, 0.4, 0.35); tone('sine', 110, 40, 0.8, 0.35, 0.35); },
+  kiBlast:   () => { tone('sine', vary(900), 300, 0.16, 0.12); crunch(3000, 0.12, 0.18, 1.2); },
+  kame:      () => { sweep('sine', [[0, 180], [0.55, 720]], 0.6, 0.1, 0, 6); sweep('triangle', [[0, 360], [0.55, 1440]], 0.6, 0.04); crunch(4000, 0.6, 0.08, 0.5); },
+  beam:      () => { crunch(900, 1.2, 0.45, 0.4); crunch(160, 1.2, 0.4, 0.5); tone('sawtooth', 75, 60, 1.2, 0.12); tone('sine', 1500, 1200, 0.5, 0.05); },
+  zap:       () => { crunch(vary(6000), 0.05, 0.2, 2.5); tone('square', vary(1900), 600, 0.04, 0.05); },
+  flare:     () => { [1568, 2093, 2637, 3136].forEach((f, i) => tone('sine', f, f, 0.5, 0.07, i * 0.02)); crunch(7000, 0.4, 0.25, 0.5); },
 };
 
 // Too many sounds at once turn into mush: limit how often each can play
 const MIN_GAP = { parry: 0.04, parryBig: 0.06, gust: 0.15, hit: 0.035, crit: 0.05, kill: 0.04, bigKill: 0.08, hurt: 0.1, shield: 0.05, combo: 0.2, ult: 0.2, boom: 0.08, miss: 0.06,
-  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2, fart: 1,
+  summon: 0.12, sign: 0.2, tick: 0.03, bark: 0.3, howl: 0.8, thunder: 0.15, ox: 0.5, deer: 0.5, hiss: 0.4, roar: 0.4, trumpet: 0.5, splash: 0.25, tongue: 0.2, domain: 1, wheel: 0.12, gun: 0.05, leap: 0.2, charge: 0.5, worldslash: 0.5, discover: 0.5, saved: 0.5, dive: 0.2, fart: 1, powerUp: 0.5, transform: 0.5, kiBlast: 0.06, kame: 0.5, beam: 0.8, zap: 0.08, flare: 0.5,
   daddyStep: 0.16, daddyMove: 0.7, daddyMoveLong: 2, daddyChatter: 2.2, daddyIdle: 3, daddyMaim: 2 };
 const lastPlayed = {};
 export function sfx(name, arg) {

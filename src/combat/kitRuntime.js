@@ -19,6 +19,7 @@ import { createBioClassic } from './bioClassic';
 import { createIcePlatinum } from './icePlatinum';
 import { createBonkPlatinum } from './bonkPlatinum';
 import { createAstrecPlatinum } from './astrecPlatinum';
+import { createBoiPlatinum } from './boiPlatinum';
 import { createRamsfPlatinum } from './ramsfPlatinum';
 import { createReefPlatinum } from './reefPlatinum';
 import { CHARACTERS } from '../data/characters';
@@ -179,7 +180,8 @@ export function createKitRuntime(api) {
   // true = the hit was stopped (Toad / Infinity); 'parry' = 6★ Ramsf parried it (no extra i-frames: the follow-through gets the next one)
   function absorbHit(kind, src, from) {
     const P = s.player.pos;
-    if (skill()?.type === 'marionette' && ramsf.tryParry(kind, src, from)) return 'parry';   // 6★ Ramsf: parried
+    if (skill()?.type === 'marionette' && ramsf.tryParry(kind, src, from)) return 'parry';
+    if (skill()?.type === 'saiyan' && boi.dodge(kind, src)) return true;   // 6★ Boi: Ultra Boi isn't where it hit   // 6★ Ramsf: parried
     const toad = s.allies.find(a => a.kind === 'toad');
     if (toad) {
       s.allies = s.allies.filter(a => a !== toad);
@@ -289,6 +291,7 @@ export function createKitRuntime(api) {
   function onPlayerHit(dmg = 0) {
     if (skill()?.type === 'deathwish') astrec.onHit(dmg);   // 6★ Astrec: what Brace soaks up
     if (skill()?.type === 'marionette') ramsf.onHurt(dmg);  // 6★ Ramsf: a hit you might still parry a hair late
+    if (skill()?.type === 'saiyan') boi.onHit(dmg);         // 6★ Boi: Saiyan Blood
     if (s.kit.souls > 0) {
       s.kit.souls--;
       const P = s.player.pos;
@@ -340,6 +343,7 @@ export function createKitRuntime(api) {
     if (skill()?.type === 'boil') bonk.onClick(e, auto);           // 6★ Bonk: every click builds Bleed
     if (skill()?.type === 'deathwish') astrec.onClick(e, auto);    // 6★ Astrec: Death Wish's cleave and shockwaves
     if (skill()?.type === 'necro') reef.onClick(e, auto);          // 6★ Reef: Hex
+    if (skill()?.type === 'saiyan') boi.onClick(e, auto);          // 6★ Boi: Ki, lightning, Ultra's teleport strikes
   }
   // Stephen: a crit click slices a line through the target
   function onCritClick(e) {
@@ -403,7 +407,7 @@ export function createKitRuntime(api) {
     s.ult.active = null; s.ult.charge = 0; s.ult.cd = 0; s.timeStop = 0;
     s.special.cd = 0; s.special.cdMax = 0;
     s.player.m2 = null; s.player.held = null;
-    s.enemies.forEach(e => { e.burn = null; e.mad = 0; e.slow = undefined; e.vuln = undefined; e.boundT = 0; e.chill = 0; e.iceSlow = false; });
+    s.enemies.forEach(e => { e.burn = null; e.mad = 0; e.slow = undefined; e.vuln = undefined; e.boundT = 0; e.chill = 0; e.iceSlow = false; e.blind = 0; });
   }
 
   // ── M2 (special), charge and hold moves ──────────────────────────────────
@@ -486,6 +490,7 @@ export function createKitRuntime(api) {
       case 'deathwish': return astrec.drawFire(x, y); // 6★ Astrec: Draw Fire
       case 'marionette': return ramsf.press(x, y);    // 6★ Ramsf: Parry
       case 'necro': return reef.press(x, y);          // 6★ Reef: Summon (decided on release / by holding)
+      case 'saiyan': return boi.press(x, y);          // 6★ Boi: Ki Blast (tap) / KA-ME-HA-ME-BOI (hold)
       case 'maw': {   // Hox: the Abyssal Maw tears open under the cursor, then snaps shut
         if (!startCooldown(sk, x, y)) return false;
         s.kit.maws = s.kit.maws ?? [];
@@ -518,6 +523,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'zero') { ice.m2Release(held); return; }
     if (sk?.type === 'boil') { bonk.m2Release(held); return; }
     if (sk?.type === 'necro') { reef.m2Release(held, x, y); return; }   // 6★ Reef: a tap summons; the wheel's choice
+    if (sk?.type === 'saiyan') { boi.m2Release(held); return; }         // 6★ Boi: the blast, or the end of the beam
     if (sk?.style !== 'charge' || held < CHARGE_HOLD) return;   // a tap only stocks up (done on press)
     fire(x, y);
   }
@@ -585,6 +591,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'deathwish') { astrec.release(held, x, y, press); return; }  // 6★ Astrec: Brace's hit back (or the end of a Breach)
     if (sk?.type === 'marionette') { ramsf.release(held, x, y, press); return; }  // 6★ Ramsf: Wingbeat (or Strings, after a drag)
     if (sk?.type === 'necro') { reef.release(held, x, y, press); return; }        // 6★ Reef: the end of a command, or a Blood Sigil
+    if (sk?.type === 'saiyan') { boi.release(held, x, y, press); return; }        // 6★ Boi: let go on a full bar: the next form (or the end of a Rush)
     if (!sk || sk.style !== 'hold' || !fighting() || s.mahoraga || held < HOLD_MIN) return;
     const f = clamp((held - HOLD_MIN) / Math.max(0.01, sk.full - HOLD_MIN), 0, 1);
     const pct = (sk.minPct ?? sk.pct * 0.35) + (sk.pct - (sk.minPct ?? sk.pct * 0.35)) * f;
@@ -633,6 +640,7 @@ export function createKitRuntime(api) {
     if (sk.type === 'deathwish') return astrec.m2Info();
     if (sk.type === 'marionette') return ramsf.m2Info();
     if (sk.type === 'necro') return reef.m2Info();
+    if (sk.type === 'saiyan') return boi.m2Info();
     if (sk.style === 'special') return { kind: 'cd', cd: s.special.cd, cdMax: s.special.cdMax || sk.cooldown, color: '#a78bfa' };
     if (sk.type === 'souls')    return { kind: 'count', n: s.kit.souls, max: Math.round(sk.cap), color: '#e879f9' };
     if (sk.type === 'crawlers') return { kind: 'count', n: s.kit.crawlN, max: Math.round(sk.cap), color: '#c084fc' };
@@ -649,6 +657,7 @@ export function createKitRuntime(api) {
     if (sk?.type === 'boil') bonk.onKill(e);           // 6★ Bonk: Bloodlust feeds on what dies hemorrhaging
     if (sk?.type === 'marionette') ramsf.onKill(e);    // 6★ Ramsf: Offering (parried, then killed → a Soul)
     if (sk?.type === 'necro') reef.onKill(e);          // 6★ Reef: Soul Harvest
+    if (sk?.type === 'saiyan') boi.onKill(e);          // 6★ Boi: the Spirit Bomb grows
     // Sorcerer Killer charges from kills, not damage
     const u = s.stats.ult;
     if (u?.chargeOn === 'kills' && !s.ult.active) {
@@ -775,6 +784,9 @@ export function createKitRuntime(api) {
       case 'legion':         // 6★ Reef: every soul he has comes up at once, then the pentagram (reefPlatinum.js)
         reef.ult(u);
         return true;
+      case 'ultraboi':       // 6★ Boi: Ultra Boi, then the Spirit Bomb (boiPlatinum.js)
+        boi.ult(u);
+        return true;
       default: return false;
     }
   }
@@ -791,6 +803,7 @@ export function createKitRuntime(api) {
     if (act.type === 'noretreat') astrec.endUlt(act);
     if (act.type === 'openarms' || act.type === 'helldrums' || act.type === 'ascent') ramsf.endUlt(act);
     if (act.type === 'legion') reef.endUlt(act);
+    if (act.type === 'ultraboi') boi.endUlt(act);
     if (act.type === 'shrine') { effect({ kind: 'flash', color: '#450a0a', life: 0.6 }); shake(0.3); }   // the domain collapses
   }
   // Room 16's ult: you picked one of the three skills
@@ -814,14 +827,17 @@ export function createKitRuntime(api) {
   // Q: a second skill for the kits that have one (6★ Ice's Flash Freeze, Bonk's Bloodletting, Astrec's Second Wind); null = Q is M2 as usual
   const ramsf = createRamsfPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
   const reef = createReefPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, nextId, skill, passive, kitHit, ultHit, foes, fighting, radius, heavy });
+  const boi = createBoiPlatinum({ s, api, K, rand, dist, distToSegment, floater, effect, shake, sfx, skill, kitHit, foes, fighting, radius, heavy, launch });
   // 6★ Ramsf: with 10 Souls the ult waits for a second tap (engine.activateUlt); his Souls' damage bonus
   const ultTap = () => (skill()?.type === 'marionette' ? ramsf.ultTap() : null);
   const soulMult = () => (skill()?.type === 'marionette' ? ramsf.soulMult() : 1);
-  const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : t === 'marionette' ? ramsf.qInfo() : t === 'necro' ? reef.qInfo() : null; };
-  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.gunslinger(x, y) : t === 'necro' ? reef.seance(x, y) : false; }
-  const exposedBonus = e => (skill()?.type === 'marionette' ? ramsf.exposedBonus(e) : 0);
+  const skill2Info = () => { const t = skill()?.type; return t === 'zero' ? ice.qInfo() : t === 'boil' ? bonk.qInfo() : t === 'deathwish' ? astrec.qInfo() : t === 'marionette' ? ramsf.qInfo() : t === 'necro' ? reef.qInfo() : t === 'saiyan' ? boi.qInfo() : null; };
+  function skill2(x, y) { const t = skill()?.type; return t === 'zero' ? ice.flash(x, y) : t === 'boil' ? bonk.bloodletting(x, y) : t === 'deathwish' ? astrec.secondWind(x, y) : t === 'marionette' ? ramsf.gunslinger(x, y) : t === 'necro' ? reef.seance(x, y) : t === 'saiyan' ? boi.flare(x, y) : false; }
+  const exposedBonus = e => (skill()?.type === 'marionette' ? ramsf.exposedBonus(e) : skill()?.type === 'saiyan' ? boi.exposedBonus(e) : 0);
+  // 6★ Boi: a second tap on the ult while Ultra Boi is out throws the Spirit Bomb (engine.activateUlt)
+  const ultAgain = () => (skill()?.type === 'saiyan' ? boi.ultAgain() : false);
   // 6★ Astrec: how much of a hit gets through (Brace), how fast enemies attack (Draw Fire), and Not Yet
-  const hurtMult = () => (skill()?.type === 'deathwish' ? astrec.hurtMult() : 1);
+  const hurtMult = () => (skill()?.type === 'deathwish' ? astrec.hurtMult() : skill()?.type === 'saiyan' ? boi.hurtMult() : 1);
   const attackRate = () => (skill()?.type === 'deathwish' ? astrec.attackRate() : 1);
   const undying = () => (skill()?.type === 'deathwish' && astrec.cheatDeath()) || reef.cheatDeath();
 
@@ -1013,6 +1029,7 @@ export function createKitRuntime(api) {
     // 6★ Ramsf: the parry window, the arms on your cursor, Strings, the tornado
     if (sk?.type === 'marionette' || ramsf.active()) ramsf.update(dt, live);
     if (sk?.type === 'necro' || reef.active()) reef.update(dt, live);
+    if (sk?.type === 'saiyan' || boi.active()) boi.update(dt, live);   // 6★ Boi: Ki, forms, the beam, the Spirit Bomb
 
     // Doro's fire arrows land
     if (kit.arrows?.length) {
@@ -1274,6 +1291,7 @@ export function createKitRuntime(api) {
     astrec.reset(why);
     ramsf.reset(why);
     reef.reset(why);
+    boi.reset(why);
     // 6★ Ice's Absolute Zero is a time stop: it ends with the stage (its storm with it)
     if (s.ult.active?.type === 'absolutezero') s.ult.active = null;
     s.choosing = null;
@@ -1291,7 +1309,7 @@ export function createKitRuntime(api) {
     signAim: (dx, dy) => (skill()?.type === 'necro' ? reef.aim(dx, dy) : ts.signAim(dx, dy)),   // (Bio's sign wheel / 6★ Reef's soul wheel on a phone)
     timeScale: () => ts.timeScale() * (skill()?.type === 'marionette' ? ramsf.timeScale() : 1),   // (Bio's sign wheel / 6★ Ramsf's slow motion after a parry)
     cheatDeath: () => ts.cheatDeath() || (skill()?.type === 'deathwish' && astrec.cheatDeath()) || reef.cheatDeath(),   // Round Deer / 6★ Astrec's Not Yet: the hit that would have killed you
-    hurtMult, attackRate, undying, exposedBonus, ultTap, soulMult,
+    hurtMult, attackRate, undying, exposedBonus, ultTap, ultAgain, soulMult,
     update, reset, origin, slide,
     skill2, skill2Info,
   };
