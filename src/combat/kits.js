@@ -214,17 +214,17 @@ export const SKILLS = {
                    novaPct: 3, novaR: 230, auraPct: 0.25, auraR: 150,   // going up / powering up
                    chainPct: 0.6, chainN: 2, chainR: 220, sparkPct: 0.5, sparkR: 220, quakePct: 0.35, quakeR: 100,
                    dashPct: 1.2, dashLen: 800,                      // drag: Rush
-                   blastPct: 1.5, beamPct: 0.45, beamCost: 20, beamMin: 15, beamW: 46,   // M2: Ki Blast / KA-ME-HA-ME-BOI
+                   blastPct: 1.5, beamPct: 0.85, stageCost: 12, beamW: 46,   // M2: Ki Blast / BOI… YOU… JUST… GOT… OOFED!!!! (beamPct: per tick, full chant)
                    cooldown: 18, flareDur: 3, exposed: 0.3,         // Q: Solar Flare
                    zenkai: 0.12, zenkaiMax: 5, zenkaiCd: 8,          // Saiyan Blood
                    telePct: 0.8, counterPct: 1.5,                   // (Ultra Boi)
-                   lv1: { mult1: 0.3, mult2: 0.6, mult3: 1.1, novaPct: 1.8, chainPct: 0.35, sparkPct: 0.3, dashPct: 0.7, blastPct: 0.9, beamPct: 0.28, exposed: 0.18, zenkai: 0.07, cooldown: 22 },
-                   si: { mult1: 0.05, mult2: 0.1, mult3: 0.15, novaPct: 0.4, chainPct: 0.08, sparkPct: 0.06, dashPct: 0.2, blastPct: 0.2, beamPct: 0.06, exposed: 0.04, zenkai: 0.02, cooldown: -0.8 },
+                   lv1: { mult1: 0.3, mult2: 0.6, mult3: 1.1, novaPct: 1.8, chainPct: 0.35, sparkPct: 0.3, dashPct: 0.7, blastPct: 0.9, beamPct: 0.53, exposed: 0.18, zenkai: 0.07, cooldown: 22 },
+                   si: { mult1: 0.05, mult2: 0.1, mult3: 0.15, novaPct: 0.4, chainPct: 0.08, sparkPct: 0.06, dashPct: 0.2, blastPct: 0.2, beamPct: 0.11, exposed: 0.04, zenkai: 0.02, cooldown: -0.8 },
                    desc: 'LIMIT BREAKER. Clicks build Ki ({kiClick} each, up to 100). '
                      + 'HOLD M1: POWER UP. He screams, Ki fills fast ({kiHold}/s), rocks lift and the aura shoves the small ones away. Let go on a full bar to go up a form, with a shockwave ({novaPct} click DMG, throws everything around him). '
                      + 'FORMS: Super +{mult1} DMG, Super 2 +{mult2}, Super 3 +{mult3}, each burning Ki every second ({drain1} / {drain2} / {drain3}). At 0 Ki he drops back to Base, winded for {windDur}s. In a form every 3rd click chains lightning ({chainPct} click DMG); Super 2 and up crackle and zap what\'s near ({sparkPct}); Super 3 adds a shockwave to every click but he takes {s3Hurt} more damage. '
                      + 'DRAG (hold M1 and move): RUSH. He blurs along your path, up to {dashLen} long: everything on it takes {dashPct} click DMG. '
-                     + 'M2: tap for a homing KI BLAST ({blastPct} click DMG). Hold for KA-ME-HA-ME-BOI: a beam from where you pressed toward the cursor ({beamPct} click DMG ten times a second, wider each form), as long as you hold and have Ki ({beamCost}/s). '
+                     + 'M2: tap for a homing KI BLAST ({blastPct} click DMG). Hold and he chants BOI… YOU… JUST… GOT…, a word every 0.45s, each costing {stageCost} Ki and making it bigger. Let go: OOFED!!!! A beam fires from where you pressed toward the cursor, longer, wider and harder the more words he got out (the full chant: {beamPct} click DMG ten times a second for 2.1s, wider each form). '
                      + 'Q: SOLAR FLARE. Every enemy is blinded for {flareDur}s (bosses half) and takes {exposed} more damage. {cooldown}s cooldown. '
                      + 'SAIYAN BLOOD: survive a hit under 30% HP and he comes back stronger, +{zenkai} DMG for the rest of the stage (up to {zenkaiMax} times, {zenkaiCd}s apart).' },
   // 6★ Bonk (Platinum): Ice's kit turned inside out (bonkPlatinum.js). Bleed instead of Freeze,
@@ -385,7 +385,7 @@ function showVal(key, v) {
   if (MULT_KEYS.has(key)) return `${Math.round(v * 100)}%`;
   if (PCT_KEYS.has(key)) return `${+(v * 100).toFixed(1)}%`;
   if (key === 'shots' || key === 'targets' || key === 'links') return String(Math.floor(v));
-  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR' || key === 'breachLen' || key === 'stringLen' || key === 'gustR' || key === 'armR' || key === 'riftR' || key === 'riftPull' || key === 'gunR' || key === 'cloneR' || key === 'gatePull' || key === 'maxSouls' || key === 'lv2At' || key === 'lv3At' || key === 'gates' || key === 'soulCap' || key === 'maxOut' || key === 'seanceR' || key === 'pentMin' || key === 'pentMax' || key === 'sigilLen' || key === 'novaR' || key === 'dashLen' || key === 'kiClick' || key === 'kiHold' || key === 'beamCost' || key === 'zenkaiMax' || key === 'drain1' || key === 'drain2' || key === 'drain3') return String(Math.round(v));
+  if (key === 'chill' || key === 'chain' || key === 'qRadius' || key === 'figR' || key === 'wallLen' || key === 'bleed' || key === 'splash' || key === 'rakeLen' || key === 'rakeBleed' || key === 'slamR' || key === 'cleaveR' || key === 'shockR' || key === 'counterR' || key === 'breachLen' || key === 'stringLen' || key === 'gustR' || key === 'armR' || key === 'riftR' || key === 'riftPull' || key === 'gunR' || key === 'cloneR' || key === 'gatePull' || key === 'maxSouls' || key === 'lv2At' || key === 'lv3At' || key === 'gates' || key === 'soulCap' || key === 'maxOut' || key === 'seanceR' || key === 'pentMin' || key === 'pentMax' || key === 'sigilLen' || key === 'novaR' || key === 'dashLen' || key === 'kiClick' || key === 'kiHold' || key === 'stageCost' || key === 'zenkaiMax' || key === 'drain1' || key === 'drain2' || key === 'drain3') return String(Math.round(v));
   if (key === 'every' || key === 'cap' || key === 'maxMad' || key === 'maxBars' || key === 'berserkAt' || key === 'gardenNeed') return String(Math.round(v));
   if (key === 'cooldown') return String(+v.toFixed(1));
   return String(+v.toFixed(2));

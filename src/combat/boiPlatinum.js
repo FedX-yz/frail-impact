@@ -11,8 +11,9 @@
 //   hold M1     POWER UP: he screams, the aura shoves the small ones away, rocks lift and
 //               Ki fills fast. Let go on a full bar to go to the next form (a shockwave)
 //   drag        RUSH: hold M1 and move: he blurs along the path, hitting everything on it
-//   M2          tap: KI BLAST (homing). Hold: KA-ME-HA-ME-BOI, a beam from where you pressed
-//               toward the cursor (or at the most enemies), as long as you hold and have Ki
+//   M2          tap: KI BLAST (homing). Hold: the chant, BOI… YOU… JUST… GOT… (a word every
+//               0.45s, each paid in Ki and each making it bigger); let go: OOFED!!!! and the
+//               beam fires from where you pressed toward the cursor (or at the most enemies)
 //   Q           SOLAR FLARE: every enemy is blinded (can't move or attack) and open
 //   (passive)   SAIYAN BLOOD: survive a hit under 30% HP and he comes back stronger for the
 //               rest of the stage (stacks, with a cooldown)
@@ -24,7 +25,10 @@
 const HOLD_MIN = 0.25;      // shorter than this is a click, not powering up
 const DRAG_START = 18;      // design px the cursor has to move while held to Rush instead
 const BEAM_HOLD = 0.22;     // holding M2 this long is a beam, not a blast
-const BEAM_CHARGE = 0.6;    // "ka… me… ha… me…" before it fires
+// the chant while M2 is held, one word every CHANT_T; letting go shouts OOFED!!!! and fires
+export const CHANT = ['BOI…', 'YOU…', 'JUST…', 'GOT…'];
+const CHANT_T = 0.45;
+const STAGE_POWER = [0, 0.24, 0.4, 0.6, 1];   // the beam's DMG by how many words you got through (beamPct is the full chant)
 const CUTIN = 1.1;          // seconds the burst art is on screen (the fight goes on)
 export const BOI_INTRO = CUTIN;
 export const BOI_EFFECTS = new Set(['sbNova', 'sbZap', 'sbDash', 'sbFlare', 'sbDodge', 'sbTele', 'sbBlast', 'sbBoom', 'sbDrop', 'sbZen', 'sbPulse']);
@@ -196,7 +200,7 @@ export function createBoiPlatinum(ctx) {
   function m2Release(held) {
     const a = st(), sk = skill();
     const m2 = a.m2; a.m2 = null;
-    if (a.beam) { endBeam(); return; }
+    if (a.beam) { if (!a.beam.firing) fireBeam(); return; }   // let go mid-chant: OOFED!!!!
     if (!sk || !m2 || held >= BEAM_HOLD || !fighting()) return;
     if (a.bcd > 0) return;
     a.bcd = 0.28;
@@ -209,11 +213,32 @@ export function createBoiPlatinum(ctx) {
     }
     sfx('kiBlast');
   }
-  function startBeam() {
+  // the chant: one word every CHANT_T while you hold, each paid in Ki and each making it bigger.
+  // Let go whenever you like: OOFED!!!! fires it at the size it got to.
+  function payWord() {
     const a = st(), sk = skill();
-    if (!isUltra(s) && a.ki < sk.beamMin) { const p = P(); label('no Ki', p.x, p.y - K(36), '#94a3b8'); a.m2 = null; return; }
-    a.beam = { x: a.m2.x, y: a.m2.y, t: 0, ang: aimFrom(a.m2.x, a.m2.y, null), tick: 0, firing: false, hit: 0 };
-    sfx('kame');
+    if (!isUltra(s) && a.ki < sk.stageCost) return false;
+    if (!isUltra(s)) a.ki -= sk.stageCost;
+    return true;
+  }
+  function startBeam() {
+    const a = st();
+    if (!payWord()) { const p = P(); label('no Ki', p.x, p.y - K(36), '#94a3b8'); a.m2 = null; return; }
+    a.beam = { x: a.m2.x, y: a.m2.y, t: 0, ang: aimFrom(a.m2.x, a.m2.y, null), stage: 1, stageT: 0, firing: false, fireT: 0, fireDur: 0, tick: 0, hit: 0 };
+    chantWord(a.beam);
+  }
+  function chantWord(b) {
+    b.stageT = 0;
+    effect({ kind: 'sbPulse', x: b.x, y: b.y, r: K(40 + 22 * b.stage), life: 0.35, color: '#7dd3fc' });
+    shake(0.05 + 0.05 * b.stage); sfx('chant', b.stage);
+  }
+  function fireBeam() {
+    const a = st(), b = a.beam;
+    b.firing = true; b.fireT = 0; b.fireDur = 0.5 + 0.4 * b.stage; b.tick = 0;
+    a.oof = { t: 0, life: 1.1, x: b.x, y: b.y, stage: b.stage };   // the shout (drawn over the beam: BoiFx)
+    effect({ kind: 'sbNova', x: b.x, y: b.y, r: K(60 + 30 * b.stage), life: 0.5, color: '#bae6fd', form: 1 });
+    if (b.stage >= 4) effect({ kind: 'flash', color: '#e0f2fe', life: 0.3 });
+    shake(0.25 + 0.12 * b.stage); sfx('beam'); sfx('boom');
   }
   // which way the beam goes: toward the cursor once it's moved off the start, else at the most enemies
   function aimFrom(x, y, prev) {
@@ -233,28 +258,40 @@ export function createBoiPlatinum(ctx) {
     }
     return best;
   }
-  function beamW() { const a = st(), sk = skill(); return K(sk.beamW) * (isUltra(s) ? 2.4 : [1, 1.3, 1.6, 2.1][a.form]); }
+  // how wide: by form, and by how far into the chant you got
+  function beamW() {
+    const a = st(), sk = skill(), stg = a.beam?.stage ?? 4;
+    return K(sk.beamW) * (isUltra(s) ? 2.4 : [1, 1.3, 1.6, 2.1][a.form]) * (0.55 + 0.15 * stg);
+  }
   function updateBeam(dt, sk) {
     const a = st(), b = a.beam;
     b.t += dt;
-    if (!s.player.m2) { endBeam(); return; }
     // it turns, but it's heavy: it follows the aim, a little behind
     const want = aimFrom(b.x, b.y, b.ang);
     let dA = ((want - b.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    b.ang += dA * Math.min(1, dt * 7);
-    if (b.t < BEAM_CHARGE) return;
-    if (!b.firing) { b.firing = true; shake(0.4); sfx('beam'); }
-    if (!isUltra(s)) { a.ki -= sk.beamCost * dt; if (a.ki <= 0) { a.ki = 0; endBeam(); return; } }
-    shake(0.05);
+    b.ang += dA * Math.min(1, dt * (b.firing ? 4 : 7));
+    if (!b.firing) {
+      if (!s.player.m2) { fireBeam(); return; }   // (let go some other way)
+      b.stageT += dt;
+      if (b.stage < CHANT.length && b.stageT >= CHANT_T) {
+        if (payWord()) { b.stage++; chantWord(b); }
+        else b.stageT = 0;   // out of Ki: stuck on this word until you let go
+      }
+      if (b.stage >= CHANT.length) shake(0.04);   // at full, the whole screen strains
+      return;
+    }
+    b.fireT += dt;
+    if (b.fireT >= b.fireDur) { endBeam(); return; }
+    shake(0.03 + 0.02 * b.stage);
     b.tick -= dt;
     if (b.tick > 0) return;
     b.tick = 0.1;
-    const ux = Math.cos(b.ang), uy = Math.sin(b.ang), w = beamW();
+    const ux = Math.cos(b.ang), uy = Math.sin(b.ang), w = beamW(), pct = sk.beamPct * STAGE_POWER[b.stage];
     let n = 0;
     api.asYou(() => foes().forEach(e => {
       const dx = e.x - b.x, dy = e.y - b.y, along = dx * ux + dy * uy;
       if (along < -radius(e) || Math.abs(dx * uy - dy * ux) > w / 2 + radius(e) * 0.6) return;
-      kitHit(e, sk.beamPct, { color: '#bae6fd', quiet: n++ >= 1 || b.hit % 3 !== 0, charge: 0.6 });
+      kitHit(e, pct, { color: '#bae6fd', quiet: n++ >= 1 || b.hit % 3 !== 0, charge: 0.6 });
       // it pushes them along it
       if (e.hp > 0 && !heavy(e) && !(e.down > 0) && !e.grabbed && s.enemies.includes(e)) { e.x += ux * K(26); e.y += uy * K(26); e.x = Math.max(0, Math.min(s.W, e.x)); e.y = Math.max(0, Math.min(s.H, e.y)); }
     }));
@@ -263,7 +300,7 @@ export function createBoiPlatinum(ctx) {
   function endBeam() {
     const a = st();
     if (a.beam?.firing) effect({ kind: 'sbBlast', x: a.beam.x, y: a.beam.y, r: K(40), life: 0.3, color: '#bae6fd' });
-    a.beam = null; a.m2 = null; a.bcd = 0.4;
+    a.beam = null; a.bcd = 0.4;
   }
   function updateBlasts(dt, sk) {
     const a = st();
@@ -338,6 +375,7 @@ export function createBoiPlatinum(ctx) {
   function ult(u) {
     const a = st();
     if (a.beam) endBeam();
+    a.m2 = null;
     a.prevForm = a.form;
     a.wind = 0; a.ki = 100; a.bombN = 0; a.thrown = false; a.charging = false;
     s.ult.active = { type: 'ultraboi', t: u.dur, dur: u.dur, bonus: u.bonus, bombBase: u.bombBase, bombPer: u.bombPer, bombR: u.bombR };
@@ -393,6 +431,7 @@ export function createBoiPlatinum(ctx) {
     a.qcd = Math.max(0, a.qcd - dt);
     a.bcd = Math.max(0, a.bcd - dt);
     if (a.cutin) { a.cutin.t += dt; if (a.cutin.t >= a.cutin.life) a.cutin = null; }
+    if (a.oof) { a.oof.t += dt; if (a.oof.t >= a.oof.life) a.oof = null; }
     for (const r of a.rocks) { r.t += dt; r.y += r.vy * dt; r.rot += dt * 2; }
     a.rocks = a.rocks.filter(r => r.t < r.life);
     if (a.bomb) updateBomb(dt);
@@ -441,12 +480,12 @@ export function createBoiPlatinum(ctx) {
   }
 
   // ── for the HUD ──────────────────────────────────────────────────────────
-  const m2Info = () => { const a = st(); return { kind: 'count', n: Math.floor(a.ki), max: 100, fill: a.ki / 100, label: 'KI ', color: look().color, btn: 'KI', hint: 'M2: tap for a Ki Blast, hold for KA-ME-HA-ME-BOI (from where you pressed toward the cursor)' }; };
+  const m2Info = () => { const a = st(); return { kind: 'count', n: Math.floor(a.ki), max: 100, fill: a.ki / 100, label: 'KI ', color: look().color, btn: 'KI', hint: 'M2: tap for a Ki Blast. Hold: BOI… YOU… JUST… GOT… and let go: OOFED!!!! (a beam from where you pressed toward the cursor)' }; };
   const qInfo = () => { const a = st(), sk = skill(); return { kind: 'cd', cd: a.qcd, cdMax: a.qcdMax || sk?.cooldown || 18, color: '#fef9c3', text: 'Q', hint: 'Solar Flare: Q (phone: the SKILL button). Blinds every enemy, and they take more damage' }; };
-  const active = () => { const a = s.kit.boi; return !!(a && (a.cutin || a.bomb || a.rocks.length)); };
+  const active = () => { const a = s.kit.boi; return !!(a && (a.cutin || a.bomb || a.oof || a.rocks.length)); };
   function reset(why) {
     const a = st();
-    a.charging = false; a.beam = null; a.m2 = null; a.blasts = []; a.cutin = null; a.bomb = null; a.rocks = [];
+    a.charging = false; a.beam = null; a.m2 = null; a.blasts = []; a.cutin = null; a.bomb = null; a.oof = null; a.rocks = [];
     a.qcd = 0; a.bcd = 0;
     // he keeps his form and Ki from stage to stage; losing puts him back to Base
     if (why === 'defeat') { a.form = 0; a.ki = 0; a.wind = 0; }

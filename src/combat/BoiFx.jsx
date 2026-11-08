@@ -6,7 +6,7 @@
 //   BoiEffect  one-off effects (sbNova, sbZap, sbDash, sbFlare, sbDodge, sbTele, sbBlast, …)
 //   BoiScreen  the form on the screen's edge, the cut-in when he goes up, Ultra's tag
 // ─────────────────────────────────────────────────────────────────────────────
-import { boiLook, isUltra, FORMS } from './boiPlatinum.js';
+import { boiLook, isUltra, FORMS, CHANT } from './boiPlatinum.js';
 const clamp01 = v => Math.max(0, Math.min(1, v));
 const SKY = '#a5f3fc', WHITE = '#ffffff';
 
@@ -125,6 +125,13 @@ export function BoiOver({ s, k, P, time }) {
           </g>
         );
       })()}
+      {/* OOFED!!!!: the last word, slammed in huge over the beam, bigger the more of the chant came first */}
+      {a.oof && (() => {
+        const f = a.oof, p = clamp01(f.t / f.life), pop = clamp01(f.t / 0.1), sz = (26 + 9 * f.stage) * k * (1.6 - 0.6 * pop) * (1 + 0.15 * p);
+        const jx = Math.sin(f.t * 70) * (1 - p) * 4 * k, jy = Math.cos(f.t * 53) * (1 - p) * 4 * k;
+        return <text x={f.x + jx} y={f.y - (40 + 8 * f.stage) * k - 30 * k * p + jy} textAnchor="middle" fontSize={sz} fill={WHITE} opacity={1 - clamp01((p - 0.6) / 0.4)}
+          style={{ ...WORD, strokeWidth: 6 * k, filter: `drop-shadow(0 0 ${10 * k}px #38bdf8)` }}>OOFED!!!!</text>;
+      })()}
       {/* the Spirit Bomb: it gathers over him, then comes down */}
       {a.bomb && <Bomb b={a.bomb} k={k} time={time} />}
       {mine && ultra && !a.thrown && P && (() => {
@@ -140,26 +147,44 @@ export function BoiOver({ s, k, P, time }) {
   );
 }
 
+const WORD = { fontFamily: 'var(--font-hit, sans-serif)', paintOrder: 'stroke', stroke: '#082f49', strokeLinejoin: 'round' };
 function Beam({ b, s, k, time, form, ultra }) {
-  const W = (ultra ? 2.4 : [1, 1.3, 1.6, 2.1][form]) * 46 * s.k;
+  const W = (ultra ? 2.4 : [1, 1.3, 1.6, 2.1][form]) * 46 * s.k * (0.55 + 0.15 * b.stage);
   const col = ultra ? '#c7d2fe' : form >= 1 ? '#7dd3fc' : '#67e8f9';
   if (!b.firing) {
-    // the charge: a ball of light growing in his hands, the light pulled into it
-    const f = clamp01(b.t / 0.6), R = (6 + 18 * f) * k * (ultra ? 1.4 : 1 + form * 0.15);
+    // the chant: the ball swells a step with every word, the light pulled into it faster
+    const pop = clamp01(b.stageT / 0.12), full = b.stage >= CHANT.length;
+    const R = (7 + 7 * b.stage + 3 * (1 - pop)) * k * (ultra ? 1.4 : 1 + form * 0.15) * (full ? 1 + 0.06 * Math.sin(time * 50) : 1);
+    const lines = 6 + 3 * b.stage, speed = 1.5 + b.stage;
+    // the words so far, side by side over his hands; the newest one big
+    const words = CHANT.slice(0, b.stage), gap = 8 * k;
+    const size = i => (i === b.stage - 1 ? (20 + 4 * b.stage) * k * (1.35 - 0.35 * pop) : 15 * k);
+    const widths = words.map((w, i) => w.length * size(i) * 0.7);
+    let x = b.x - (widths.reduce((a, c) => a + c, 0) + gap * (words.length - 1)) / 2;
+    const y = b.y - R - 26 * k;
     return (
       <g>
-        {Array.from({ length: 8 }, (_, i) => {
-          const ang = i * 0.785 + time * 3, r0 = (70 - 50 * ((time * 2.5 + i * 0.13) % 1)) * k;
-          return <line key={i} x1={b.x + Math.cos(ang) * r0} y1={b.y + Math.sin(ang) * r0} x2={b.x + Math.cos(ang) * (r0 - 14 * k)} y2={b.y + Math.sin(ang) * (r0 - 14 * k)}
-            stroke={col} strokeWidth={2 * k} strokeLinecap="round" opacity={0.8} />;
+        {Array.from({ length: lines }, (_, i) => {
+          const ang = i * (6.283 / lines) + time * 3, r0 = (90 - 66 * ((time * speed + i * 0.13) % 1)) * k;
+          return <line key={i} x1={b.x + Math.cos(ang) * r0} y1={b.y + Math.sin(ang) * r0} x2={b.x + Math.cos(ang) * (r0 - 16 * k)} y2={b.y + Math.sin(ang) * (r0 - 16 * k)}
+            stroke={col} strokeWidth={2 * k} strokeLinecap="round" opacity={0.85} />;
         })}
-        <circle cx={b.x} cy={b.y} r={R * 1.6} fill={col} opacity={0.25} />
-        <circle cx={b.x} cy={b.y} r={R} fill={WHITE} style={{ filter: `drop-shadow(0 0 ${12 * k}px ${col})` }} />
+        <circle cx={b.x} cy={b.y} r={R * 1.7} fill={col} opacity={0.25} />
+        <circle cx={b.x} cy={b.y} r={R} fill={WHITE} style={{ filter: `drop-shadow(0 0 ${(10 + 4 * b.stage) * k}px ${col})` }} />
+        {words.map((w, i) => {
+          const sz = size(i), cx = x + widths[i] / 2, last = i === b.stage - 1;
+          x += widths[i] + gap;
+          const jx = full && last ? Math.sin(time * 61) * 1.5 * k : 0, jy = full && last ? Math.cos(time * 47) * 1.5 * k : 0;
+          return <text key={i} x={cx + jx} y={y + jy} textAnchor="middle" fontSize={sz} fill={last ? WHITE : '#e0f2fe'} opacity={last ? 1 : 0.9}
+            style={{ ...WORD, strokeWidth: (last ? 5 : 3) * k, filter: last ? `drop-shadow(0 0 ${6 * k}px ${col})` : undefined }}>{w}</text>;
+        })}
       </g>
     );
   }
+  // firing: at full width, then it thins out and is gone
   const L = Math.hypot(s.W, s.H) * 1.3, ux = Math.cos(b.ang), uy = Math.sin(b.ang);
-  const x2 = b.x + ux * L, y2 = b.y + uy * L, wob = 1 + 0.08 * Math.sin(time * 40) + 0.05 * Math.sin(time * 17);
+  const left = b.fireDur - b.fireT, thin = clamp01(left / 0.3) * (0.6 + 0.4 * clamp01(b.fireT / 0.08));
+  const x2 = b.x + ux * L, y2 = b.y + uy * L, wob = (1 + 0.08 * Math.sin(time * 40) + 0.05 * Math.sin(time * 17)) * thin;
   return (
     <g style={{ mixBlendMode: 'screen' }}>
       <line x1={b.x} y1={b.y} x2={x2} y2={y2} stroke={col} strokeOpacity={0.3} strokeWidth={W * 1.6 * wob} strokeLinecap="round" />
@@ -169,7 +194,7 @@ function Beam({ b, s, k, time, form, ultra }) {
       {[0, 1, 2, 3].map(i => {
         const d = ((time * 900 * s.k + i * 220 * s.k) % (L * 0.6)) + 30 * s.k;
         const cx = b.x + ux * d, cy = b.y + uy * d;
-        return <ellipse key={i} cx={cx} cy={cy} rx={W * 0.18} ry={W * 0.75} fill="none" stroke={WHITE} strokeOpacity={0.55} strokeWidth={2 * k}
+        return <ellipse key={i} cx={cx} cy={cy} rx={W * 0.18 * thin} ry={W * 0.75 * thin} fill="none" stroke={WHITE} strokeOpacity={0.55} strokeWidth={2 * k}
           transform={`rotate(${b.ang * 57.3} ${cx} ${cy})`} />;
       })}
       <circle cx={b.x} cy={b.y} r={W * 0.75 * wob} fill={WHITE} style={{ filter: `drop-shadow(0 0 ${16 * k}px ${col})` }} />
